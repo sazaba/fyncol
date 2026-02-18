@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { 
   FiPlus, FiEdit2, FiTrash2, FiCamera, FiMoreVertical, 
   FiUser, FiCreditCard, FiMapPin, FiPhone, FiShield,
-  FiChevronDown, FiCheck
+  FiChevronDown, FiCheck, FiX
 } from "react-icons/fi";
 
 export default function UsersPage() {
@@ -16,6 +16,20 @@ export default function UsersPage() {
   ];
   
   const roles = ["Cobrador", "Administrador", "Supervisor"];
+
+  // ==========================================
+  // FIX: Bloquear scroll del fondo al abrir Modal
+  // ==========================================
+  useEffect(() => {
+    if (showModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showModal]);
 
   return (
     <div className="max-w-6xl mx-auto p-4 pt-8 md:p-8 md:pt-10 font-inter">
@@ -108,31 +122,43 @@ export default function UsersPage() {
       </div>
 
       {/* ========================================== */}
-      {/* MODAL ULTRA PREMIUM (SCROLL & ARROWS HIDDEN + NO MOBILE ZOOM) */}
+      {/* MODAL FULL-SCREEN MÓVIL / FLOATING DESKTOP */}
       {/* ========================================== */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-[#020408]/80 backdrop-blur-md p-0 md:p-4 transition-all">
+        <div className="fixed inset-0 z-[100] flex md:items-center justify-center bg-[#020408]/90 backdrop-blur-md transition-all">
           
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute inset-0 overflow-hidden pointer-events-none hidden md:block">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[500px] w-[500px] rounded-full bg-blue-600/10 blur-[120px]" />
           </div>
 
-          <div className="relative w-full max-w-[520px] bg-[#05050A]/80 backdrop-blur-3xl border-t md:border border-white/10 rounded-t-[36px] md:rounded-[36px] shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col max-h-[92dvh] animate-[slideUp_0.4s_cubic-bezier(0.16,1,0.3,1)] md:animate-none overflow-hidden ring-1 ring-white/5">
+          {/* Contenedor Principal del Modal:
+            MÓVIL: w-full, h-[100dvh], rounded-none, border-none (Pantalla Completa Nativa)
+            DESKTOP: max-w-[520px], max-h-[92dvh], rounded-[36px], border (Flotante Premium) 
+          */}
+          <div className="relative w-full h-[100dvh] md:h-auto md:max-w-[520px] bg-[#05050A] md:bg-[#05050A]/80 md:backdrop-blur-3xl md:border border-white/10 rounded-none md:rounded-[36px] md:shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col animate-[slideUp_0.3s_cubic-bezier(0.16,1,0.3,1)] md:animate-none overflow-hidden ring-0 md:ring-1 md:ring-white/5">
             
-            <div className="w-12 h-1.5 bg-white/10 rounded-full mx-auto mt-4 shrink-0 md:hidden" />
-
             {/* HEADER MODAL */}
-            <div className="px-6 md:px-10 pt-5 md:pt-10 pb-4 shrink-0 border-b border-white/[0.05]">
-              <h2 className="text-xl md:text-2xl font-bold text-white font-sora">Nuevo Usuario</h2>
-              <p className="text-xs text-slate-400 mt-1.5 font-medium">Completa los datos para registrar un nuevo integrante.</p>
+            <div className="flex justify-between items-start px-6 md:px-10 pt-8 md:pt-10 pb-4 shrink-0 border-b border-white/[0.05]">
+              <div>
+                <h2 className="text-2xl font-bold text-white font-sora">Nuevo Usuario</h2>
+                <p className="text-xs text-slate-400 mt-1.5 font-medium">Completa los datos para registrar un nuevo integrante.</p>
+              </div>
+              
+              {/* Botón X (Más útil en full-screen móvil) */}
+              <button 
+                onClick={() => setShowModal(false)}
+                className="p-2 -mr-2 text-slate-500 hover:text-white hover:bg-white/5 rounded-full transition-colors"
+              >
+                <FiX size={24} />
+              </button>
             </div>
             
-            {/* BODY MODAL - Scroll oculto visualmente pero funcional */}
-            <div className="px-6 md:px-10 py-8 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            {/* BODY MODAL - Toma el espacio sobrante con flex-1 */}
+            <div className="flex-1 px-6 md:px-10 py-8 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               <form className="space-y-6">
                 
                 {/* Foto Profile Area */}
-                <div className="flex justify-center mb-2">
+                <div className="flex justify-center mb-4">
                    <div className="relative group cursor-pointer">
                      <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-xl group-hover:bg-blue-500/30 transition-colors duration-500" />
                      <div className="relative h-28 w-28 rounded-full bg-[#0B1020]/80 border border-white/10 flex flex-col items-center justify-center text-slate-400 group-hover:border-blue-500/50 group-hover:text-blue-400 transition-all duration-300 shadow-inner">
@@ -142,7 +168,6 @@ export default function UsersPage() {
                    </div>
                 </div>
 
-                {/* Grid de Inputs con Íconos */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <InputGroup label="Nombre Completo" placeholder="Ej: Juan Pérez" icon={FiUser} />
                   <InputGroup label="Cédula (CC)" placeholder="12345678" type="number" icon={FiCreditCard} />
@@ -153,7 +178,6 @@ export default function UsersPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <InputGroup label="Teléfono" placeholder="300 123 4567" type="tel" icon={FiPhone} />
                   
-                  {/* Select Personalizado */}
                   <CustomSelect 
                     label="Rol de Acceso" 
                     icon={FiShield} 
@@ -165,8 +189,8 @@ export default function UsersPage() {
               </form>
             </div>
 
-            {/* FOOTER MODAL */}
-            <div className="px-6 md:px-10 py-5 border-t border-white/[0.05] bg-[#020408]/50 shrink-0 flex gap-4 backdrop-blur-xl">
+            {/* FOOTER MODAL - pb-safe para respetar la barra de inicio de iPhone */}
+            <div className="px-6 md:px-10 pt-5 pb-[max(env(safe-area-inset-bottom),1.25rem)] border-t border-white/[0.05] bg-[#020408] md:bg-[#020408]/50 shrink-0 flex gap-4 backdrop-blur-xl">
               <button 
                 type="button" 
                 onClick={() => setShowModal(false)} 
@@ -190,7 +214,7 @@ export default function UsersPage() {
 }
 
 // ==========================================
-// HELPERS (Con Fix 'text-base md:text-sm' para evitar Zoom en iOS)
+// HELPERS 
 // ==========================================
 
 function InputGroup({ label, type = "text", placeholder, icon: Icon }: any) {
@@ -206,7 +230,6 @@ function InputGroup({ label, type = "text", placeholder, icon: Icon }: any) {
         <input 
           type={type} 
           placeholder={placeholder} 
-          // FIX ZOOM: text-base en móvil, text-sm en desktop (md:text-sm)
           className={`w-full bg-[#0B1020]/50 border border-white/5 rounded-2xl ${Icon ? 'pl-11' : 'px-4'} pr-4 py-3.5 text-base md:text-sm text-white focus:border-blue-500/50 focus:bg-blue-500/[0.02] focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600 shadow-inner [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]`} 
         />
       </div>
@@ -235,7 +258,6 @@ function CustomSelect({ label, icon: Icon, options, value, onChange }: any) {
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          // FIX ZOOM: text-base en móvil, text-sm en desktop (md:text-sm)
           className={`w-full flex items-center justify-between bg-[#0B1020]/50 border border-white/5 rounded-2xl ${Icon ? 'pl-11' : 'px-4'} pr-4 py-3.5 text-base md:text-sm focus:border-blue-500/50 focus:bg-blue-500/[0.02] focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all shadow-inner text-left ${isOpen ? 'border-blue-500/50 bg-blue-500/[0.02] ring-4 ring-blue-500/10 text-white' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}
         >
           {Icon && (
@@ -247,7 +269,7 @@ function CustomSelect({ label, icon: Icon, options, value, onChange }: any) {
           <FiChevronDown size={18} className={`text-slate-500 transition-transform duration-300 flex-shrink-0 ml-2 ${isOpen ? 'rotate-180 text-blue-400' : ''}`} />
         </button>
 
-        <div className={`absolute z-20 mt-2 w-full bg-[#0B1020] border border-white/10 rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.7)] backdrop-blur-xl overflow-hidden transition-all duration-200 origin-top ${isOpen ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto' : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'}`}>
+        <div className={`absolute z-50 mt-2 w-full bg-[#0B1020] border border-white/10 rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.7)] backdrop-blur-xl overflow-hidden transition-all duration-200 origin-top ${isOpen ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto' : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'}`}>
           <div className="py-2 max-h-60 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             {options.map((option: string) => (
               <button
@@ -257,7 +279,6 @@ function CustomSelect({ label, icon: Icon, options, value, onChange }: any) {
                   onChange(option);
                   setIsOpen(false);
                 }}
-                // FIX ZOOM: text-base en móvil, text-sm en desktop (md:text-sm)
                 className={`w-full flex items-center justify-between px-4 py-3 text-base md:text-sm text-left transition-colors ${value === option ? 'bg-blue-500/10 text-blue-400 font-medium' : 'text-slate-300 hover:bg-white/5 hover:text-white'}`}
               >
                 <span>{option}</span>
