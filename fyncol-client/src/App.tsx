@@ -2,6 +2,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
         
         {/* Ruta de login: Muestra el formulario de inicio de sesión */}
         <Route path="/login" element={<Login />} />
+        <Route path="/dashboard" element={<Dashboard />} />
       </Routes>
     </BrowserRouter>
   );
