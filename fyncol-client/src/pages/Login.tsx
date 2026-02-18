@@ -1,6 +1,6 @@
 // src/pages/Login.tsx
 import { useState } from "react";
-import logo from "@/assets/logo.png"; // Usamos tu logo
+import logo from "@/assets/logo.png";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -9,22 +9,23 @@ export default function Login() {
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#020408] px-4">
       
-      {/* Background Gradients (Ambientación similar a la imagen) */}
+      {/* Background Gradients */}
       <div className="pointer-events-none absolute inset-0">
-        {/* Glow Violeta en la derecha */}
-        <div className="absolute top-1/2 right-[-10%] h-[500px] w-[500px] -translate-y-1/2 rounded-full bg-violet-600/20 blur-[120px]" />
-        {/* Glow Azul en la izquierda (para mantener identidad Fyncol) */}
-        <div className="absolute bottom-[-10%] left-[-10%] h-[500px] w-[500px] rounded-full bg-blue-600/10 blur-[120px]" />
+        {/* Usamos azules y cyanes para mantener la marca Fyncol */}
+        <div className="absolute top-1/2 right-[-10%] h-[500px] w-[500px] -translate-y-1/2 rounded-full bg-blue-600/20 blur-[120px]" />
+        <div className="absolute bottom-[-10%] left-[-10%] h-[500px] w-[500px] rounded-full bg-cyan-600/10 blur-[120px]" />
       </div>
 
       {/* Login Card */}
       <div className="relative w-full max-w-[420px] rounded-[32px] border border-white/10 bg-[#0B1020]/60 p-8 shadow-2xl backdrop-blur-xl md:p-10">
         
-        {/* Header */}
-        <div className="mb-10 text-center">
-          <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-tr from-cyan-500/20 to-blue-600/20 shadow-inner ring-1 ring-white/10">
-            <img src={logo} alt="Fyncol" className="h-6 w-auto object-contain" />
-          </div>
+        {/* Header - Logo Limpio (Sin cuadro) */}
+        <div className="mb-10 text-center flex flex-col items-center">
+          <img 
+            src={logo} 
+            alt="Fyncol" 
+            className="h-10 w-auto object-contain mb-6 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)] brightness-110" 
+          />
           <h1 className="text-2xl font-bold tracking-tight text-white">
             Bienvenido de nuevo
           </h1>
@@ -83,10 +84,16 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Submit Button (Gradiente Violeta como en la imagen) */}
-          <button className="group relative mt-2 w-full overflow-hidden rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 py-3.5 text-sm font-bold text-white shadow-[0_0_20px_-5px_rgba(124,58,237,0.5)] transition-all hover:scale-[1.02] hover:shadow-[0_0_25px_-5px_rgba(124,58,237,0.6)] active:scale-[0.98]">
-            <span className="relative z-10">Iniciar Sesión</span>
-            <div className="absolute inset-0 -z-10 bg-gradient-to-r from-indigo-600 to-violet-600 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+          {/* Submit Button (Alineado con Navbar/Hero: Blue + Cyan Gradient) */}
+          <button className="group relative mt-2 w-full overflow-hidden rounded-xl bg-blue-600 py-3.5 text-sm font-bold text-white shadow-[0_0_20px_-5px_rgba(37,99,235,0.5)] transition-all hover:scale-[1.02] hover:bg-blue-500 hover:shadow-[0_0_25px_-5px_rgba(37,99,235,0.6)] active:scale-[0.98]">
+            <span className="relative z-10 flex items-center justify-center gap-2">
+              Iniciar Sesión
+              <svg className="h-4 w-4 opacity-70 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5-5 5M6 12h12" />
+              </svg>
+            </span>
+            {/* Gradiente de brillo interno al hacer hover (igual al navbar) */}
+            <div className="absolute inset-0 -z-10 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
           </button>
         </form>
 
