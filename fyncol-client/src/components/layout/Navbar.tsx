@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
-import logo from "@/assets/logo.png";
+// src/components/layout/Navbar.tsx
+import { useEffect, useRef, useState } from "react";
+import logo from "@/assets/fyncol-logo-navbar-optimized.png"; // usa el optimizado sin márgenes
 
 type NavbarProps = {
-  brand?: string; // solo para accesibilidad (alt)
+  brand?: string; // solo accesibilidad (alt)
   userLabel?: string;
   primaryCtaLabel?: string;
   onPrimaryCta?: () => void;
@@ -16,15 +17,47 @@ export default function Navbar({
 }: NavbarProps) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [hidden, setHidden] = useState(false);
+
+  const lastYRef = useRef(0);
+  const tickingRef = useRef(false);
 
   useEffect(() => {
     const onResize = () => {
       if (window.innerWidth >= 1024) setOpen(false);
     };
-    const onScroll = () => setScrolled(window.scrollY > 10);
+
+    const onScroll = () => {
+      const y = window.scrollY || 0;
+      setScrolled(y > 10);
+
+      // Hide on scroll down, show on scroll up
+      if (!tickingRef.current) {
+        tickingRef.current = true;
+
+        window.requestAnimationFrame(() => {
+          const lastY = lastYRef.current;
+          const goingDown = y > lastY;
+          const delta = Math.abs(y - lastY);
+
+          // evita parpadeo con scroll pequeño
+          if (delta > 6) {
+            // no ocultar pegado al top
+            if (y < 20) setHidden(false);
+            else setHidden(goingDown);
+          }
+
+          lastYRef.current = y;
+          tickingRef.current = false;
+        });
+      }
+    };
 
     window.addEventListener("resize", onResize);
     window.addEventListener("scroll", onScroll, { passive: true });
+
+    // init
+    lastYRef.current = window.scrollY || 0;
     onScroll();
 
     return () => {
@@ -34,7 +67,12 @@ export default function Navbar({
   }, []);
 
   return (
-    <header className="sticky top-0 z-50">
+    <header
+      className={[
+        "fixed inset-x-0 top-0 z-50 transition-transform duration-300",
+        hidden ? "-translate-y-full" : "translate-y-0",
+      ].join(" ")}
+    >
       {/* Backdrop */}
       <div className="absolute inset-0 -z-10">
         <div
@@ -52,21 +90,21 @@ export default function Navbar({
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" />
       </div>
 
-    <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4 md:px-6">
-
-        {/* Logo SOLO (sin cuadro) */}
-        <a
-          href="/"
-          aria-label={brand}
-          className="group inline-flex items-center"
-        >
-         <img
-  src={logo}
-  alt="Fyncol logo"
-  className="h-9 sm:h-10 md:h-11 w-auto object-contain"
-/>
-
-
+      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 md:px-6">
+        {/* Logo only (sin título) */}
+        <a href="/" aria-label={brand} className="group inline-flex items-center">
+          <img
+            src={logo}
+            alt={`${brand} logo`}
+            className="
+              h-9 sm:h-10 md:h-11
+              w-auto object-contain
+              drop-shadow-[0_18px_40px_rgba(0,0,0,0.55)]
+              transition duration-300
+              group-hover:brightness-110
+              group-hover:drop-shadow-[0_22px_60px_rgba(0,0,0,0.65)]
+            "
+          />
         </a>
 
         {/* Right (desktop) */}
@@ -173,7 +211,11 @@ export default function Navbar({
                 <span className="absolute inset-0 rounded-xl ring-1 ring-white/15" />
                 <span className="relative inline-flex items-center justify-center gap-2">
                   {primaryCtaLabel}
-                  <svg className="h-4 w-4 opacity-80" viewBox="0 0 24 24" fill="none">
+                  <svg
+                    className="h-4 w-4 opacity-80"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
                     <path
                       d="M13 7l5 5-5 5M6 12h12"
                       stroke="currentColor"
