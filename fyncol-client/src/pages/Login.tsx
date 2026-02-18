@@ -7,12 +7,11 @@ export default function Login() {
   const [password, setPassword] = useState("");
 
   return (
-    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#020408] px-4 selection:bg-blue-500/30">
+    // CAMBIO CLAVE: Usamos h-[100dvh] en lugar de min-h-screen
+    // Esto fuerza al contenedor a tener EXACTAMENTE el tamaño visible de la pantalla móvil
+    <div className="relative flex h-[100dvh] w-full items-center justify-center overflow-hidden bg-[#020408] px-4 selection:bg-blue-500/30">
       
-      {/* Background Gradients (Optimizados para GPU) 
-          - Agregamos 'transform-gpu' para evitar lag en iPhones antiguos
-          - 'will-change-transform' ayuda al navegador a priorizar estas capas
-      */}
+      {/* Background Gradients (Optimizados para GPU) */}
       <div className="pointer-events-none absolute inset-0 transform-gpu overflow-hidden">
         <div className="absolute top-1/2 right-[-10%] h-[500px] w-[500px] -translate-y-1/2 rounded-full bg-blue-600/20 blur-[120px] will-change-transform" />
         <div className="absolute bottom-[-10%] left-[-10%] h-[500px] w-[500px] rounded-full bg-cyan-600/10 blur-[120px] will-change-transform" />
@@ -53,11 +52,6 @@ export default function Login() {
               <input
                 type="email"
                 placeholder="ejemplo@empresa.com"
-                /* SAFARI FIXES:
-                   1. text-base en móvil (evita zoom), md:text-sm en escritorio.
-                   2. autofill:shadow-... fuerza el fondo oscuro aunque el navegador quiera ponerlo amarillo.
-                   3. appearance-none quita estilos default de iOS.
-                */
                 className="w-full appearance-none rounded-xl border border-white/10 bg-white/5 py-3.5 pl-11 pr-4 text-base text-white placeholder-slate-500 shadow-sm transition-all focus:border-blue-500/50 focus:bg-white/[0.07] focus:outline-none focus:ring-4 focus:ring-blue-500/10 md:text-sm [&:-webkit-autofill]:shadow-[0_0_0_1000px_#0B1020_inset] [&:-webkit-autofill]:text-fill-color-white [&:-webkit-autofill]:transition-[background-color_5000s_ease-in-out_0s]"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
