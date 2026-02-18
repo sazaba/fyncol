@@ -12,10 +12,8 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // URL de tu Backend en Render (Asegúrate de que no tenga barra al final)
-  // IMPORTANTE: Cambia esta URL por la real que te dio Render si es diferente
-// Si existe la variable de entorno, úsala. Si no (localhost), usa el puerto 3000.
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+  // URL de tu Backend (Usa la variable de entorno de Vercel o localhost por defecto)
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,7 +104,7 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
                 type="email"
                 required
                 placeholder="ejemplo@empresa.com"
-                className="w-full appearance-none rounded-xl border border-white/10 bg-white/5 py-3.5 pl-11 pr-4 text-base text-white placeholder-slate-500 shadow-sm transition-all focus:border-blue-500/50 focus:bg-white/[0.07] focus:outline-none focus:ring-4 focus:ring-blue-500/10 md:text-sm [&:-webkit-autofill]:shadow-[0_0_0_1000px_#0B1020_inset] [&:-webkit-autofill]:text-fill-color-white [&:-webkit-autofill]:transition-[background-color_5000s_ease-in-out_0s]"
+                className="w-full appearance-none rounded-xl border border-white/10 bg-white/5 py-3.5 pl-11 pr-4 text-base text-white placeholder-slate-500 shadow-sm transition-all focus:border-blue-500/50 focus:bg-white/[0.07] focus:outline-none focus:ring-4 focus:ring-blue-500/10 md:text-sm [&:-webkit-autofill]:shadow-[0_0_0_1000px_#0B1020_inset] [&:-webkit-autofill]:-webkit-text-fill-color:white [&:-webkit-autofill]:caret-white"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -133,7 +131,7 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
                 type="password"
                 required
                 placeholder="••••••••"
-                className="w-full appearance-none rounded-xl border border-white/10 bg-white/5 py-3.5 pl-11 pr-4 text-base text-white placeholder-slate-500 shadow-sm transition-all focus:border-blue-500/50 focus:bg-white/[0.07] focus:outline-none focus:ring-4 focus:ring-blue-500/10 md:text-sm [&:-webkit-autofill]:shadow-[0_0_0_1000px_#0B1020_inset] [&:-webkit-autofill]:text-fill-color-white [&:-webkit-autofill]:transition-[background-color_5000s_ease-in-out_0s]"
+                className="w-full appearance-none rounded-xl border border-white/10 bg-white/5 py-3.5 pl-11 pr-4 text-base text-white placeholder-slate-500 shadow-sm transition-all focus:border-blue-500/50 focus:bg-white/[0.07] focus:outline-none focus:ring-4 focus:ring-blue-500/10 md:text-sm [&:-webkit-autofill]:shadow-[0_0_0_1000px_#0B1020_inset] [&:-webkit-autofill]:-webkit-text-fill-color:white [&:-webkit-autofill]:caret-white"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
