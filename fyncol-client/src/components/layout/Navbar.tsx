@@ -52,7 +52,7 @@ export default function Navbar({
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" />
       </div>
 
-    <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-6 md:px-6 lg:py-7">
+    <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 md:px-6">
 
         {/* Logo SOLO (sin cuadro) */}
         <a
@@ -62,20 +62,10 @@ export default function Navbar({
         >
          <img
   src={logo}
-  alt={`${brand} logo`}
-  className="
-    h-14
-    sm:h-16
-    md:h-18
-    lg:h-20
-    w-auto
-    object-contain
-    drop-shadow-[0_25px_60px_rgba(0,0,0,0.65)]
-    transition
-    duration-300
-    group-hover:scale-105
-  "
+  alt="Fyncol logo"
+  className="h-9 sm:h-10 md:h-11 w-auto object-contain"
 />
+
 
         </a>
 
