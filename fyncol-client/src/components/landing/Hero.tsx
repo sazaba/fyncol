@@ -1,61 +1,66 @@
+// src/components/layout/Hero.tsx
 export default function Hero() {
   return (
-    <section className="relative overflow-hidden">
-      {/* Background gradients */}
-      <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute -top-40 left-1/2 h-[680px] w-[680px] -translate-x-1/2 rounded-full bg-cyan-500/10 blur-3xl" />
-        <div className="absolute top-20 left-[-180px] h-[720px] w-[720px] rounded-full bg-blue-600/15 blur-3xl" />
-        <div className="absolute bottom-[-260px] right-[-220px] h-[780px] w-[780px] rounded-full bg-indigo-600/15 blur-3xl" />
+    <section className="relative flex min-h-[90vh] flex-col justify-center overflow-hidden bg-[#020408] pt-24 pb-12 md:pt-32">
+      
+      {/* Background Effects (Optimizado para renderizado rápido) */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-7xl pointer-events-none">
+        {/* Glow Central Azul/Cyan similar a la imagen */}
+        <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 h-[500px] w-[80vw] bg-blue-600/20 blur-[100px] rounded-full mix-blend-screen opacity-50 md:opacity-30" />
+        <div className="absolute top-[10%] left-1/2 -translate-x-1/2 h-[300px] w-[60vw] bg-cyan-500/10 blur-[80px] rounded-full mix-blend-screen" />
       </div>
 
-      <div className="mx-auto w-full max-w-6xl px-4 pb-20 pt-14 md:px-6 md:pt-20">
-        {/* small pill */}
-        <div className="mx-auto mb-8 w-fit rounded-full border border-white/10 bg-white/5 px-5 py-2 text-xs font-semibold tracking-wide text-cyan-200">
-          CONTROL DE PAGOS Y CARTERA • SIMPLE Y CLARO
-        </div>
-
+      <div className="relative mx-auto w-full max-w-6xl px-5 md:px-8 z-10">
         <div className="mx-auto max-w-4xl text-center">
-          <h1 className="text-balance text-4xl font-extrabold leading-tight text-white md:text-6xl">
+          
+          {/* Badge / Pill */}
+          <div className="mx-auto mb-8 inline-flex items-center rounded-full border border-cyan-500/20 bg-cyan-950/10 px-4 py-1.5 backdrop-blur-md">
+            <span className="flex h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)] animate-pulse mr-2"></span>
+            <span className="text-[11px] font-bold tracking-wider text-cyan-300 uppercase">
+              Control de pagos y cartera
+            </span>
+          </div>
+
+          {/* Heading - Typography ajustada a la imagen (Tight & Bold) */}
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-white leading-[1.1]">
             El sistema que{" "}
-            <span className="bg-gradient-to-r from-cyan-300 via-blue-400 to-indigo-400 bg-clip-text text-transparent">
-              registra pagos
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
+              confirma citas
             </span>{" "}
-            y te muestra la cartera en segundos
+            <br className="hidden md:block" />
+            y llena tu agenda.
           </h1>
 
-          <p className="mx-auto mt-6 max-w-2xl text-pretty text-base leading-relaxed text-white/70 md:text-lg">
-            Olvídate del Excel desordenado. Fyncol centraliza clientes, abonos,
-            saldos e historial para que cobres con confianza y sin perder
-            tiempo.
+          <p className="mx-auto mt-6 max-w-2xl text-lg text-slate-400 leading-relaxed md:text-xl">
+            Olvídate de los "vistos" sin respuesta. Fyncol atiende al instante,
+            cualifica pacientes reales y agenda citas mientras tu equipo descansa.
           </p>
 
-          {/* Only one CTA */}
-          <div className="mt-10 flex justify-center">
-            <button className="group relative inline-flex items-center justify-center rounded-full px-7 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98]">
-              <span className="absolute inset-0 rounded-full bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 opacity-95" />
-              <span className="absolute inset-0 rounded-full blur-md bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 opacity-40 transition group-hover:opacity-55" />
-              <span className="absolute inset-[1px] rounded-full bg-[#0B1020]/35" />
-              <span className="absolute inset-0 rounded-full ring-1 ring-white/15" />
-              <span className="relative inline-flex items-center gap-2">
-                Iniciar sesión
-                <svg
-                  className="h-4 w-4 opacity-80 transition-transform group-hover:translate-x-0.5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                >
-                  <path
-                    d="M13 7l5 5-5 5M6 12h12"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </span>
+          {/* CTA Principal - Grande y llamativo */}
+          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <button className="group relative inline-flex h-14 items-center justify-center rounded-full bg-blue-600 px-8 text-base font-semibold text-white transition-all hover:bg-blue-500 hover:scale-[1.02] active:scale-95 shadow-[0_0_40px_-10px_rgba(37,99,235,0.4)]">
+              {/* Glow interno sutil */}
+              <div className="absolute inset-0 rounded-full ring-1 ring-white/20 group-hover:ring-white/30" />
+              <span className="mr-2">Auditar Mi Clínica Gratis</span>
+              <svg 
+                className="h-5 w-5 transition-transform group-hover:translate-x-1" 
+                fill="none" 
+                viewBox="0 0 24 24" 
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5-5 5M6 12h12" />
+              </svg>
             </button>
+            
+            <p className="text-xs font-medium text-slate-500 mt-4 sm:mt-0">
+              * Ver demo en vivo (Sin compromiso)
+            </p>
           </div>
         </div>
       </div>
+      
+      {/* Fondo degradado inferior para conectar con la siguiente sección */}
+      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#020408] to-transparent pointer-events-none" />
     </section>
   );
 }

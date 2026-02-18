@@ -1,9 +1,9 @@
 // src/components/layout/Navbar.tsx
 import { useEffect, useRef, useState } from "react";
-import logo from "@/assets/logo.png"; // usa el optimizado sin márgenes
+import logo from "@/assets/logo.png";
 
 type NavbarProps = {
-  brand?: string; // solo accesibilidad (alt)
+  brand?: string;
   userLabel?: string;
   primaryCtaLabel?: string;
   onPrimaryCta?: () => void;
@@ -18,9 +18,7 @@ export default function Navbar({
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [hidden, setHidden] = useState(false);
-
   const lastYRef = useRef(0);
-  const tickingRef = useRef(false);
 
   useEffect(() => {
     const onResize = () => {
@@ -31,205 +29,107 @@ export default function Navbar({
       const y = window.scrollY || 0;
       setScrolled(y > 10);
 
-      // Hide on scroll down, show on scroll up
-      if (!tickingRef.current) {
-        tickingRef.current = true;
-
-        window.requestAnimationFrame(() => {
-          const lastY = lastYRef.current;
-          const goingDown = y > lastY;
-          const delta = Math.abs(y - lastY);
-
-          // evita parpadeo con scroll pequeño
-          if (delta > 6) {
-            // no ocultar pegado al top
-            if (y < 20) setHidden(false);
-            else setHidden(goingDown);
-          }
-
-          lastYRef.current = y;
-          tickingRef.current = false;
-        });
+      // Lógica de ocultamiento (Hiding logic)
+      if (Math.abs(y - lastYRef.current) > 10) {
+        setHidden(y > lastYRef.current && y > 60);
+        lastYRef.current = y;
       }
     };
 
     window.addEventListener("resize", onResize);
     window.addEventListener("scroll", onScroll, { passive: true });
-
-    // init
-    lastYRef.current = window.scrollY || 0;
-    onScroll();
-
     return () => {
       window.removeEventListener("resize", onResize);
       window.removeEventListener("scroll", onScroll);
     };
   }, []);
 
+  // Estilo base del botón unificado para consistencia desktop/mobile
+  const buttonBaseStyles =
+    "relative inline-flex items-center justify-center font-semibold text-white transition-all active:scale-95 duration-200";
+  
+  // Estilo específico del botón primario (Gradiente + Glow)
+  const primaryButtonStyles = `
+    ${buttonBaseStyles} rounded-full bg-blue-600 px-6 py-2.5 text-[15px] shadow-[0_0_20px_-5px_rgba(37,99,235,0.5)] hover:bg-blue-500 hover:shadow-[0_0_25px_-5px_rgba(37,99,235,0.6)]
+    before:absolute before:inset-0 before:rounded-full before:bg-gradient-to-r before:from-cyan-400 before:via-blue-500 before:to-indigo-500 before:opacity-0 before:transition-opacity hover:before:opacity-100 before:-z-10
+  `;
+
   return (
     <header
       className={[
-        "fixed inset-x-0 top-0 z-50 transition-transform duration-300",
+        "fixed inset-x-0 top-0 z-50 transition-all duration-300 ease-in-out transform-gpu",
         hidden ? "-translate-y-full" : "translate-y-0",
+        scrolled
+          ? "bg-[#05050A]/80 backdrop-blur-xl border-b border-white/5 py-3"
+          : "bg-transparent py-4",
       ].join(" ")}
     >
-      {/* Backdrop */}
-      <div className="absolute inset-0 -z-10">
-        <div
-          className={[
-            "absolute inset-0 backdrop-blur-2xl transition",
-            scrolled ? "bg-[#070A12]/82" : "bg-[#070A12]/58",
-          ].join(" ")}
-        />
-        <div className="absolute inset-0 opacity-70">
-          <div className="absolute -top-24 left-1/2 h-56 w-[48rem] -translate-x-1/2 rounded-full bg-gradient-to-r from-cyan-500/20 via-blue-600/20 to-indigo-600/20 blur-3xl" />
-          <div className="absolute -top-20 right-[-10rem] h-56 w-72 rounded-full bg-emerald-500/10 blur-3xl" />
-          <div className="absolute -top-24 left-[-10rem] h-56 w-72 rounded-full bg-fuchsia-500/10 blur-3xl" />
-        </div>
-        <div className="absolute inset-x-0 top-0 h-px bg-white/10" />
-        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" />
-      </div>
-
-      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 md:px-6">
-        {/* Logo only (sin título) */}
-        <a href="/" aria-label={brand} className="group inline-flex items-center">
+      <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-5 md:px-8">
+        {/* Logo */}
+        <a href="/" aria-label={brand} className="relative z-10 flex items-center">
           <img
             src={logo}
-            alt={`${brand} logo`}
-            className="
-              h-9 sm:h-10 md:h-11
-              w-auto object-contain
-              drop-shadow-[0_18px_40px_rgba(0,0,0,0.55)]
-              transition duration-300
-              group-hover:brightness-110
-              group-hover:drop-shadow-[0_22px_60px_rgba(0,0,0,0.65)]
-            "
+            alt={brand}
+            className="h-8 w-auto md:h-9 object-contain brightness-110 drop-shadow-lg"
           />
         </a>
 
-        {/* Right (desktop) */}
-        <div className="hidden items-center gap-3 lg:flex">
-          {userLabel ? (
-            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-emerald-400/80 shadow-[0_0_0_3px_rgba(16,185,129,0.12)]" />
-              <span className="text-sm text-white/75">{userLabel}</span>
-            </div>
-          ) : null}
-
-          <button
-            onClick={onPrimaryCta}
-            className="group relative inline-flex items-center justify-center rounded-full px-[18px] py-[10px] text-sm font-semibold text-white transition-transform active:scale-[0.98]"
-          >
-            <span className="absolute inset-0 rounded-full bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 opacity-95" />
-            <span className="absolute inset-0 rounded-full blur-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 opacity-35 transition group-hover:opacity-45" />
-            <span className="absolute inset-[1px] rounded-full bg-[#0B1020]/40" />
-            <span className="absolute inset-0 rounded-full ring-1 ring-white/15" />
-
-            <span className="relative inline-flex items-center gap-2">
-              <span>{primaryCtaLabel}</span>
-              <svg
-                className="h-4 w-4 opacity-80 transition-transform group-hover:translate-x-0.5"
-                viewBox="0 0 24 24"
-                fill="none"
-              >
-                <path
-                  d="M13 7l5 5-5 5M6 12h12"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+        {/* Desktop Menu */}
+        <div className="hidden items-center gap-6 lg:flex">
+          {userLabel && (
+            <span className="text-sm font-medium text-slate-300 hover:text-white transition-colors cursor-default">
+              {userLabel}
             </span>
+          )}
+          
+          <button onClick={onPrimaryCta} className={primaryButtonStyles}>
+            <span>{primaryCtaLabel}</span>
           </button>
         </div>
 
-        {/* Mobile controls */}
-        <div className="flex items-center gap-2 lg:hidden">
-          <button
-            onClick={onPrimaryCta}
-            className="relative inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-semibold text-white"
-          >
-            <span className="absolute inset-0 rounded-xl bg-white/[0.06]" />
-            <span className="absolute inset-0 rounded-xl ring-1 ring-white/10" />
-            <span className="relative">{primaryCtaLabel}</span>
-          </button>
-
-          <button
-            className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] p-2 text-white"
-            aria-label={open ? "Cerrar menú" : "Abrir menú"}
-            onClick={() => setOpen((v) => !v)}
+        {/* Mobile Toggle */}
+        <button
+          className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white active:bg-white/10 lg:hidden"
+          onClick={() => setOpen(!open)}
+          aria-label="Toggle menu"
+        >
+          <svg
+            className="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
             {open ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M6 6l12 12M18 6 6 18"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M4 7h16M4 12h16M4 17h16"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
             )}
-          </button>
-        </div>
+          </svg>
+        </button>
       </nav>
 
-      {/* Mobile dropdown */}
-      {open && (
-        <div className="lg:hidden">
-          <div className="mx-auto w-full max-w-6xl px-4 pb-4 md:px-6">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 backdrop-blur-2xl">
-              {userLabel ? (
-                <div className="mb-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/75">
-                  {userLabel}
-                </div>
-              ) : (
-                <div className="mb-2 text-sm text-white/60">
-                  Accede para empezar
-                </div>
-              )}
-
-              <button
-                onClick={() => {
-                  setOpen(false);
-                  onPrimaryCta?.();
-                }}
-                className="group relative w-full rounded-xl px-3 py-2 text-sm font-semibold text-white"
-              >
-                <span className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 opacity-95" />
-                <span className="absolute inset-0 rounded-xl blur-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 opacity-30 transition group-hover:opacity-40" />
-                <span className="absolute inset-[1px] rounded-xl bg-[#0B1020]/35" />
-                <span className="absolute inset-0 rounded-xl ring-1 ring-white/15" />
-                <span className="relative inline-flex items-center justify-center gap-2">
-                  {primaryCtaLabel}
-                  <svg
-                    className="h-4 w-4 opacity-80"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                  >
-                    <path
-                      d="M13 7l5 5-5 5M6 12h12"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-              </button>
+      {/* Mobile Menu Dropdown (Optimizado para Safari) */}
+      <div
+        className={`fixed inset-x-0 top-0 z-0 bg-[#05050A] pt-24 pb-8 shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:hidden ${
+          open ? "translate-y-0" : "-translate-y-full"
+        }`}
+      >
+        <div className="flex flex-col gap-4 px-6">
+          {userLabel && (
+            <div className="flex items-center gap-3 rounded-xl bg-white/5 p-4 border border-white/5">
+              <div className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]"></div>
+              <span className="text-sm font-medium text-slate-200">{userLabel}</span>
             </div>
-          </div>
+          )}
+          
+          <button 
+            onClick={() => { setOpen(false); onPrimaryCta?.(); }}
+            className={`${primaryButtonStyles} w-full py-3.5 text-base`}
+          >
+            {primaryCtaLabel}
+          </button>
         </div>
-      )}
+      </div>
     </header>
   );
 }
