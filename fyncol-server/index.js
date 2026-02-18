@@ -1,48 +1,70 @@
-// fyncol-server/index.js
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const mysql = require('mysql2/promise'); // Usamos la versión con promesas (async/await)
+const { PrismaClient } = require('@prisma/client'); // Importamos Prisma
+const jwt = require('jsonwebtoken');
 
 const app = express();
+const prisma = new PrismaClient(); // Inicializamos el cliente
 const port = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'fyncol_super_secret_key_2026';
 
-// Middlewares
 app.use(cors());
 app.use(express.json());
 
-// Configuración del Pool de Conexiones (Más eficiente que una sola conexión)
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,       // IP o Dominio de Hostinger
-  user: process.env.DB_USER,       // Usuario de Hostinger
-  password: process.env.DB_PASSWORD, // Contraseña
-  database: process.env.DB_NAME,   // Nombre de la base de datos
-  port: process.env.DB_PORT || 3306,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+// Ruta Base
+app.get('/', (req, res) => res.send('Fyncol API con Prisma 🚀'));
+
+// --- RUTA DE LOGIN (Refactorizada con Prisma) ---
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    // 1. Buscar usuario con Prisma (mucho más legible que SQL)
+    const user = await prisma.user.findUnique({
+      where: { email: email },
+    });
+
+    // Si no existe el usuario
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Usuario no encontrado' });
+    }
+
+    // 2. Verificar contraseña (texto plano por ahora)
+    if (password !== user.password) {
+      return res.status(401).json({ success: false, message: 'Contraseña incorrecta' });
+    }
+
+    // 3. Crear Token
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
+    res.json({
+      success: true,
+      message: 'Bienvenido',
+      token,
+      user: { name: user.name, email: user.email, role: user.role }
+    });
+
+  } catch (error) {
+    console.error('Error en login:', error);
+    res.status(500).json({ success: false, message: 'Error en el servidor' });
+  }
 });
 
-// Ruta de prueba
-app.get('/', (req, res) => {
-  res.send('API de Fyncol (MySQL Hostinger) funcionando 🚀');
-});
-
-// Ruta para probar la conexión a la Base de Datos
+// Prueba de BD con Prisma
 app.get('/test-db', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT NOW() as tiempo_servidor');
-    res.json({ 
-      success: true, 
-      mensaje: "¡Conexión exitosa con Hostinger!", 
-      tiempo: rows[0].tiempo_servidor 
-    });
+    const userCount = await prisma.user.count();
+    res.json({ success: true, message: `Conexión exitosa. Hay ${userCount} usuarios.` });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
 app.listen(port, () => {
-  console.log(`Servidor corriendo en el puerto ${port}`);
+  console.log(`Server running on port ${port}`);
 });
