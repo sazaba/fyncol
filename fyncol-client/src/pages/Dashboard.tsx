@@ -5,7 +5,7 @@ import logo from "@/assets/logo.png";
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen] = useState(true);
 
   return (
     <div className="flex h-screen w-full bg-[#020408] text-white overflow-hidden font-sans selection:bg-blue-500/30">
@@ -94,7 +94,7 @@ function NavItem({ icon, label, isOpen, active = false }: any) {
   );
 }
 
-function StatCard({ title, value, change, positive, negative, neutral }: any) {
+function StatCard({ title, value, change, positive, negative }: any) {
   return (
     <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-[#0B1020]/40 p-5 hover:border-white/10 transition-colors">
       <p className="text-xs font-medium text-slate-400">{title}</p>
