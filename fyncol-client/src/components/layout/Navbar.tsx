@@ -52,28 +52,31 @@ export default function Navbar({
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" />
       </div>
 
-      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4 md:px-6">
+    <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-6 md:px-6 lg:py-7">
+
         {/* Logo SOLO (sin cuadro) */}
         <a
           href="/"
           aria-label={brand}
           className="group inline-flex items-center"
         >
-          <img
-            src={logo}
-            alt={`${brand} logo`}
-            className="
-              h-10 w-auto
-              sm:h-11
-              md:h-12
-              lg:h-12
-              object-contain
-              drop-shadow-[0_18px_40px_rgba(0,0,0,0.55)]
-              transition
-              group-hover:brightness-110
-              group-hover:drop-shadow-[0_22px_60px_rgba(0,0,0,0.65)]
-            "
-          />
+         <img
+  src={logo}
+  alt={`${brand} logo`}
+  className="
+    h-14
+    sm:h-16
+    md:h-18
+    lg:h-20
+    w-auto
+    object-contain
+    drop-shadow-[0_25px_60px_rgba(0,0,0,0.65)]
+    transition
+    duration-300
+    group-hover:scale-105
+  "
+/>
+
         </a>
 
         {/* Right (desktop) */}
