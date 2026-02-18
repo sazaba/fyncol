@@ -1,9 +1,9 @@
 // src/pages/Landing.tsx
 import { useNavigate } from "react-router-dom"; 
-import Navbar from "../components/layout/Navbar";
+import Navbar from "../components/landing/Navbar";
 import Hero from "../components/landing/Hero";
 import Features from "@/components/landing/Features";
-import Footer from "../components/layout/Footer";
+import Footer from "../components/landing/Footer";
 
 export default function Landing() {
   const navigate = useNavigate();

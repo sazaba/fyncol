@@ -1,31 +1,28 @@
-// src/App.tsx
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Landing from "./pages/Landing";
 import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
+import Landing from "./pages/Landing";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import MainLayout from "@/components/layouts/MainLayout"; // <--- Importas el layout
+import Dashboard from "./pages/dashboard/Dashboard";
+import UsersPage from "./pages/admin/UsersPage";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* --- RUTAS PÚBLICAS --- */}
-        {/* Cualquiera puede ver la Landing y el Login */}
+        {/* Rutas Públicas */}
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
 
-        {/* --- RUTAS PROTEGIDAS --- */}
-        {/* Todo lo que pongas aquí dentro requiere Token. 
-            Si no hay token, ProtectedRoute los manda al Login. */}
+        {/* Rutas Privadas (SaaS) */}
         <Route element={<ProtectedRoute />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          {/* Aquí podrás agregar más rutas privadas en el futuro, ejemplo:
-          <Route path="/pacientes" element={<Pacientes />} /> 
-          */}
+          {/* El MainLayout envuelve todo: Sidebar + Contenido */}
+          <Route element={<MainLayout />}>
+             <Route path="/dashboard" element={<Dashboard />} />
+             <Route path="/admin/usuarios" element={<UsersPage />} />
+             {/* Futuras rutas: /rutas, /prestamos, etc. */}
+          </Route>
         </Route>
-
-        {/* Ruta 404 (Opcional): Redirige a Landing si escriben algo raro */}
-        <Route path="*" element={<Landing />} />
       </Routes>
     </BrowserRouter>
   );
