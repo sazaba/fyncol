@@ -1,181 +1,191 @@
-// src/pages/Dashboard.tsx
+// src/pages/dashboard/Dashboard.tsx
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import logo from "@/assets/logo.png";
 
-// Definimos la URL del API (igual que en Login)
+// Variable de entorno
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [sidebarOpen] = useState(true);
-  
-  // Estado para guardar el nombre real del usuario traído del backend
   const [userName, setUserName] = useState("Cargando...");
-  const [stats, setStats] = useState<any>(null); // Para guardar las stats del backend
+  const [stats, setStats] = useState<any>(null);
 
-  // --- 1. VERIFICAR SESIÓN AL CARGAR ---
   useEffect(() => {
     const fetchUserData = async () => {
       const token = localStorage.getItem("token");
-      
-      // Si no hay token local, fuera de aquí
-      if (!token) {
-        navigate("/login");
-        return;
-      }
+      if (!token) return navigate("/login");
 
       try {
-        // Llamamos al endpoint unificado en authController
         const res = await fetch(`${API_URL}/api/auth/me`, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}` // Enviamos el token
-          }
+          headers: { "Authorization": `Bearer ${token}` }
         });
-
         const data = await res.json();
 
         if (data.success) {
-          // Todo bien: Actualizamos nombre y stats
           setUserName(data.user.name);
           setStats(data.stats);
         } else {
-          // Si el token expiró o es falso -> Logout forzado
-          handleLogout();
+            // Si falla el token, limpiar y salir
+            localStorage.removeItem("token");
+            navigate("/login");
         }
       } catch (error) {
-        console.error("Error validando sesión:", error);
-        // Opcional: handleLogout() si quieres ser estricto con errores de red
+        console.error("Error:", error);
       }
     };
 
     fetchUserData();
   }, [navigate]);
 
-  // --- 2. FUNCIÓN LOGOUT ---
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    navigate("/");
-  };
-
   return (
-    <div className="flex h-screen w-full bg-[#020408] text-white overflow-hidden font-sans selection:bg-blue-500/30">
+    <div className="max-w-7xl mx-auto space-y-8">
       
-      {/* SIDEBAR */}
-      <aside 
-        className={`${sidebarOpen ? "w-64" : "w-20"} relative z-20 flex flex-col border-r border-white/5 bg-[#05050A] transition-all duration-300 hidden md:flex`}
-      >
-        <div className="flex h-16 items-center justify-center border-b border-white/5">
-           <img src={logo} alt="Fyncol" className="h-6 w-auto object-contain opacity-90" />
-           {sidebarOpen && <span className="ml-3 font-bold tracking-tight text-white">Fyncol</span>}
-        </div>
+      {/* 1. Header de Bienvenida */}
+      <div>
+        <h1 className="text-2xl font-bold text-white">Hola, {userName} 👋</h1>
+        <p className="text-slate-400">Aquí tienes el resumen de tu operación hoy.</p>
+      </div>
 
-        <nav className="flex-1 space-y-2 p-4">
-          <NavItem icon={<HomeIcon />} label="Inicio" isOpen={sidebarOpen} active />
-          <NavItem icon={<UsersIcon />} label="Pacientes" isOpen={sidebarOpen} />
-          <NavItem icon={<CalendarIcon />} label="Citas" isOpen={sidebarOpen} />
-          <NavItem icon={<WalletIcon />} label="Cartera" isOpen={sidebarOpen} />
-        </nav>
+      {/* 2. Tarjetas KPIs (Stats) */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <StatCard 
+          title="Ingresos Hoy" 
+          value={stats ? stats.ingresos : "$0"} 
+          change="+12%" 
+          positive 
+          icon="💰"
+        />
+        <StatCard 
+          title="Citas Pendientes" 
+          value={stats ? stats.citas : "0"} 
+          change="Para hoy" 
+          icon="📅"
+        />
+        <StatCard 
+          title="Cartera Vencida" 
+          value={stats ? stats.cartera : "$0"} 
+          change="-5%" 
+          negative 
+          icon="📉"
+        />
+        <StatCard 
+          title="Clientes Activos" 
+          value={stats ? stats.pacientes : "0"} 
+          change="+2" 
+          positive 
+          icon="👥"
+        />
+      </div>
 
-        <div className="border-t border-white/5 p-4">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 shadow-lg shadow-blue-500/20" />
-            {sidebarOpen && (
-              <div className="flex flex-col">
-                {/* Nombre dinámico traído del backend */}
-                <span className="text-sm font-medium text-white truncate max-w-[150px]">{userName}</span>
-                <span className="text-xs text-slate-500">Psicólogo</span>
-              </div>
-            )}
+      {/* 3. Sección Gráficas Dummy y Actividad */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        
+        {/* Gráfica de Barras Simulada (CSS puro) */}
+        <div className="lg:col-span-2 rounded-2xl border border-white/5 bg-[#0B1020]/40 p-6 backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="font-semibold text-white">Comportamiento de Recaudos</h3>
+            <select className="bg-white/5 border border-white/10 rounded-lg text-xs text-slate-400 px-2 py-1 outline-none">
+              <option>Últimos 6 meses</option>
+            </select>
+          </div>
+          
+          {/* Contenedor de las barras */}
+          <div className="flex items-end justify-between h-48 gap-2 pt-4">
+            <Bar height="40%" label="Ago" />
+            <Bar height="65%" label="Sep" />
+            <Bar height="50%" label="Oct" />
+            <Bar height="85%" label="Nov" active />
+            <Bar height="70%" label="Dic" />
+            <Bar height="60%" label="Ene" />
           </div>
         </div>
-      </aside>
 
-      {/* MAIN CONTENT AREA */}
-      <main className="flex-1 relative overflow-hidden flex flex-col">
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute top-[-20%] right-[-10%] h-[500px] w-[500px] rounded-full bg-blue-600/10 blur-[120px]" />
-        </div>
-
-        <header className="flex h-16 items-center justify-between border-b border-white/5 bg-[#020408]/50 px-6 backdrop-blur-xl z-10">
-          <h2 className="text-lg font-semibold text-slate-200">Panel Principal</h2>
-          <button 
-            onClick={handleLogout}
-            className="text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
-          >
-            Cerrar Sesión
+        {/* Lista de Actividad Reciente */}
+        <div className="rounded-2xl border border-white/5 bg-[#0B1020]/40 p-6 backdrop-blur-sm">
+          <h3 className="font-semibold text-white mb-4">Actividad Reciente</h3>
+          <div className="space-y-4">
+            <ActivityItem 
+              title="Pago Recibido" 
+              desc="Juan Pérez abonó $50.000" 
+              time="Hace 10 min" 
+              type="payment" 
+            />
+            <ActivityItem 
+              title="Nuevo Cliente" 
+              desc="Registro de María Gómez" 
+              time="Hace 1h" 
+              type="user" 
+            />
+            <ActivityItem 
+              title="Ruta Finalizada" 
+              desc="Cobrador Carlos terminó ruta Norte" 
+              time="Hace 2h" 
+              type="route" 
+            />
+          </div>
+          <button className="w-full mt-4 py-2 text-xs font-medium text-slate-400 hover:text-white transition-colors border border-white/5 rounded-lg hover:bg-white/5">
+            Ver todo
           </button>
-        </header>
-
-        <div className="flex-1 overflow-y-auto p-6 md:p-8">
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {/* Usamos los datos del estado 'stats' si existen, o un fallback visual */}
-            <StatCard 
-              title="Ingresos del Mes" 
-              value={stats ? stats.ingresos : "..."} 
-              change="+12%" 
-              positive 
-            />
-            <StatCard 
-              title="Citas Pendientes" 
-              value={stats ? stats.citas : "..."} 
-              change="Para hoy" 
-            />
-            <StatCard 
-              title="Cartera Vencida" 
-              value={stats ? stats.cartera : "..."} 
-              change="-5%" 
-              negative 
-            />
-            <StatCard 
-              title="Nuevos Pacientes" 
-              value={stats ? stats.pacientes : "..."} 
-              change="+2" 
-              positive 
-            />
-          </div>
-
-          <div className="mt-8 rounded-2xl border border-white/5 bg-white/[0.02] p-6 backdrop-blur-sm">
-            <h3 className="mb-4 text-sm font-semibold text-slate-300">Últimos Movimientos</h3>
-            <div className="h-40 flex items-center justify-center border-2 border-dashed border-white/5 rounded-xl text-slate-500 text-sm">
-              Conectado a la Base de Datos: {userName !== "Cargando..." ? "Sí 🟢" : "Verificando..."}
-            </div>
-          </div>
         </div>
-      </main>
-    </div>
-  );
-}
 
-// --- Componentes UI ---
-
-function NavItem({ icon, label, isOpen, active = false }: any) {
-  return (
-    <button className={`flex w-full items-center rounded-xl px-3 py-2.5 transition-all group ${active ? 'bg-blue-600/10 text-blue-400' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}>
-      <span className="h-5 w-5">{icon}</span>
-      {isOpen && <span className="ml-3 text-sm font-medium">{label}</span>}
-    </button>
-  );
-}
-
-function StatCard({ title, value, change, positive, negative }: any) {
-  return (
-    <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-[#0B1020]/40 p-5 hover:border-white/10 transition-colors">
-      <p className="text-xs font-medium text-slate-400">{title}</p>
-      <div className="mt-2 flex items-baseline gap-2">
-        <h3 className="text-2xl font-bold text-white animate-in fade-in duration-500">{value}</h3>
-        <span className={`text-xs font-medium ${positive ? 'text-emerald-400' : negative ? 'text-rose-400' : 'text-blue-400'}`}>
-          {change}
-        </span>
       </div>
     </div>
   );
 }
 
-const HomeIcon = () => <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>;
-const UsersIcon = () => <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
-const CalendarIcon = () => <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
-const WalletIcon = () => <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>;
+// --- Componentes Pequeños Visuales ---
+
+function StatCard({ title, value, change, positive, negative, icon }: any) {
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-[#0B1020]/40 p-5 hover:border-white/10 transition-colors group">
+      <div className="flex justify-between items-start">
+        <div>
+           <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">{title}</p>
+           <h3 className="mt-2 text-2xl font-bold text-white">{value}</h3>
+        </div>
+        <span className="text-2xl opacity-50 grayscale group-hover:grayscale-0 transition-all">{icon}</span>
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${positive ? 'bg-emerald-500/10 text-emerald-400' : negative ? 'bg-rose-500/10 text-rose-400' : 'bg-blue-500/10 text-blue-400'}`}>
+          {change}
+        </span>
+        <span className="text-xs text-slate-500">vs mes anterior</span>
+      </div>
+    </div>
+  );
+}
+
+// Componente de Barra para la gráfica
+function Bar({ height, label, active }: any) {
+  return (
+    <div className="flex flex-col items-center flex-1 group cursor-pointer">
+      <div className="relative w-full max-w-[40px] bg-white/5 rounded-t-sm h-full flex items-end overflow-hidden">
+        <div 
+          style={{ height: height }} 
+          className={`w-full transition-all duration-500 ${active ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]' : 'bg-slate-700 group-hover:bg-slate-600'}`}
+        />
+      </div>
+      <span className="mt-2 text-xs text-slate-500">{label}</span>
+    </div>
+  );
+}
+
+// Item de Actividad
+function ActivityItem({ title, desc, time, type }: any) {
+  const colors: any = {
+    payment: "bg-emerald-500",
+    user: "bg-blue-500",
+    route: "bg-purple-500"
+  };
+
+  return (
+    <div className="flex gap-3 items-start">
+      <div className={`mt-1.5 h-2 w-2 rounded-full ${colors[type] || "bg-slate-500"} shadow-[0_0_8px_rgba(255,255,255,0.2)]`} />
+      <div>
+        <p className="text-sm font-medium text-slate-200">{title}</p>
+        <p className="text-xs text-slate-500">{desc}</p>
+        <p className="text-[10px] text-slate-600 mt-1">{time}</p>
+      </div>
+    </div>
+  );
+}
