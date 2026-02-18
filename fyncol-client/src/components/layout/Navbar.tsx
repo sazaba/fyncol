@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import logo from "@/assets/logo.png";
 
 type NavbarProps = {
-  brand?: string; // solo para el alt (accesibilidad)
+  brand?: string; // solo para accesibilidad (alt)
   userLabel?: string;
   primaryCtaLabel?: string;
   onPrimaryCta?: () => void;
@@ -35,7 +35,7 @@ export default function Navbar({
 
   return (
     <header className="sticky top-0 z-50">
-      {/* Ultra-premium backdrop */}
+      {/* Backdrop */}
       <div className="absolute inset-0 -z-10">
         <div
           className={[
@@ -43,40 +43,37 @@ export default function Navbar({
             scrolled ? "bg-[#070A12]/82" : "bg-[#070A12]/58",
           ].join(" ")}
         />
-
         <div className="absolute inset-0 opacity-70">
           <div className="absolute -top-24 left-1/2 h-56 w-[48rem] -translate-x-1/2 rounded-full bg-gradient-to-r from-cyan-500/20 via-blue-600/20 to-indigo-600/20 blur-3xl" />
           <div className="absolute -top-20 right-[-10rem] h-56 w-72 rounded-full bg-emerald-500/10 blur-3xl" />
           <div className="absolute -top-24 left-[-10rem] h-56 w-72 rounded-full bg-fuchsia-500/10 blur-3xl" />
         </div>
-
         <div className="absolute inset-x-0 top-0 h-px bg-white/10" />
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" />
       </div>
 
       <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4 md:px-6">
-        {/* Logo ONLY */}
+        {/* Logo SOLO (sin cuadro) */}
         <a
           href="/"
-          className="group inline-flex items-center rounded-2xl px-2 py-1 transition hover:bg-white/[0.03]"
           aria-label={brand}
+          className="group inline-flex items-center"
         >
-          <span className="relative grid h-14 w-14 place-items-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] shadow-[0_0_0_1px_rgba(255,255,255,0.05)]">
-            {/* inner glow */}
-            <span className="absolute inset-0 opacity-0 transition group-hover:opacity-100">
-              <span className="absolute -left-7 top-1/2 h-20 w-20 -translate-y-1/2 rounded-full bg-cyan-500/25 blur-2xl" />
-              <span className="absolute -right-7 top-1/2 h-20 w-20 -translate-y-1/2 rounded-full bg-indigo-500/25 blur-2xl" />
-            </span>
-
-            {/* shiny sweep */}
-            <span className="absolute -left-24 top-0 h-full w-24 rotate-12 bg-white/10 blur-xl transition-all duration-700 group-hover:left-32" />
-
-            <img
-              src={logo}
-              alt={`${brand} logo`}
-              className="relative h-10 w-10 object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.45)]"
-            />
-          </span>
+          <img
+            src={logo}
+            alt={`${brand} logo`}
+            className="
+              h-10 w-auto
+              sm:h-11
+              md:h-12
+              lg:h-12
+              object-contain
+              drop-shadow-[0_18px_40px_rgba(0,0,0,0.55)]
+              transition
+              group-hover:brightness-110
+              group-hover:drop-shadow-[0_22px_60px_rgba(0,0,0,0.65)]
+            "
+          />
         </a>
 
         {/* Right (desktop) */}
@@ -183,11 +180,7 @@ export default function Navbar({
                 <span className="absolute inset-0 rounded-xl ring-1 ring-white/15" />
                 <span className="relative inline-flex items-center justify-center gap-2">
                   {primaryCtaLabel}
-                  <svg
-                    className="h-4 w-4 opacity-80"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                  >
+                  <svg className="h-4 w-4 opacity-80" viewBox="0 0 24 24" fill="none">
                     <path
                       d="M13 7l5 5-5 5M6 12h12"
                       stroke="currentColor"
