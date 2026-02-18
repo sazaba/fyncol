@@ -1,11 +1,11 @@
+// src/components/app/Sidebar.tsx
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-// Si no tienes logo importado, comenta la línea del img
+import { Link, useLocation } from "react-router-dom"; // Quitamos useNavigate de aquí
 import logo from "@/assets/logo.png"; 
 
 export default function Sidebar({ isOpen }: { isOpen: boolean }) {
   const location = useLocation();
-  const navigate = useNavigate();
+  // const navigate = useNavigate(); <--- BORRAMOS ESTA LÍNEA QUE CAUSA EL ERROR
   const [isAdminOpen, setIsAdminOpen] = useState(false);
 
   // Función para saber si un link está activo
@@ -48,7 +48,6 @@ export default function Sidebar({ isOpen }: { isOpen: boolean }) {
               <Link to="/admin/usuarios" className={`block w-full text-left rounded-lg px-3 py-2 text-sm ${isActive("/admin/usuarios") ? "text-blue-400 bg-blue-500/10" : "text-slate-500 hover:text-white"}`}>
                 Usuarios
               </Link>
-              {/* Aquí agregarás más opciones admin a futuro */}
             </div>
           </div>
         </div>
