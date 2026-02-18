@@ -29,22 +29,30 @@ export default function Hero() {
             tiempo.
           </p>
 
-          <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <button className="relative inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold text-white">
+          {/* Only one CTA */}
+          <div className="mt-10 flex justify-center">
+            <button className="group relative inline-flex items-center justify-center rounded-full px-7 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98]">
               <span className="absolute inset-0 rounded-full bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 opacity-95" />
-              <span className="absolute inset-0 rounded-full blur-md bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 opacity-40" />
+              <span className="absolute inset-0 rounded-full blur-md bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 opacity-40 transition group-hover:opacity-55" />
+              <span className="absolute inset-[1px] rounded-full bg-[#0B1020]/35" />
+              <span className="absolute inset-0 rounded-full ring-1 ring-white/15" />
               <span className="relative inline-flex items-center gap-2">
-                <span className="inline-block h-5 w-5 rounded-md bg-white/15" />
-                Crear cuenta / Iniciar sesión
+                Iniciar sesión
+                <svg
+                  className="h-4 w-4 opacity-80 transition-transform group-hover:translate-x-0.5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <path
+                    d="M13 7l5 5-5 5M6 12h12"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
               </span>
             </button>
-
-            <a
-              href="#como-funciona"
-              className="text-sm font-semibold text-white/70 hover:text-white"
-            >
-              Ver cómo funciona (sin compromiso)
-            </a>
           </div>
         </div>
       </div>

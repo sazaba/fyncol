@@ -52,7 +52,7 @@ export default function Navbar({
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" />
       </div>
 
-    <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 md:px-6">
+    <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4 md:px-6">
 
         {/* Logo SOLO (sin cuadro) */}
         <a
