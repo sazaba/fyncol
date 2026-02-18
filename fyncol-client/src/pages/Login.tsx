@@ -1,5 +1,5 @@
 // src/pages/Login.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png";
 
@@ -14,6 +14,16 @@ export default function Login() {
 
   // URL de tu Backend (Usa la variable de entorno de Vercel o localhost por defecto)
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
+  // === NUEVO: VERIFICAR SESIÓN ACTIVA (Guest Route) ===
+  useEffect(() => {
+    // Si ya existe un token en localStorage, asumimos que está logueado
+    // y lo mandamos de vuelta al dashboard para que no vea el login.
+    const token = localStorage.getItem("token");
+    if (token) {
+      navigate("/dashboard");
+    }
+  }, [navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,9 +61,9 @@ export default function Login() {
   };
 
   return (
-    // CAMBIO CLAVE: Usamos h-[100dvh] en lugar de min-h-screen
+    // Usamos h-[100dvh] en lugar de min-h-screen
     // Esto fuerza al contenedor a tener EXACTAMENTE el tamaño visible de la pantalla móvil
-    <div className="relative flex h-[100dvh] w-full items-center justify-center overflow-hidden bg-[#020408] px-4 selection:bg-blue-500/30">
+    <div className="relative flex h-[100dvh] w-full items-center justify-center overflow-hidden bg-[#020408] px-4 selection:bg-blue-500/30 font-inter">
       
       {/* Background Gradients (Optimizados para GPU) */}
       <div className="pointer-events-none absolute inset-0 transform-gpu overflow-hidden">
@@ -71,7 +81,7 @@ export default function Login() {
             alt="Fyncol" 
             className="mb-6 h-10 w-auto object-contain drop-shadow-[0_0_15px_rgba(59,130,246,0.5)] brightness-110" 
           />
-          <h1 className="text-2xl font-bold tracking-tight text-white">
+          <h1 className="text-2xl font-bold tracking-tight text-white font-sora">
             Bienvenido de nuevo
           </h1>
           <p className="mt-2 text-sm text-slate-400">
@@ -91,7 +101,7 @@ export default function Login() {
 
           {/* Email Input */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <label className="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-slate-500">
               Correo Electrónico
             </label>
             <div className="group relative">
@@ -101,20 +111,20 @@ export default function Login() {
                 </svg>
               </div>
               <input
-  type="email"
-  required
-  placeholder="ejemplo@empresa.com"
-  className="w-full appearance-none rounded-xl border border-white/10 bg-white/5 py-3.5 pl-11 pr-4 text-base text-white placeholder-slate-500 shadow-sm transition-all focus:border-blue-500/50 focus:bg-white/[0.07] focus:outline-none focus:ring-4 focus:ring-blue-500/10 md:text-sm"
-  value={email}
-  onChange={(e) => setEmail(e.target.value)}
-/>
+                type="email"
+                required
+                placeholder="ejemplo@empresa.com"
+                className="w-full appearance-none rounded-xl border border-white/10 bg-[#05050A] py-3.5 pl-11 pr-4 text-sm md:text-base text-white placeholder-slate-600 shadow-sm transition-all focus:border-blue-500/50 focus:bg-[#0B1020] focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
             </div>
           </div>
 
           {/* Password Input */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <label className="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-slate-500">
                 Contraseña
               </label>
               <a href="#" className="text-xs font-medium text-blue-400 transition-colors hover:text-blue-300">
@@ -131,7 +141,7 @@ export default function Login() {
                 type="password"
                 required
                 placeholder="••••••••"
-                className="w-full appearance-none rounded-xl border border-white/10 bg-white/5 py-3.5 pl-11 pr-4 text-base text-white placeholder-slate-500 shadow-sm transition-all focus:border-blue-500/50 focus:bg-white/[0.07] focus:outline-none focus:ring-4 focus:ring-blue-500/10 md:text-sm [&:-webkit-autofill]:shadow-[0_0_0_1000px_#0B1020_inset] [&:-webkit-autofill]:-webkit-text-fill-color:white [&:-webkit-autofill]:caret-white"
+                className="w-full appearance-none rounded-xl border border-white/10 bg-[#05050A] py-3.5 pl-11 pr-4 text-sm md:text-base text-white placeholder-slate-600 shadow-sm transition-all focus:border-blue-500/50 focus:bg-[#0B1020] focus:outline-none focus:ring-1 focus:ring-blue-500/50 [&:-webkit-autofill]:shadow-[0_0_0_1000px_#05050A_inset] [&:-webkit-autofill]:-webkit-text-fill-color:white [&:-webkit-autofill]:caret-white"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -142,7 +152,7 @@ export default function Login() {
           <button 
             type="submit"
             disabled={loading}
-            className="group relative mt-2 w-full overflow-hidden rounded-xl bg-blue-600 py-3.5 text-sm font-bold text-white shadow-[0_0_20px_-5px_rgba(37,99,235,0.5)] transition-all hover:scale-[1.02] hover:bg-blue-500 hover:shadow-[0_0_25px_-5px_rgba(37,99,235,0.6)] active:scale-[0.98] disabled:opacity-70 disabled:cursor-wait"
+            className="group relative mt-2 w-full overflow-hidden rounded-xl bg-blue-600 py-3.5 text-sm font-bold text-white shadow-[0_0_20px_-5px_rgba(37,99,235,0.5)] transition-all hover:scale-[1.02] hover:bg-blue-500 hover:shadow-[0_0_25px_-5px_rgba(37,99,235,0.6)] active:scale-[0.98] disabled:opacity-70 disabled:cursor-wait disabled:hover:scale-100 disabled:active:scale-100"
           >
             <span className="relative z-10 flex items-center justify-center gap-2">
               {loading ? "Verificando..." : "Iniciar Sesión"}
