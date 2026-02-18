@@ -1,5 +1,5 @@
 // src/components/layout/Footer.tsx
-import logo from "@/assets/fyncol-logo-navbar-optimized.png";
+import logo from "@/assets/logo.png";
 
 export default function Footer() {
   const year = new Date().getFullYear();

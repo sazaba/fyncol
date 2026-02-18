@@ -1,6 +1,6 @@
 // src/components/layout/Navbar.tsx
 import { useEffect, useRef, useState } from "react";
-import logo from "@/assets/fyncol-logo-navbar-optimized.png"; // usa el optimizado sin márgenes
+import logo from "@/assets/logo.png"; // usa el optimizado sin márgenes
 
 type NavbarProps = {
   brand?: string; // solo accesibilidad (alt)
