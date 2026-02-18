@@ -1,6 +1,9 @@
 // src/pages/admin/UsersPage.tsx
 import { useState } from "react";
-import { FiPlus, FiEdit2, FiTrash2, FiCamera, FiMoreVertical } from "react-icons/fi";
+import { 
+  FiPlus, FiEdit2, FiTrash2, FiCamera, FiMoreVertical, 
+  FiUser, FiCreditCard, FiMapPin, FiPhone, FiShield 
+} from "react-icons/fi";
 
 export default function UsersPage() {
   const [showModal, setShowModal] = useState(false);
@@ -51,7 +54,7 @@ export default function UsersPage() {
                 dummyUsers.map((user) => (
                   <tr key={user.id} className="hover:bg-white/[0.02] transition-colors group">
                     <td className="px-6 py-4 font-medium text-white flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-500/10">
+                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500/20 to-cyan-500/20 text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-500/10 shadow-[0_0_10px_rgba(59,130,246,0.1)]">
                         {user.name.charAt(0)}
                       </div>
                       {user.name}
@@ -84,7 +87,7 @@ export default function UsersPage() {
           dummyUsers.map((user) => (
             <div key={user.id} className="bg-[#0B1020]/60 border border-white/5 rounded-3xl p-5 flex items-center justify-between backdrop-blur-md shadow-xl">
               <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 text-blue-400 flex items-center justify-center font-bold text-base shrink-0 border border-blue-500/10">
+                <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500/20 to-cyan-500/20 text-blue-400 flex items-center justify-center font-bold text-base shrink-0 border border-blue-500/10">
                   {user.name.charAt(0)}
                 </div>
                 <div>
@@ -100,72 +103,86 @@ export default function UsersPage() {
         )}
       </div>
 
-      {/* MODAL DE REGISTRO PREMIUM GLASSMORPHISM */}
+      {/* ========================================== */}
+      {/* MODAL ULTRA PREMIUM (SCROLL & ARROWS HIDDEN) */}
+      {/* ========================================== */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-[#020408]/80 backdrop-blur-md p-0 md:p-4 transition-all">
           
-          {/* Luces de fondo (Glows) */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[400px] w-[400px] rounded-full bg-blue-600/20 blur-[120px]" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[500px] w-[500px] rounded-full bg-blue-600/10 blur-[120px]" />
           </div>
 
-          {/* Contenedor del Modal (Estructura Flex para evitar que se corte) */}
-          <div className="relative w-full max-w-lg bg-[#05050A]/90 backdrop-blur-2xl border-t md:border border-white/10 rounded-t-[32px] md:rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col max-h-[92dvh] animate-[slideUp_0.3s_ease-out] md:animate-none overflow-hidden">
+          <div className="relative w-full max-w-[520px] bg-[#05050A]/80 backdrop-blur-3xl border-t md:border border-white/10 rounded-t-[36px] md:rounded-[36px] shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col max-h-[92dvh] animate-[slideUp_0.4s_cubic-bezier(0.16,1,0.3,1)] md:animate-none overflow-hidden ring-1 ring-white/5">
             
-            {/* Handle Drag Móvil */}
             <div className="w-12 h-1.5 bg-white/10 rounded-full mx-auto mt-4 shrink-0 md:hidden" />
 
-            {/* HEADER MODAL (Fijo) */}
-            <div className="px-6 md:px-8 pt-4 md:pt-8 pb-4 shrink-0 border-b border-white/5">
+            {/* HEADER MODAL */}
+            <div className="px-6 md:px-10 pt-5 md:pt-10 pb-4 shrink-0 border-b border-white/[0.05]">
               <h2 className="text-xl md:text-2xl font-bold text-white font-sora">Nuevo Usuario</h2>
-              <p className="text-xs text-slate-400 mt-1">Completa los datos para registrar un nuevo integrante.</p>
+              <p className="text-xs text-slate-400 mt-1.5 font-medium">Completa los datos para registrar un nuevo integrante.</p>
             </div>
             
-            {/* BODY MODAL (Scrolleable) */}
-            <div className="px-6 md:px-8 py-6 overflow-y-auto custom-scrollbar">
+            {/* BODY MODAL - Scroll oculto visualmente pero funcional */}
+            <div className="px-6 md:px-10 py-8 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               <form className="space-y-6">
                 
-                {/* Foto */}
-                <div className="flex justify-center">
-                   <div className="h-24 w-24 rounded-full bg-white/5 border border-dashed border-white/20 flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:border-blue-500/50 hover:text-blue-400 hover:bg-blue-500/10 transition-all group shadow-inner">
-                     <FiCamera size={24} className="mb-1 group-hover:scale-110 transition-transform duration-300" />
-                     <span className="text-[10px] font-semibold uppercase tracking-wider">Subir</span>
+                {/* Foto Profile Area */}
+                <div className="flex justify-center mb-2">
+                   <div className="relative group cursor-pointer">
+                     <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-xl group-hover:bg-blue-500/30 transition-colors duration-500" />
+                     <div className="relative h-28 w-28 rounded-full bg-[#0B1020]/80 border border-white/10 flex flex-col items-center justify-center text-slate-400 group-hover:border-blue-500/50 group-hover:text-blue-400 transition-all duration-300 shadow-inner">
+                       <FiCamera size={28} className="mb-2 group-hover:scale-110 transition-transform duration-300" />
+                       <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">Subir</span>
+                     </div>
                    </div>
                 </div>
 
+                {/* Grid de Inputs con Íconos */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <InputGroup label="Nombre Completo" placeholder="Ej: Juan Pérez" />
-                  <InputGroup label="Cédula (CC)" placeholder="12345678" type="number" />
+                  <InputGroup label="Nombre Completo" placeholder="Ej: Juan Pérez" icon={FiUser} />
+                  <InputGroup label="Cédula (CC)" placeholder="12345678" type="number" icon={FiCreditCard} />
                 </div>
                 
-                <InputGroup label="Dirección" placeholder="Calle 123 # 45-67" />
+                <InputGroup label="Dirección" placeholder="Calle 123 # 45-67" icon={FiMapPin} />
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <InputGroup label="Teléfono" placeholder="300 123 4567" type="tel" />
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] md:text-xs font-semibold text-slate-400 uppercase tracking-wider">Rol</label>
-                    <select className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm focus:border-blue-500/50 focus:bg-[#0B1020] focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all [&>option]:bg-[#0B1020]">
-                      <option>Cobrador</option>
-                      <option>Administrador</option>
-                      <option>Supervisor</option>
-                    </select>
+                  <InputGroup label="Teléfono" placeholder="300 123 4567" type="tel" icon={FiPhone} />
+                  
+                  {/* Select Personalizado */}
+                  <div className="space-y-2 relative group">
+                    <label className="text-[10px] md:text-xs font-semibold text-slate-400 uppercase tracking-widest pl-1">Rol de Acceso</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500 group-focus-within:text-blue-400 transition-colors">
+                        <FiShield size={18} />
+                      </div>
+                      <select className="w-full appearance-none bg-[#0B1020]/50 border border-white/5 rounded-2xl pl-11 pr-4 py-3.5 text-white text-sm focus:border-blue-500/50 focus:bg-blue-500/[0.02] focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all shadow-inner [&>option]:bg-[#0B1020]">
+                        <option>Cobrador</option>
+                        <option>Administrador</option>
+                        <option>Supervisor</option>
+                      </select>
+                      {/* Flecha del select personalizada */}
+                      <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-slate-500">
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </form>
             </div>
 
-            {/* FOOTER MODAL (Fijo) */}
-            <div className="px-6 md:px-8 py-5 border-t border-white/5 bg-[#05050A] shrink-0 flex gap-3">
+            {/* FOOTER MODAL */}
+            <div className="px-6 md:px-10 py-5 border-t border-white/[0.05] bg-[#020408]/50 shrink-0 flex gap-4 backdrop-blur-xl">
               <button 
                 type="button" 
                 onClick={() => setShowModal(false)} 
-                className="flex-1 py-3.5 rounded-xl border border-white/10 text-slate-300 font-medium hover:bg-white/5 transition-all active:scale-95 text-sm"
+                className="w-1/3 py-3.5 rounded-2xl border border-white/5 text-slate-400 font-medium hover:bg-white/5 hover:text-white transition-all active:scale-95 text-sm"
               >
                 Cancelar
               </button>
               <button 
                 type="button" 
-                className="flex-1 py-3.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-500 transition-all active:scale-95 text-sm shadow-[0_0_20px_-5px_rgba(37,99,235,0.5)] hover:shadow-[0_0_25px_-5px_rgba(37,99,235,0.6)]"
+                className="w-2/3 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-500 text-white font-bold hover:from-blue-500 hover:to-blue-400 transition-all active:scale-95 text-sm shadow-[0_0_20px_-5px_rgba(37,99,235,0.5)] hover:shadow-[0_0_30px_-5px_rgba(37,99,235,0.7)] flex justify-center items-center gap-2"
               >
                 Guardar Usuario
               </button>
@@ -178,16 +195,24 @@ export default function UsersPage() {
   );
 }
 
-// Helper para Inputs estilizados
-function InputGroup({ label, type = "text", placeholder }: any) {
+// Helper para Inputs Premium con Íconos y sin flechas de number
+function InputGroup({ label, type = "text", placeholder, icon: Icon }: any) {
   return (
-    <div className="space-y-1.5">
-      <label className="text-[10px] md:text-xs font-semibold text-slate-400 uppercase tracking-wider">{label}</label>
-      <input 
-        type={type} 
-        placeholder={placeholder} 
-        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm focus:border-blue-500/50 focus:bg-[#0B1020] focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600 shadow-sm" 
-      />
+    <div className="space-y-2 relative group">
+      <label className="text-[10px] md:text-xs font-semibold text-slate-400 uppercase tracking-widest pl-1">{label}</label>
+      <div className="relative">
+        {Icon && (
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500 group-focus-within:text-blue-400 transition-colors">
+            <Icon size={18} />
+          </div>
+        )}
+        <input 
+          type={type} 
+          placeholder={placeholder} 
+          // Clases clave para ocultar flechas de number: [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]
+          className={`w-full bg-[#0B1020]/50 border border-white/5 rounded-2xl ${Icon ? 'pl-11' : 'px-4'} pr-4 py-3.5 text-white text-sm focus:border-blue-500/50 focus:bg-blue-500/[0.02] focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600 shadow-inner [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]`} 
+        />
+      </div>
     </div>
   );
 }
