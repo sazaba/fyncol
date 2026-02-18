@@ -12,7 +12,6 @@ type NavbarProps = {
 
 export default function Navbar({
   brand = "Fyncol",
-  userLabel,
   primaryCtaLabel = "Iniciar sesión",
   onPrimaryCta,
 }: NavbarProps) {
