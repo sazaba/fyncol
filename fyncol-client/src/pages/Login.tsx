@@ -1,10 +1,56 @@
 // src/pages/Login.tsx
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png";
 
 export default function Login() {
+  const navigate = useNavigate();
+  
+  // Estados para manejar los inputs y el feedback de carga/error
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  // URL de tu Backend en Render (Asegúrate de que no tenga barra al final)
+  // IMPORTANTE: Cambia esta URL por la real que te dio Render si es diferente
+// Si existe la variable de entorno, úsala. Si no (localhost), usa el puerto 3000.
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        // 1. Guardar token y usuario en localStorage para persistencia
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("user", JSON.stringify(data.user));
+        
+        // 2. Redirigir al Dashboard
+        navigate("/dashboard");
+      } else {
+        // Mostrar error que viene del backend (ej: "Credenciales inválidas")
+        setError(data.message || "Error al iniciar sesión");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("No se pudo conectar con el servidor.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     // CAMBIO CLAVE: Usamos h-[100dvh] en lugar de min-h-screen
@@ -35,9 +81,16 @@ export default function Login() {
           </p>
         </div>
 
-        {/* Form */}
-        <form className="flex flex-col gap-5" onSubmit={(e) => e.preventDefault()}>
+        {/* Form - Conectado a la función handleLogin */}
+        <form className="flex flex-col gap-5" onSubmit={handleLogin}>
           
+          {/* Mensaje de Error (Solo aparece si hay error) */}
+          {error && (
+            <div className="rounded-lg bg-red-500/10 p-3 text-center text-xs font-medium text-red-400 border border-red-500/20 animate-pulse">
+              {error}
+            </div>
+          )}
+
           {/* Email Input */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -51,6 +104,7 @@ export default function Login() {
               </div>
               <input
                 type="email"
+                required
                 placeholder="ejemplo@empresa.com"
                 className="w-full appearance-none rounded-xl border border-white/10 bg-white/5 py-3.5 pl-11 pr-4 text-base text-white placeholder-slate-500 shadow-sm transition-all focus:border-blue-500/50 focus:bg-white/[0.07] focus:outline-none focus:ring-4 focus:ring-blue-500/10 md:text-sm [&:-webkit-autofill]:shadow-[0_0_0_1000px_#0B1020_inset] [&:-webkit-autofill]:text-fill-color-white [&:-webkit-autofill]:transition-[background-color_5000s_ease-in-out_0s]"
                 value={email}
@@ -77,6 +131,7 @@ export default function Login() {
               </div>
               <input
                 type="password"
+                required
                 placeholder="••••••••"
                 className="w-full appearance-none rounded-xl border border-white/10 bg-white/5 py-3.5 pl-11 pr-4 text-base text-white placeholder-slate-500 shadow-sm transition-all focus:border-blue-500/50 focus:bg-white/[0.07] focus:outline-none focus:ring-4 focus:ring-blue-500/10 md:text-sm [&:-webkit-autofill]:shadow-[0_0_0_1000px_#0B1020_inset] [&:-webkit-autofill]:text-fill-color-white [&:-webkit-autofill]:transition-[background-color_5000s_ease-in-out_0s]"
                 value={password}
@@ -86,12 +141,18 @@ export default function Login() {
           </div>
 
           {/* Submit Button */}
-          <button className="group relative mt-2 w-full overflow-hidden rounded-xl bg-blue-600 py-3.5 text-sm font-bold text-white shadow-[0_0_20px_-5px_rgba(37,99,235,0.5)] transition-all hover:scale-[1.02] hover:bg-blue-500 hover:shadow-[0_0_25px_-5px_rgba(37,99,235,0.6)] active:scale-[0.98]">
+          <button 
+            type="submit"
+            disabled={loading}
+            className="group relative mt-2 w-full overflow-hidden rounded-xl bg-blue-600 py-3.5 text-sm font-bold text-white shadow-[0_0_20px_-5px_rgba(37,99,235,0.5)] transition-all hover:scale-[1.02] hover:bg-blue-500 hover:shadow-[0_0_25px_-5px_rgba(37,99,235,0.6)] active:scale-[0.98] disabled:opacity-70 disabled:cursor-wait"
+          >
             <span className="relative z-10 flex items-center justify-center gap-2">
-              Iniciar Sesión
-              <svg className="h-4 w-4 opacity-70 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5-5 5M6 12h12" />
-              </svg>
+              {loading ? "Verificando..." : "Iniciar Sesión"}
+              {!loading && (
+                <svg className="h-4 w-4 opacity-70 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5-5 5M6 12h12" />
+                </svg>
+              )}
             </span>
             <div className="absolute inset-0 -z-10 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
           </button>
