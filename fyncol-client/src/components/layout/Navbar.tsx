@@ -1,5 +1,6 @@
 // src/components/layout/Navbar.tsx
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom"; // Importamos useNavigate
 import logo from "@/assets/logo.png";
 
 type NavbarProps = {
@@ -15,12 +16,21 @@ export default function Navbar({
   primaryCtaLabel = "Iniciar sesión",
   onPrimaryCta,
 }: NavbarProps) {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [hidden, setHidden] = useState(false);
+  
+  // Nuevo estado para saber si está logueado
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
   const lastYRef = useRef(0);
 
   useEffect(() => {
+    // Verificar si hay token al cargar el componente
+    const token = localStorage.getItem("token");
+    setIsAuthenticated(!!token);
+
     const onResize = () => {
       if (window.innerWidth >= 1024) setOpen(false);
     };
@@ -28,8 +38,6 @@ export default function Navbar({
     const onScroll = () => {
       const y = window.scrollY || 0;
       setScrolled(y > 10);
-
-      // Lógica de ocultamiento (Hiding logic)
       if (Math.abs(y - lastYRef.current) > 10) {
         setHidden(y > lastYRef.current && y > 60);
         lastYRef.current = y;
@@ -44,11 +52,18 @@ export default function Navbar({
     };
   }, []);
 
-  // Estilo base del botón unificado para consistencia desktop/mobile
+  // Función para cerrar sesión
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    setIsAuthenticated(false);
+    navigate("/"); // Recargar o ir al home
+    window.location.reload(); // Forzamos recarga para limpiar estados
+  };
+
   const buttonBaseStyles =
     "relative inline-flex items-center justify-center font-semibold text-white transition-all active:scale-95 duration-200";
   
-  // Estilo específico del botón primario (Gradiente + Glow)
   const primaryButtonStyles = `
     ${buttonBaseStyles} rounded-full bg-blue-600 px-6 py-2.5 text-[15px] shadow-[0_0_20px_-5px_rgba(37,99,235,0.5)] hover:bg-blue-500 hover:shadow-[0_0_25px_-5px_rgba(37,99,235,0.6)]
     before:absolute before:inset-0 before:rounded-full before:bg-gradient-to-r before:from-cyan-400 before:via-blue-500 before:to-indigo-500 before:opacity-0 before:transition-opacity hover:before:opacity-100 before:-z-10
@@ -65,7 +80,6 @@ export default function Navbar({
       ].join(" ")}
     >
       <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-5 md:px-8">
-        {/* Logo */}
         <a href="/" aria-label={brand} className="relative z-10 flex items-center">
           <img
             src={logo}
@@ -76,15 +90,32 @@ export default function Navbar({
 
         {/* Desktop Menu */}
         <div className="hidden items-center gap-6 lg:flex">
-          {userLabel && (
-            <span className="text-sm font-medium text-slate-300 hover:text-white transition-colors cursor-default">
-              {userLabel}
-            </span>
+          {isAuthenticated ? (
+            <>
+              {/* Si está logueado: Botón Dashboard + Logout */}
+              <button 
+                onClick={() => navigate("/dashboard")}
+                className={primaryButtonStyles}
+              >
+                Ir al Dashboard
+              </button>
+              
+              <button 
+                onClick={handleLogout}
+                className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-2"
+                title="Cerrar Sesión"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
+            </>
+          ) : (
+            /* Si NO está logueado: Botón original */
+            <button onClick={onPrimaryCta} className={primaryButtonStyles}>
+              <span>{primaryCtaLabel}</span>
+            </button>
           )}
-          
-          <button onClick={onPrimaryCta} className={primaryButtonStyles}>
-            <span>{primaryCtaLabel}</span>
-          </button>
         </div>
 
         {/* Mobile Toggle */}
@@ -93,12 +124,7 @@ export default function Navbar({
           onClick={() => setOpen(!open)}
           aria-label="Toggle menu"
         >
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             {open ? (
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             ) : (
@@ -108,26 +134,36 @@ export default function Navbar({
         </button>
       </nav>
 
-      {/* Mobile Menu Dropdown (Optimizado para Safari) */}
+      {/* Mobile Menu Dropdown */}
       <div
         className={`fixed inset-x-0 top-0 z-0 bg-[#05050A] pt-24 pb-8 shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:hidden ${
           open ? "translate-y-0" : "-translate-y-full"
         }`}
       >
         <div className="flex flex-col gap-4 px-6">
-          {userLabel && (
-            <div className="flex items-center gap-3 rounded-xl bg-white/5 p-4 border border-white/5">
-              <div className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]"></div>
-              <span className="text-sm font-medium text-slate-200">{userLabel}</span>
-            </div>
+          {isAuthenticated ? (
+             <>
+                <button 
+                  onClick={() => { setOpen(false); navigate("/dashboard"); }}
+                  className={`${primaryButtonStyles} w-full py-3.5 text-base`}
+                >
+                  Ir al Dashboard
+                </button>
+                <button 
+                  onClick={handleLogout}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-sm text-slate-300 active:bg-white/10"
+                >
+                  Cerrar Sesión
+                </button>
+             </>
+          ) : (
+            <button 
+              onClick={() => { setOpen(false); onPrimaryCta?.(); }}
+              className={`${primaryButtonStyles} w-full py-3.5 text-base`}
+            >
+              {primaryCtaLabel}
+            </button>
           )}
-          
-          <button 
-            onClick={() => { setOpen(false); onPrimaryCta?.(); }}
-            className={`${primaryButtonStyles} w-full py-3.5 text-base`}
-          >
-            {primaryCtaLabel}
-          </button>
         </div>
       </div>
     </header>
