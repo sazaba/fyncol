@@ -31,3 +31,14 @@ input:-webkit-autofill:active {
     /* Transición para evitar flashazos de color */
     transition: background-color 5000s ease-in-out 0s;
 }
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
