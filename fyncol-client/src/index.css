@@ -1,11 +1,33 @@
+/* src/index.css */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Sora:wght@400;600;800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Ajuste para suavizar fuentes en Safari/Mac (muy importante para el look "premium") */
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* --- FIX PARA AUTOCOMPLETADO (Chrome, Safari, Edge) --- */
+/* Esto fuerza al navegador a usar nuestros colores oscuros */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+    /* El color de fondo oscuro (coincide con tu diseño) */
+    -webkit-box-shadow: 0 0 0 30px #0f1629 inset !important;
+    
+    /* El color del texto (Blanco) */
+    -webkit-text-fill-color: white !important;
+    
+    /* El color del cursor */
+    caret-color: white !important;
+    
+    /* Mantiene el borde redondeado si el navegador intenta quitarlo */
+    border-radius: 0.75rem !important; 
+    
+    /* Transición para evitar flashazos de color */
+    transition: background-color 5000s ease-in-out 0s;
 }

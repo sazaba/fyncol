@@ -101,13 +101,13 @@ export default function Login() {
                 </svg>
               </div>
               <input
-                type="email"
-                required
-                placeholder="ejemplo@empresa.com"
-                className="w-full appearance-none rounded-xl border border-white/10 bg-white/5 py-3.5 pl-11 pr-4 text-base text-white placeholder-slate-500 shadow-sm transition-all focus:border-blue-500/50 focus:bg-white/[0.07] focus:outline-none focus:ring-4 focus:ring-blue-500/10 md:text-sm [&:-webkit-autofill]:shadow-[0_0_0_1000px_#0B1020_inset] [&:-webkit-autofill]:-webkit-text-fill-color:white [&:-webkit-autofill]:caret-white"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+  type="email"
+  required
+  placeholder="ejemplo@empresa.com"
+  className="w-full appearance-none rounded-xl border border-white/10 bg-white/5 py-3.5 pl-11 pr-4 text-base text-white placeholder-slate-500 shadow-sm transition-all focus:border-blue-500/50 focus:bg-white/[0.07] focus:outline-none focus:ring-4 focus:ring-blue-500/10 md:text-sm"
+  value={email}
+  onChange={(e) => setEmail(e.target.value)}
+/>
             </div>
           </div>
 
