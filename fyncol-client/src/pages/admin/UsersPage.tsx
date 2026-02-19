@@ -371,13 +371,8 @@ export default function UsersPage() {
   }, [showModal, alertState.open]);
 
   return (
-    <div
-  className="
-    max-w-6xl mx-auto px-4 md:px-8 pt-8 md:pt-10 font-inter
-    md:h-[calc(100dvh-90px)] md:overflow-y-auto
-    md:[&::-webkit-scrollbar]:hidden md:[-ms-overflow-style:none] md:[scrollbar-width:none]
-  "
->
+    <div className="max-w-6xl mx-auto px-4 md:px-8 pt-8 md:pt-10 font-inter">
+
       {/* HEADER */}
       <div className="flex justify-between items-center mb-6 md:mb-8">
         <div>
