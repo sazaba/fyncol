@@ -396,6 +396,102 @@ export default function UsersPage() {
         </button>
       </div>
 
+{/* VISTA MOBILE */}
+<div className="md:hidden space-y-3">
+  {users.map((user) => {
+    const active = !!user.isActive;
+    const isBusy = busyId === user.id;
+
+    return (
+      <div
+        key={user.id}
+        className={`rounded-3xl border border-white/10 bg-[#0B1020]/40 backdrop-blur-sm p-4 shadow-xl ${
+          !active ? "opacity-70" : ""
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <div className="h-11 w-11 rounded-full bg-gradient-to-br from-blue-500/20 to-cyan-500/20 text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-500/10 overflow-hidden">
+            {user.imageUrl ? (
+              <img src={user.imageUrl} className="h-full w-full object-cover" />
+            ) : (
+              user.name?.charAt(0)
+            )}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <p className="text-white font-semibold truncate">{user.name}</p>
+            <p className="text-slate-400 text-xs truncate">{user.email}</p>
+          </div>
+
+          <span
+            className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase border ${
+              active
+                ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
+                : "bg-slate-500/10 text-slate-300 border-white/10"
+            }`}
+          >
+            {active ? "Activo" : "Inactivo"}
+          </span>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+            <p className="text-slate-400 text-[10px] uppercase tracking-widest">Documento</p>
+            <p className="text-white font-medium truncate">{user.document || "-"}</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+            <p className="text-slate-400 text-[10px] uppercase tracking-widest">Rol</p>
+            <p className="text-white font-medium truncate">{user.role || "-"}</p>
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-center justify-end gap-2">
+          <button
+            disabled={isBusy}
+            onClick={() => openEditModal(user)}
+            className="px-3 py-2 rounded-2xl border border-white/10 text-slate-200 hover:bg-white/5 disabled:opacity-40"
+          >
+            Editar
+          </button>
+
+          {active ? (
+            <button
+              disabled={isBusy}
+              onClick={() => handleToggleActive(user.id, user.name, false)}
+              className="px-3 py-2 rounded-2xl border border-amber-500/20 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15 disabled:opacity-40"
+            >
+              Desactivar
+            </button>
+          ) : (
+            <button
+              disabled={isBusy}
+              onClick={() => handleToggleActive(user.id, user.name, true)}
+              className="px-3 py-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15 disabled:opacity-40"
+            >
+              Activar
+            </button>
+          )}
+
+          <button
+            disabled={isBusy}
+            onClick={() => handleHardDelete(user.id, user.name)}
+            className="px-3 py-2 rounded-2xl border border-red-500/20 bg-red-500/10 text-red-200 hover:bg-red-500/15 disabled:opacity-40"
+          >
+            Borrar
+          </button>
+        </div>
+      </div>
+    );
+  })}
+
+  {users.length === 0 && (
+    <div className="rounded-3xl border border-white/10 bg-[#0B1020]/40 p-6 text-center text-slate-400">
+      No hay usuarios aún.
+    </div>
+  )}
+</div>
+
+
       {/* VISTA ESCRITORIO */}
       <div className="hidden md:block border border-white/5 rounded-3xl overflow-hidden bg-[#0B1020]/40 backdrop-blur-sm shadow-2xl">
         <div
