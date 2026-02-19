@@ -1,25 +1,39 @@
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+// fyncol-server/middleware/auth.middleware.ts
+import { Request, Response, NextFunction } from "express";
+import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fyncol_secret_key';
-
-// Definimos una interfaz para extender el Request de Express
+// Extiende Request para incluir el usuario decodificado
 export interface AuthRequest extends Request {
   user?: any;
 }
 
 export const verifyToken = (req: AuthRequest, res: Response, next: NextFunction) => {
-  const token = req.header('Authorization')?.replace('Bearer ', '');
-
-  if (!token) {
-    return res.status(401).json({ success: false, message: 'Acceso denegado. No hay token.' });
-  }
-
   try {
+    const token = req.header("Authorization")?.replace("Bearer ", "");
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Acceso denegado. No hay token.",
+      });
+    }
+
+    const JWT_SECRET = process.env.JWT_SECRET;
+    if (!JWT_SECRET) {
+      return res.status(500).json({
+        success: false,
+        message: "JWT_SECRET no está definido en variables de entorno.",
+      });
+    }
+
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded; 
-    next();
+    req.user = decoded;
+
+    return next();
   } catch (error) {
-    res.status(401).json({ success: false, message: 'Token inválido o expirado.' });
+    return res.status(401).json({
+      success: false,
+      message: "Token inválido o expirado.",
+    });
   }
 };
