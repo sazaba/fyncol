@@ -3,7 +3,7 @@ import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { AuthRequest } from '../middleware/auth'; // Ajustado el nombre del archivo
+import { AuthRequest } from '../middleware/auth.middleware'; // Ajustado el nombre del archivo
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'fyncol_secret_key';

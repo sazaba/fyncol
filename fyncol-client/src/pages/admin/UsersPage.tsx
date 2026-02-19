@@ -1,7 +1,7 @@
 // src/pages/admin/UsersPage.tsx
 import { useState, useRef, useEffect } from "react";
 import { 
-  FiPlus, FiEdit2, FiTrash2, FiCamera, FiMoreVertical, 
+  FiPlus, FiEdit2, FiTrash2, FiCamera, 
   FiUser, FiCreditCard, FiMapPin, FiPhone, FiShield,
   FiChevronDown, FiCheck, FiX, FiMail 
 } from "react-icons/fi";
