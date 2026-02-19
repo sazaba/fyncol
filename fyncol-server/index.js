@@ -2,17 +2,21 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const authRoutes = require('./routes/authRoutes'); // Importamos las rutas de autenticación
+
+// Importamos las rutas
+const authRoutes = require('./routes/authRoutes'); 
+const userRoutes = require('./routes/userRoutes'); 
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 // Middlewares
-app.use(cors()); // Permite peticiones desde el frontend
-app.use(express.json()); // Parsea el body de las peticiones a JSON
+app.use(cors()); 
+app.use(express.json()); 
 
 // Rutas
-app.use('/api/auth', authRoutes); // Prefijo para todas las rutas de autenticación (ej: /api/auth/login)
+app.use('/api/auth', authRoutes); 
+app.use('/api/users', userRoutes);
 
 // Ruta Base (Health Check)
 app.get('/', (req, res) => res.send('Fyncol API con Prisma 🚀 - Online'));

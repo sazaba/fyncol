@@ -7,13 +7,28 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// 1. Definimos los roles estrictos que existirán en tu sistema
+enum Role {
+  ADMIN
+  SUPERVISOR
+  COBRADOR
+}
+
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
   password  String
   name      String?
-  role      String   @default("admin")
+  document  String?  @unique
+  phone     String?
+  address   String?
+  isActive  Boolean  @default(true)
+  role      Role     @default(COBRADOR)
+  
+  imageUrl  String?  // <-- AQUÍ GUARDAMOS LA URL DE CLOUDINARY
+  
   createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("users")
 }
