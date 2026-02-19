@@ -110,7 +110,7 @@ export default function UsersPage() {
       const res = await fetch(`${API_URL}/api/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (res.ok && data.success) setUsers(data.users);
       else {
@@ -338,6 +338,13 @@ export default function UsersPage() {
     setShowModal(true);
   };
 
+  const openCreateModal = () => {
+    setEditingId(null);
+    setFormData({ name: "", document: "", email: "", address: "", phone: "" });
+    setSelectedRole("COBRADOR");
+    setShowModal(true);
+  };
+
   const closeModal = () => {
     setShowModal(false);
     setEditingId(null);
@@ -348,6 +355,19 @@ export default function UsersPage() {
   // Bloquea scroll del body cuando hay modal/alert
   useEffect(() => {
     document.body.style.overflow = showModal || alertState.open ? "hidden" : "unset";
+  }, [showModal, alertState.open]);
+
+  // Cerrar modal con ESC
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (alertState.open) closeAlert();
+        else if (showModal) closeModal();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showModal, alertState.open]);
 
   return (
@@ -368,7 +388,7 @@ export default function UsersPage() {
         </div>
 
         <button
-          onClick={() => setShowModal(true)}
+          onClick={openCreateModal}
           className="group relative overflow-hidden bg-blue-600 px-4 md:px-5 py-2.5 rounded-xl font-medium transition-all active:scale-95 flex items-center gap-2 shadow-[0_0_20px_rgba(37,99,235,0.4)]"
         >
           <FiPlus size={20} />
@@ -475,7 +495,7 @@ export default function UsersPage() {
                           </button>
                         )}
 
-                        {/* Soft delete (desactivar) rápido si quieres mantener la semántica "basura" */}
+                        {/* Soft rápido (mantengo tu icono slash), solo si está activo */}
                         <button
                           disabled={isBusy || !active}
                           onClick={() => handleToggleActive(user.id, user.name, false)}
@@ -514,85 +534,149 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* MODAL */}
+      {/* MODAL (centrado ancho en desktop) */}
       {showModal && (
-        <div className="fixed inset-0 z-[100] flex md:items-center justify-center bg-[#020408]/90 backdrop-blur-md">
-          <div className="relative w-full h-[100dvh] md:h-auto md:max-w-[520px] bg-[#05050A] md:bg-[#05050A]/80 md:backdrop-blur-3xl md:border border-white/10 rounded-none md:rounded-[36px] flex flex-col overflow-hidden shadow-2xl animate-[slideUp_0.3s_ease-out]">
-            <div className="flex justify-between items-start px-6 md:px-10 pt-8 md:pt-10 pb-4 shrink-0 border-b border-white/[0.05]">
-              <h2 className="text-2xl font-bold text-white font-sora">
-                {editingId ? "Editar Usuario" : "Nuevo Usuario"}
-              </h2>
-              <button onClick={closeModal} className="p-2 text-slate-500 hover:text-white">
+        <div
+          className="fixed inset-0 z-[100] flex md:items-center justify-center bg-[#020408]/90 backdrop-blur-md px-0 md:px-4"
+          onMouseDown={(e) => {
+            // click fuera para cerrar (solo si es el overlay)
+            if (e.target === e.currentTarget) closeModal();
+          }}
+        >
+          <div
+            className="
+              relative w-full h-[100dvh]
+              md:h-auto md:w-[min(920px,92vw)] md:max-w-none
+              md:max-h-[85dvh]
+              bg-[#05050A] md:bg-[#05050A]/80 md:backdrop-blur-3xl md:border border-white/10
+              rounded-none md:rounded-[36px]
+              flex flex-col overflow-hidden shadow-2xl
+              animate-[slideUp_0.3s_ease-out]
+            "
+          >
+            {/* Header */}
+            <div className="flex justify-between items-start px-6 md:px-10 pt-8 md:pt-9 pb-4 shrink-0 border-b border-white/[0.05]">
+              <div>
+                <h2 className="text-2xl font-bold text-white font-sora">
+                  {editingId ? "Editar Usuario" : "Nuevo Usuario"}
+                </h2>
+                <p className="text-sm text-slate-400 mt-1 hidden md:block">
+                  Completa la información y guarda los cambios.
+                </p>
+              </div>
+
+              <button onClick={closeModal} className="p-2 text-slate-500 hover:text-white" aria-label="Cerrar">
                 <FiX size={24} />
               </button>
             </div>
 
-            <div className="flex-1 px-6 md:px-10 py-8 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              <form id="userForm" onSubmit={handleSaveUser} className="space-y-6">
-                <div className="flex justify-center mb-4">
-                  <div className="h-28 w-28 rounded-full bg-[#0B1020]/80 border border-white/10 flex flex-col items-center justify-center text-slate-400 shadow-inner">
-                    <FiCamera size={28} className="mb-2" />
-                    <span className="text-[10px] font-bold uppercase opacity-80">Foto</span>
+            {/* Body */}
+            <div className="flex-1 px-6 md:px-10 py-8 md:py-9 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <form
+                id="userForm"
+                onSubmit={handleSaveUser}
+                className="space-y-6 md:space-y-0 md:grid md:grid-cols-12 md:gap-8"
+              >
+                {/* Columna izquierda (avatar / info) */}
+                <div className="md:col-span-4">
+                  <div className="flex md:flex-col items-center md:items-start gap-4 md:gap-6">
+                    <div className="h-28 w-28 rounded-full bg-[#0B1020]/80 border border-white/10 flex flex-col items-center justify-center text-slate-400 shadow-inner">
+                      <FiCamera size={28} className="mb-2" />
+                      <span className="text-[10px] font-bold uppercase opacity-80">Foto</span>
+                    </div>
+
+                    <div className="text-left">
+                      <p className="text-white font-semibold">Foto de perfil</p>
+                      <p className="text-slate-400 text-sm mt-1 leading-relaxed">
+                        (Opcional) Luego la conectamos a Cloudinary.
+                      </p>
+
+                      {editingId ? (
+                        <div className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+                          <span className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">
+                            Modo
+                          </span>
+                          <span className="text-xs font-bold text-white">Edición</span>
+                        </div>
+                      ) : (
+                        <div className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+                          <span className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">
+                            Modo
+                          </span>
+                          <span className="text-xs font-bold text-white">Creación</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Columna derecha (form) */}
+                <div className="md:col-span-8 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <InputGroup
+                      label="Nombre Completo"
+                      placeholder="Juan Pérez"
+                      icon={FiUser}
+                      value={formData.name}
+                      onChange={(e: any) => setFormData({ ...formData, name: e.target.value })}
+                      required
+                    />
+                    <InputGroup
+                      label="Cédula (CC)"
+                      placeholder="123456"
+                      type="number"
+                      icon={FiCreditCard}
+                      value={formData.document}
+                      onChange={(e: any) => setFormData({ ...formData, document: e.target.value })}
+                      required
+                    />
+                  </div>
+
                   <InputGroup
-                    label="Nombre Completo"
-                    placeholder="Juan Pérez"
-                    icon={FiUser}
-                    value={formData.name}
-                    onChange={(e: any) => setFormData({ ...formData, name: e.target.value })}
+                    label="Correo Electrónico"
+                    placeholder="correo@empresa.com"
+                    type="email"
+                    icon={FiMail}
+                    value={formData.email}
+                    onChange={(e: any) => setFormData({ ...formData, email: e.target.value })}
                     required
                   />
+
                   <InputGroup
-                    label="Cédula (CC)"
-                    placeholder="123456"
-                    type="number"
-                    icon={FiCreditCard}
-                    value={formData.document}
-                    onChange={(e: any) => setFormData({ ...formData, document: e.target.value })}
-                    required
+                    label="Dirección"
+                    placeholder="Calle 123"
+                    icon={FiMapPin}
+                    value={formData.address}
+                    onChange={(e: any) => setFormData({ ...formData, address: e.target.value })}
                   />
-                </div>
 
-                <InputGroup
-                  label="Correo Electrónico"
-                  placeholder="correo@empresa.com"
-                  type="email"
-                  icon={FiMail}
-                  value={formData.email}
-                  onChange={(e: any) => setFormData({ ...formData, email: e.target.value })}
-                  required
-                />
-
-                <InputGroup
-                  label="Dirección"
-                  placeholder="Calle 123"
-                  icon={FiMapPin}
-                  value={formData.address}
-                  onChange={(e: any) => setFormData({ ...formData, address: e.target.value })}
-                />
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <InputGroup
-                    label="Teléfono"
-                    placeholder="300..."
-                    type="tel"
-                    icon={FiPhone}
-                    value={formData.phone}
-                    onChange={(e: any) => setFormData({ ...formData, phone: e.target.value })}
-                  />
-                  <CustomSelect label="Rol de Acceso" icon={FiShield} options={roles} value={selectedRole} onChange={setSelectedRole} />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <InputGroup
+                      label="Teléfono"
+                      placeholder="300..."
+                      type="tel"
+                      icon={FiPhone}
+                      value={formData.phone}
+                      onChange={(e: any) => setFormData({ ...formData, phone: e.target.value })}
+                    />
+                    <CustomSelect
+                      label="Rol de Acceso"
+                      icon={FiShield}
+                      options={roles}
+                      value={selectedRole}
+                      onChange={setSelectedRole}
+                    />
+                  </div>
                 </div>
               </form>
             </div>
 
-            <div className="px-6 md:px-10 pt-5 pb-8 border-t border-white/[0.05] bg-[#020408]/50 flex gap-4 backdrop-blur-xl">
+            {/* Footer */}
+            <div className="px-6 md:px-10 pt-5 pb-8 border-t border-white/[0.05] bg-[#020408]/50 flex gap-4 backdrop-blur-xl shrink-0">
               <button
                 type="button"
                 onClick={closeModal}
-                className="w-1/3 py-3.5 rounded-2xl border border-white/5 text-slate-400 font-medium"
+                className="w-1/3 py-3.5 rounded-2xl border border-white/5 text-slate-400 font-medium hover:bg-white/5 transition-colors"
               >
                 Cancelar
               </button>
@@ -600,7 +684,7 @@ export default function UsersPage() {
                 form="userForm"
                 type="submit"
                 disabled={loading}
-                className="w-2/3 py-3.5 rounded-2xl bg-blue-600 text-white font-bold shadow-[0_0_20px_rgba(37,99,235,0.4)] disabled:opacity-50"
+                className="w-2/3 py-3.5 rounded-2xl bg-blue-600 text-white font-bold shadow-[0_0_20px_rgba(37,99,235,0.4)] disabled:opacity-50 active:scale-[0.99]"
               >
                 {loading ? "Procesando..." : editingId ? "Actualizar" : "Guardar Usuario"}
               </button>
@@ -631,7 +715,7 @@ export default function UsersPage() {
                 <p className="text-slate-300 text-sm mt-1 leading-relaxed">{alertState.message}</p>
               </div>
 
-              <button onClick={closeAlert} className="text-slate-500 hover:text-white p-2 -m-2">
+              <button onClick={closeAlert} className="text-slate-500 hover:text-white p-2 -m-2" aria-label="Cerrar alerta">
                 <FiX size={18} />
               </button>
             </div>
@@ -670,7 +754,9 @@ export default function UsersPage() {
 function InputGroup({ label, type = "text", placeholder, icon: Icon, value, onChange, required }: any) {
   return (
     <div className="space-y-2 relative group">
-      <label className="text-[10px] md:text-xs font-semibold text-slate-400 uppercase tracking-widest pl-1">{label}</label>
+      <label className="text-[10px] md:text-xs font-semibold text-slate-400 uppercase tracking-widest pl-1">
+        {label}
+      </label>
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-500 group-focus-within:text-blue-400">
           <Icon size={18} />
@@ -704,7 +790,9 @@ function CustomSelect({ label, icon: Icon, options, value, onChange }: any) {
 
   return (
     <div className="space-y-2 relative group" ref={dropdownRef}>
-      <label className="text-[10px] md:text-xs font-semibold text-slate-400 uppercase tracking-widest pl-1">{label}</label>
+      <label className="text-[10px] md:text-xs font-semibold text-slate-400 uppercase tracking-widest pl-1">
+        {label}
+      </label>
       <div className="relative">
         <button
           type="button"
@@ -715,7 +803,10 @@ function CustomSelect({ label, icon: Icon, options, value, onChange }: any) {
             <Icon size={18} />
           </div>
           <span>{displayLabel}</span>
-          <FiChevronDown size={18} className={`transition-transform duration-300 ${isOpen ? "rotate-180 text-blue-400" : ""}`} />
+          <FiChevronDown
+            size={18}
+            className={`transition-transform duration-300 ${isOpen ? "rotate-180 text-blue-400" : ""}`}
+          />
         </button>
 
         {isOpen && (
