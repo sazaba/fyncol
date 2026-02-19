@@ -68,18 +68,26 @@ input:-webkit-autofill:active {
 }
 
 /* =========================
-   LANDING: bloquear scroll del documento
-   (solo cuando agregamos esta clase por JS)
+   SCROLL GLOBAL: ocultar barra pero permitir scroll
    ========================= */
-html.landing-lock,
-body.landing-lock {
+
+html, body {
   height: 100%;
-  overflow: hidden; /* <-- mata el scrollbar del navegador */
 }
 
-/* Por si algún browser igual “pinta” la barra (raro) */
-html.landing-lock::-webkit-scrollbar,
-body.landing-lock::-webkit-scrollbar {
+/* Firefox */
+html {
+  scrollbar-width: none;
+}
+
+/* IE/Edge viejo */
+body {
+  -ms-overflow-style: none;
+}
+
+/* Chrome/Safari */
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
   width: 0;
   height: 0;
   display: none;
