@@ -1,23 +1,22 @@
 // src/pages/admin/UsersPage.tsx
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  FiPlus,
-  FiEdit2,
-  FiTrash2,
+  FiAlertTriangle,
   FiCamera,
-  FiUser,
+  FiCheck,
+  FiChevronDown,
   FiCreditCard,
+  FiEdit2,
+  FiMail,
   FiMapPin,
   FiPhone,
+  FiPlus,
   FiShield,
-  FiChevronDown,
-  FiCheck,
-  FiX,
-  FiMail,
-  FiAlertTriangle,
   FiToggleLeft,
   FiToggleRight,
-  FiSlash,
+  FiTrash2,
+  FiUser,
+  FiX,
 } from "react-icons/fi";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
@@ -40,7 +39,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [busyId, setBusyId] = useState<number | string | null>(null);
 
-  // === ESTADOS PARA CRUD ===
+  // === CRUD ===
   const [editingId, setEditingId] = useState<number | string | null>(null);
   const [selectedRole, setSelectedRole] = useState("COBRADOR");
   const [formData, setFormData] = useState({
@@ -57,7 +56,7 @@ export default function UsersPage() {
     { label: "Supervisor", value: "SUPERVISOR" },
   ];
 
-  // === ALERTA PREMIUM ===
+  // === ALERTA ===
   const [alertState, setAlertState] = useState<PremiumAlertState>({
     open: false,
     variant: "info",
@@ -101,7 +100,7 @@ export default function UsersPage() {
     return token;
   };
 
-  // 1. READ
+  // === READ ===
   const fetchUsers = async () => {
     try {
       const token = getTokenOrFail();
@@ -110,14 +109,15 @@ export default function UsersPage() {
       const res = await fetch(`${API_URL}/api/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
       const data = await res.json().catch(() => ({}));
 
-      if (res.ok && data.success) setUsers(data.users);
+      if (res.ok && data?.success) setUsers(data.users || []);
       else {
         openAlert({
           variant: "danger",
           title: "No se pudo cargar",
-          message: data.message || "Error trayendo usuarios.",
+          message: data?.message || "Error trayendo usuarios.",
           confirmText: "Entendido",
           cancelText: "",
           onConfirm: () => closeAlert(),
@@ -141,7 +141,7 @@ export default function UsersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 2. CREATE / UPDATE
+  // === CREATE / UPDATE ===
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -165,7 +165,7 @@ export default function UsersPage() {
 
       const data = await res.json().catch(() => ({}));
 
-      if (res.ok && data.success) {
+      if (res.ok && data?.success) {
         closeModal();
         fetchUsers();
         openAlert({
@@ -180,13 +180,13 @@ export default function UsersPage() {
         openAlert({
           variant: "danger",
           title: "No se pudo guardar",
-          message: data.message || `Error del servidor (${res.status})`,
+          message: data?.message || `Error del servidor (${res.status})`,
           confirmText: "Entendido",
           cancelText: "",
           onConfirm: () => closeAlert(),
         });
       }
-    } catch (error) {
+    } catch {
       openAlert({
         variant: "danger",
         title: "Error de conexión",
@@ -200,7 +200,7 @@ export default function UsersPage() {
     }
   };
 
-  // 3. ACTIVAR / DESACTIVAR
+  // === ACTIVAR / DESACTIVAR ===
   const handleToggleActive = async (id: number | string, name: string, nextState: boolean) => {
     const actionLabel = nextState ? "activar" : "desactivar";
 
@@ -248,7 +248,7 @@ export default function UsersPage() {
               onConfirm: () => closeAlert(),
             });
           }
-        } catch (e) {
+        } catch {
           openAlert({
             variant: "danger",
             title: "Error",
@@ -264,7 +264,7 @@ export default function UsersPage() {
     });
   };
 
-  // 4. BORRAR REAL (Hard Delete)
+  // === BORRAR REAL ===
   const handleHardDelete = async (id: number | string, name: string) => {
     openAlert({
       variant: "danger",
@@ -302,13 +302,13 @@ export default function UsersPage() {
               title: "No se pudo eliminar",
               message:
                 data?.message ||
-                `Error del servidor (${res.status}). Asegura que exista DELETE /api/users/:id/hard.`,
+                `Error del servidor (${res.status}). Verifica DELETE /api/users/:id/hard.`,
               confirmText: "Entendido",
               cancelText: "",
               onConfirm: () => closeAlert(),
             });
           }
-        } catch (e) {
+        } catch {
           openAlert({
             variant: "danger",
             title: "Error",
@@ -324,7 +324,7 @@ export default function UsersPage() {
     });
   };
 
-  // === AUXILIARES DE UI ===
+  // === UI ===
   const openEditModal = (user: any) => {
     setEditingId(user.id);
     setFormData({
@@ -352,12 +352,12 @@ export default function UsersPage() {
     setSelectedRole("COBRADOR");
   };
 
-  // Bloquea scroll del body cuando hay modal/alert
+  // ✅ IMPORTANTE: solo bloquea body cuando modal/alerta está abierto
   useEffect(() => {
-    document.body.style.overflow = showModal || alertState.open ? "hidden" : "unset";
+    document.body.style.overflow = showModal || alertState.open ? "hidden" : "auto";
   }, [showModal, alertState.open]);
 
-  // Cerrar modal con ESC
+  // ESC
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -371,8 +371,8 @@ export default function UsersPage() {
   }, [showModal, alertState.open]);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 md:px-8 pt-8 md:pt-10 font-inter">
-
+    // ✅ CLAVE: en móvil NO ponemos height/overflow
+    <div className="max-w-6xl mx-auto px-4 md:px-8 pt-8 md:pt-10 font-inter md:h-[calc(100dvh-90px)] md:overflow-y-auto md:[&::-webkit-scrollbar]:hidden md:[-ms-overflow-style:none] md:[scrollbar-width:none]">
       {/* HEADER */}
       <div className="flex justify-between items-center mb-6 md:mb-8">
         <div>
@@ -391,110 +391,104 @@ export default function UsersPage() {
         </button>
       </div>
 
-{/* VISTA MOBILE */}
-<div className="md:hidden space-y-3">
-  {users.map((user) => {
-    const active = !!user.isActive;
-    const isBusy = busyId === user.id;
+      {/* ✅ MOBILE LIST (sin overflow interno) */}
+      <div className="md:hidden space-y-3 pb-10">
+        {users.map((user) => {
+          const active = !!user.isActive;
+          const isBusy = busyId === user.id;
 
-    return (
-      <div
-        key={user.id}
-        className={`rounded-3xl border border-white/10 bg-[#0B1020]/40 backdrop-blur-sm p-4 shadow-xl ${
-          !active ? "opacity-70" : ""
-        }`}
-      >
-        <div className="flex items-center gap-3">
-          <div className="h-11 w-11 rounded-full bg-gradient-to-br from-blue-500/20 to-cyan-500/20 text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-500/10 overflow-hidden">
-            {user.imageUrl ? (
-              <img src={user.imageUrl} className="h-full w-full object-cover" />
-            ) : (
-              user.name?.charAt(0)
-            )}
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <p className="text-white font-semibold truncate">{user.name}</p>
-            <p className="text-slate-400 text-xs truncate">{user.email}</p>
-          </div>
-
-          <span
-            className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase border ${
-              active
-                ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
-                : "bg-slate-500/10 text-slate-300 border-white/10"
-            }`}
-          >
-            {active ? "Activo" : "Inactivo"}
-          </span>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-          <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
-            <p className="text-slate-400 text-[10px] uppercase tracking-widest">Documento</p>
-            <p className="text-white font-medium truncate">{user.document || "-"}</p>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
-            <p className="text-slate-400 text-[10px] uppercase tracking-widest">Rol</p>
-            <p className="text-white font-medium truncate">{user.role || "-"}</p>
-          </div>
-        </div>
-
-        <div className="mt-3 flex items-center justify-end gap-2">
-          <button
-            disabled={isBusy}
-            onClick={() => openEditModal(user)}
-            className="px-3 py-2 rounded-2xl border border-white/10 text-slate-200 hover:bg-white/5 disabled:opacity-40"
-          >
-            Editar
-          </button>
-
-          {active ? (
-            <button
-              disabled={isBusy}
-              onClick={() => handleToggleActive(user.id, user.name, false)}
-              className="px-3 py-2 rounded-2xl border border-amber-500/20 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15 disabled:opacity-40"
+          return (
+            <div
+              key={user.id}
+              className={`rounded-3xl border border-white/10 bg-[#0B1020]/40 backdrop-blur-sm p-4 shadow-xl ${
+                !active ? "opacity-70" : ""
+              }`}
             >
-              Desactivar
-            </button>
-          ) : (
-            <button
-              disabled={isBusy}
-              onClick={() => handleToggleActive(user.id, user.name, true)}
-              className="px-3 py-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15 disabled:opacity-40"
-            >
-              Activar
-            </button>
-          )}
+              <div className="flex items-center gap-3">
+                <div className="h-11 w-11 rounded-full bg-gradient-to-br from-blue-500/20 to-cyan-500/20 text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-500/10 overflow-hidden">
+                  {user.imageUrl ? (
+                    <img src={user.imageUrl} className="h-full w-full object-cover" />
+                  ) : (
+                    user.name?.charAt(0)
+                  )}
+                </div>
 
-          <button
-            disabled={isBusy}
-            onClick={() => handleHardDelete(user.id, user.name)}
-            className="px-3 py-2 rounded-2xl border border-red-500/20 bg-red-500/10 text-red-200 hover:bg-red-500/15 disabled:opacity-40"
-          >
-            Borrar
-          </button>
-        </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-semibold truncate">{user.name}</p>
+                  <p className="text-slate-400 text-xs truncate">{user.email}</p>
+                </div>
+
+                <span
+                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase border ${
+                    active
+                      ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
+                      : "bg-slate-500/10 text-slate-300 border-white/10"
+                  }`}
+                >
+                  {active ? "Activo" : "Inactivo"}
+                </span>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+                  <p className="text-slate-400 text-[10px] uppercase tracking-widest">Documento</p>
+                  <p className="text-white font-medium truncate">{user.document || "-"}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+                  <p className="text-slate-400 text-[10px] uppercase tracking-widest">Rol</p>
+                  <p className="text-white font-medium truncate">{user.role || "-"}</p>
+                </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                <button
+                  disabled={isBusy}
+                  onClick={() => openEditModal(user)}
+                  className="px-3 py-2 rounded-2xl border border-white/10 text-slate-200 hover:bg-white/5 disabled:opacity-40"
+                >
+                  Editar
+                </button>
+
+                {active ? (
+                  <button
+                    disabled={isBusy}
+                    onClick={() => handleToggleActive(user.id, user.name, false)}
+                    className="px-3 py-2 rounded-2xl border border-amber-500/20 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15 disabled:opacity-40"
+                  >
+                    Desactivar
+                  </button>
+                ) : (
+                  <button
+                    disabled={isBusy}
+                    onClick={() => handleToggleActive(user.id, user.name, true)}
+                    className="px-3 py-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15 disabled:opacity-40"
+                  >
+                    Activar
+                  </button>
+                )}
+
+                <button
+                  disabled={isBusy}
+                  onClick={() => handleHardDelete(user.id, user.name)}
+                  className="px-3 py-2 rounded-2xl border border-red-500/20 bg-red-500/10 text-red-200 hover:bg-red-500/15 disabled:opacity-40"
+                >
+                  Borrar
+                </button>
+              </div>
+            </div>
+          );
+        })}
+
+        {users.length === 0 && (
+          <div className="rounded-3xl border border-white/10 bg-[#0B1020]/40 p-6 text-center text-slate-400">
+            No hay usuarios aún.
+          </div>
+        )}
       </div>
-    );
-  })}
 
-  {users.length === 0 && (
-    <div className="rounded-3xl border border-white/10 bg-[#0B1020]/40 p-6 text-center text-slate-400">
-      No hay usuarios aún.
-    </div>
-  )}
-</div>
-
-
-      {/* VISTA ESCRITORIO */}
+      {/* DESKTOP TABLE */}
       <div className="hidden md:block border border-white/5 rounded-3xl overflow-hidden bg-[#0B1020]/40 backdrop-blur-sm shadow-2xl">
-        <div
-          className="
-            max-h-[calc(100dvh-240px)] overflow-auto
-            [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]
-          "
-        >
+        <div className="max-h-[calc(100dvh-240px)] overflow-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <table className="w-full text-left text-sm text-slate-300">
             <thead className="bg-white/5 text-slate-400 uppercase text-xs font-semibold tracking-wider sticky top-0">
               <tr>
@@ -552,7 +546,6 @@ export default function UsersPage() {
 
                     <td className="px-6 py-4 text-center">
                       <div className="flex items-center justify-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                        {/* Editar */}
                         <button
                           disabled={isBusy}
                           onClick={() => openEditModal(user)}
@@ -563,7 +556,6 @@ export default function UsersPage() {
                           <FiEdit2 size={16} />
                         </button>
 
-                        {/* Activar / Desactivar (solo uno a la vez) */}
                         {active ? (
                           <button
                             disabled={isBusy}
@@ -586,18 +578,6 @@ export default function UsersPage() {
                           </button>
                         )}
 
-                        {/* Soft rápido (mantengo tu icono slash), solo si está activo */}
-                        <button
-                          disabled={isBusy || !active}
-                          onClick={() => handleToggleActive(user.id, user.name, false)}
-                          className="p-2 text-slate-400 hover:text-red-300 transition-colors disabled:opacity-30"
-                          aria-label="Desactivar (rápido)"
-                          title="Desactivar (rápido)"
-                        >
-                          <FiSlash size={16} />
-                        </button>
-
-                        {/* Borrar real */}
                         <button
                           disabled={isBusy}
                           onClick={() => handleHardDelete(user.id, user.name)}
@@ -625,27 +605,15 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* MODAL (centrado ancho en desktop) */}
+      {/* MODAL */}
       {showModal && (
         <div
           className="fixed inset-0 z-[100] flex md:items-center justify-center bg-[#020408]/90 backdrop-blur-md px-0 md:px-4"
           onMouseDown={(e) => {
-            // click fuera para cerrar (solo si es el overlay)
             if (e.target === e.currentTarget) closeModal();
           }}
         >
-          <div
-            className="
-              relative w-full h-[100dvh]
-              md:h-auto md:w-[min(920px,92vw)] md:max-w-none
-              md:max-h-[85dvh]
-              bg-[#05050A] md:bg-[#05050A]/80 md:backdrop-blur-3xl md:border border-white/10
-              rounded-none md:rounded-[36px]
-              flex flex-col overflow-hidden shadow-2xl
-              animate-[slideUp_0.3s_ease-out]
-            "
-          >
-            {/* Header */}
+          <div className="relative w-full h-[100dvh] md:h-auto md:w-[min(920px,92vw)] md:max-h-[85dvh] bg-[#05050A] md:bg-[#05050A]/80 md:backdrop-blur-3xl md:border border-white/10 rounded-none md:rounded-[36px] flex flex-col overflow-hidden shadow-2xl animate-[slideUp_0.3s_ease-out]">
             <div className="flex justify-between items-start px-6 md:px-10 pt-8 md:pt-9 pb-4 shrink-0 border-b border-white/[0.05]">
               <div>
                 <h2 className="text-2xl font-bold text-white font-sora">
@@ -661,14 +629,12 @@ export default function UsersPage() {
               </button>
             </div>
 
-            {/* Body */}
             <div className="flex-1 px-6 md:px-10 py-8 md:py-9 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               <form
                 id="userForm"
                 onSubmit={handleSaveUser}
                 className="space-y-6 md:space-y-0 md:grid md:grid-cols-12 md:gap-8"
               >
-                {/* Columna izquierda (avatar / info) */}
                 <div className="md:col-span-4">
                   <div className="flex md:flex-col items-center md:items-start gap-4 md:gap-6">
                     <div className="h-28 w-28 rounded-full bg-[#0B1020]/80 border border-white/10 flex flex-col items-center justify-center text-slate-400 shadow-inner">
@@ -681,27 +647,10 @@ export default function UsersPage() {
                       <p className="text-slate-400 text-sm mt-1 leading-relaxed">
                         (Opcional) Luego la conectamos a Cloudinary.
                       </p>
-
-                      {editingId ? (
-                        <div className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
-                          <span className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">
-                            Modo
-                          </span>
-                          <span className="text-xs font-bold text-white">Edición</span>
-                        </div>
-                      ) : (
-                        <div className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
-                          <span className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">
-                            Modo
-                          </span>
-                          <span className="text-xs font-bold text-white">Creación</span>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Columna derecha (form) */}
                 <div className="md:col-span-8 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <InputGroup
@@ -762,7 +711,6 @@ export default function UsersPage() {
               </form>
             </div>
 
-            {/* Footer */}
             <div className="px-6 md:px-10 pt-5 pb-8 border-t border-white/[0.05] bg-[#020408]/50 flex gap-4 backdrop-blur-xl shrink-0">
               <button
                 type="button"
@@ -784,7 +732,7 @@ export default function UsersPage() {
         </div>
       )}
 
-      {/* ALERTA PREMIUM DARK */}
+      {/* ALERTA */}
       {alertState.open && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-md px-4">
           <div className="w-full max-w-[520px] rounded-3xl border border-white/10 bg-[#05050A]/90 shadow-2xl overflow-hidden animate-[slideUp_0.18s_ease-out]">
@@ -884,6 +832,7 @@ function CustomSelect({ label, icon: Icon, options, value, onChange }: any) {
       <label className="text-[10px] md:text-xs font-semibold text-slate-400 uppercase tracking-widest pl-1">
         {label}
       </label>
+
       <div className="relative">
         <button
           type="button"
@@ -894,10 +843,7 @@ function CustomSelect({ label, icon: Icon, options, value, onChange }: any) {
             <Icon size={18} />
           </div>
           <span>{displayLabel}</span>
-          <FiChevronDown
-            size={18}
-            className={`transition-transform duration-300 ${isOpen ? "rotate-180 text-blue-400" : ""}`}
-          />
+          <FiChevronDown size={18} className={`transition-transform duration-300 ${isOpen ? "rotate-180 text-blue-400" : ""}`} />
         </button>
 
         {isOpen && (
