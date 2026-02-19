@@ -5,31 +5,26 @@
 @tailwind components;
 @tailwind utilities;
 
+html, body {
+  height: 100%;
+  overflow-x: hidden;
+}
+
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 /* --- FIX PARA AUTOCOMPLETADO (Chrome, Safari, Edge) --- */
-/* Esto fuerza al navegador a usar nuestros colores oscuros */
 input:-webkit-autofill,
 input:-webkit-autofill:hover, 
 input:-webkit-autofill:focus, 
 input:-webkit-autofill:active {
-    /* El color de fondo oscuro (coincide con tu diseño) */
-    -webkit-box-shadow: 0 0 0 30px #0f1629 inset !important;
-    
-    /* El color del texto (Blanco) */
-    -webkit-text-fill-color: white !important;
-    
-    /* El color del cursor */
-    caret-color: white !important;
-    
-    /* Mantiene el borde redondeado si el navegador intenta quitarlo */
-    border-radius: 0.75rem !important; 
-    
-    /* Transición para evitar flashazos de color */
-    transition: background-color 5000s ease-in-out 0s;
+  -webkit-box-shadow: 0 0 0 30px #0f1629 inset !important;
+  -webkit-text-fill-color: white !important;
+  caret-color: white !important;
+  border-radius: 0.75rem !important; 
+  transition: background-color 5000s ease-in-out 0s;
 }
 
 @keyframes slideUp {
@@ -40,5 +35,34 @@ input:-webkit-autofill:active {
   to {
     transform: translateY(0);
     opacity: 1;
+  }
+}
+
+/* =========================
+   SCROLLBAR: ocultar (mantiene el scroll)
+   ========================= */
+
+.custom-scrollbar {
+  -ms-overflow-style: none;  /* IE/Edge viejo */
+  scrollbar-width: none;     /* Firefox */
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+  display: none;             /* Chrome/Safari */
+}
+
+/* (Opcional) mejora sensación en móviles */
+@media (max-width: 768px) {
+  body {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    overscroll-behavior-y: none;
+  }
+  body::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
   }
 }

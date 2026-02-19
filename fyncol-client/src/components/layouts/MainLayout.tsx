@@ -41,12 +41,10 @@ export default function MainLayout() {
             </button>
           </header>
 
-          {/* ✅ Contenedor de páginas */}
-          {/* MÓVIL: NO overflow-y-auto (evita el scroll interno) */}
-          {/* DESKTOP: SÍ overflow-y-auto */}
-          <div className="bg-[#020408] md:flex-1 md:overflow-y-auto md:custom-scrollbar">
-            <Outlet />
-          </div>
+      <div className="bg-[#020408] md:flex-1 md:overflow-y-auto md:custom-scrollbar">
+  <Outlet />
+</div>
+
         </main>
       </div>
     </div>
