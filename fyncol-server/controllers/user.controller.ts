@@ -1,3 +1,4 @@
+// fyncol-server/controllers/user.controller.ts
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
@@ -9,8 +10,9 @@ const prisma = new PrismaClient();
 // ==========================================
 export const createUser = async (req: Request, res: Response) => {
   try {
-    const { name, document, address, phone, role, email } = req.body;
+    const { name, document, address, phone, role, email, imageUrl } = req.body;
 
+    // Validar si el correo o documento ya existen
     const existingUser = await prisma.user.findFirst({
       where: {
         OR: [{ email }, { document }],
@@ -24,17 +26,35 @@ export const createUser = async (req: Request, res: Response) => {
       });
     }
 
+    // Encriptar el documento para usarlo como contraseña inicial
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(document, salt);
 
     const newUser = await prisma.user.create({
-      data: { name, email, password: hashedPassword, document, address, phone, role },
-      select: { id: true, name: true, email: true, document: true, role: true, isActive: true }
+      data: { 
+        name, 
+        email, 
+        password: hashedPassword, 
+        document, 
+        address, 
+        phone, 
+        role,
+        imageUrl: imageUrl || null // Opcional por ahora
+      },
+      select: { 
+        id: true, 
+        name: true, 
+        email: true, 
+        document: true, 
+        role: true, 
+        isActive: true,
+        imageUrl: true 
+      }
     });
 
-    res.status(201).json({ success: true, message: "Usuario creado", user: newUser });
+    res.status(201).json({ success: true, message: "Usuario creado exitosamente", user: newUser });
   } catch (error) {
-    console.error(error);
+    console.error("Error en createUser:", error);
     res.status(500).json({ success: false, message: "Error al crear usuario" });
   }
 };
@@ -45,7 +65,6 @@ export const createUser = async (req: Request, res: Response) => {
 export const getUsers = async (req: Request, res: Response) => {
   try {
     const users = await prisma.user.findMany({
-      // Excluimos la contraseña por seguridad
       select: {
         id: true,
         name: true,
@@ -55,14 +74,15 @@ export const getUsers = async (req: Request, res: Response) => {
         address: true,
         role: true,
         isActive: true,
+        imageUrl: true, // Importante para mostrar la foto en la tabla
         createdAt: true,
       },
-      orderBy: { createdAt: 'desc' } // Los más nuevos primero
+      orderBy: { createdAt: 'desc' }
     });
 
     res.status(200).json({ success: true, users });
   } catch (error) {
-    console.error(error);
+    console.error("Error en getUsers:", error);
     res.status(500).json({ success: false, message: "Error al obtener usuarios" });
   }
 };
@@ -73,17 +93,24 @@ export const getUsers = async (req: Request, res: Response) => {
 export const updateUser = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, document, address, phone, role, email, isActive } = req.body;
+    const { name, document, address, phone, role, email, isActive, imageUrl } = req.body;
 
     const updatedUser = await prisma.user.update({
       where: { id: Number(id) },
-      data: { name, document, address, phone, role, email, isActive },
-      select: { id: true, name: true, email: true, role: true, isActive: true }
+      data: { name, document, address, phone, role, email, isActive, imageUrl },
+      select: { 
+        id: true, 
+        name: true, 
+        email: true, 
+        role: true, 
+        isActive: true,
+        imageUrl: true 
+      }
     });
 
     res.status(200).json({ success: true, message: "Usuario actualizado", user: updatedUser });
   } catch (error) {
-    console.error(error);
+    console.error("Error en updateUser:", error);
     res.status(500).json({ success: false, message: "Error al actualizar usuario" });
   }
 };
@@ -95,16 +122,16 @@ export const deleteUser = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    // En lugar de borrarlo, lo desactivamos (Soft Delete)
+    // Aplicamos Soft Delete cambiando isActive a false
     const deactivatedUser = await prisma.user.update({
       where: { id: Number(id) },
       data: { isActive: false },
       select: { id: true, name: true, isActive: true }
     });
 
-    res.status(200).json({ success: true, message: "Usuario desactivado", user: deactivatedUser });
+    res.status(200).json({ success: true, message: "Usuario desactivado correctamente", user: deactivatedUser });
   } catch (error) {
-    console.error(error);
+    console.error("Error en deleteUser:", error);
     res.status(500).json({ success: false, message: "Error al desactivar usuario" });
   }
 };

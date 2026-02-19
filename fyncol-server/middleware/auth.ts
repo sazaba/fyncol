@@ -1,9 +1,14 @@
-// fyncol-server/middleware/auth.js
-const jwt = require('jsonwebtoken');
+import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+
 const JWT_SECRET = process.env.JWT_SECRET || 'fyncol_secret_key';
 
-module.exports = (req, res, next) => {
-  // 1. Leer el header "Authorization"
+// Definimos una interfaz para extender el Request de Express
+export interface AuthRequest extends Request {
+  user?: any;
+}
+
+export const verifyToken = (req: AuthRequest, res: Response, next: NextFunction) => {
   const token = req.header('Authorization')?.replace('Bearer ', '');
 
   if (!token) {
@@ -11,10 +16,9 @@ module.exports = (req, res, next) => {
   }
 
   try {
-    // 2. Verificar el token
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded; // Guardamos los datos del usuario en la petición
-    next(); // Dejamos pasar al siguiente controlador
+    req.user = decoded; 
+    next();
   } catch (error) {
     res.status(401).json({ success: false, message: 'Token inválido o expirado.' });
   }
