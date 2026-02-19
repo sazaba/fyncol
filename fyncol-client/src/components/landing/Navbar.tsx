@@ -1,6 +1,5 @@
-// src/components/layout/Navbar.tsx
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom"; // Importamos useNavigate
+import { useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png";
 
 type NavbarProps = {
@@ -8,64 +7,117 @@ type NavbarProps = {
   userLabel?: string;
   primaryCtaLabel?: string;
   onPrimaryCta?: () => void;
+
+  /**
+   * Si el scroll NO ocurre en window (ej: dashboard con overflow-y-auto),
+   * pásale el ref del contenedor scrolleable.
+   * Si no lo pasas, usa window (landing).
+   */
+  scrollContainerRef?: React.RefObject<HTMLElement>;
 };
 
 export default function Navbar({
   brand = "Fyncol",
   primaryCtaLabel = "Iniciar sesión",
   onPrimaryCta,
+  scrollContainerRef,
 }: NavbarProps) {
   const navigate = useNavigate();
+
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [hidden, setHidden] = useState(false);
-  
-  // Nuevo estado para saber si está logueado
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const lastYRef = useRef(0);
+  const tickingRef = useRef(false);
+
+  // Mantener auth actualizada (incluye cambios entre tabs)
+  useEffect(() => {
+    const syncAuth = () => setIsAuthenticated(!!localStorage.getItem("token"));
+    syncAuth();
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "token") syncAuth();
+    };
+
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   useEffect(() => {
-    // Verificar si hay token al cargar el componente
-    const token = localStorage.getItem("token");
-    setIsAuthenticated(!!token);
-
     const onResize = () => {
       if (window.innerWidth >= 1024) setOpen(false);
     };
 
+    // Detectar el scroller real
+    const el = scrollContainerRef?.current ?? null;
+
+    // Inicializar lastY según dónde se hace scroll
+    lastYRef.current = el ? el.scrollTop : window.scrollY;
+
+    const getY = () => (el ? el.scrollTop : window.scrollY);
+
     const onScroll = () => {
-      const y = window.scrollY || 0;
-      setScrolled(y > 10);
-      if (Math.abs(y - lastYRef.current) > 10) {
-        setHidden(y > lastYRef.current && y > 60);
-        lastYRef.current = y;
-      }
+      if (tickingRef.current) return;
+      tickingRef.current = true;
+
+      requestAnimationFrame(() => {
+        const y = getY() || 0;
+
+        // Efecto "glass" cuando baja un poquito
+        setScrolled(y > 10);
+
+        const delta = y - lastYRef.current;
+
+        // Evita jitter con umbral pequeño
+        if (Math.abs(delta) > 6) {
+          // Baja => ocultar. Sube => mostrar.
+          if (y > 60 && delta > 0) setHidden(true);
+          if (delta < 0) setHidden(false);
+
+          lastYRef.current = y;
+        }
+
+        // Siempre visible cerca del top
+        if (y < 20) setHidden(false);
+
+        tickingRef.current = false;
+      });
     };
 
     window.addEventListener("resize", onResize);
-    window.addEventListener("scroll", onScroll, { passive: true });
+
+    // Listener al scroller correcto
+    if (el) el.addEventListener("scroll", onScroll, { passive: true });
+    else window.addEventListener("scroll", onScroll, { passive: true });
+
     return () => {
       window.removeEventListener("resize", onResize);
-      window.removeEventListener("scroll", onScroll);
+      if (el) el.removeEventListener("scroll", onScroll as any);
+      else window.removeEventListener("scroll", onScroll as any);
     };
-  }, []);
+    // IMPORTANTE: escuchar cuando el ref "aparece"
+  }, [scrollContainerRef?.current]);
 
-  // Función para cerrar sesión
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     setIsAuthenticated(false);
-    navigate("/"); // Recargar o ir al home
-    window.location.reload(); // Forzamos recarga para limpiar estados
+    setOpen(false);
+    navigate("/");
   };
 
   const buttonBaseStyles =
     "relative inline-flex items-center justify-center font-semibold text-white transition-all active:scale-95 duration-200";
-  
+
   const primaryButtonStyles = `
-    ${buttonBaseStyles} rounded-full bg-blue-600 px-6 py-2.5 text-[15px] shadow-[0_0_20px_-5px_rgba(37,99,235,0.5)] hover:bg-blue-500 hover:shadow-[0_0_25px_-5px_rgba(37,99,235,0.6)]
-    before:absolute before:inset-0 before:rounded-full before:bg-gradient-to-r before:from-cyan-400 before:via-blue-500 before:to-indigo-500 before:opacity-0 before:transition-opacity hover:before:opacity-100 before:-z-10
+    ${buttonBaseStyles} rounded-full bg-blue-600 px-6 py-2.5 text-[15px]
+    shadow-[0_0_20px_-5px_rgba(37,99,235,0.5)]
+    hover:bg-blue-500 hover:shadow-[0_0_25px_-5px_rgba(37,99,235,0.6)]
+    before:absolute before:inset-0 before:rounded-full before:bg-gradient-to-r
+    before:from-cyan-400 before:via-blue-500 before:to-indigo-500
+    before:opacity-0 before:transition-opacity hover:before:opacity-100 before:-z-10
   `;
 
   return (
@@ -79,7 +131,12 @@ export default function Navbar({
       ].join(" ")}
     >
       <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-5 md:px-8">
-        <a href="/" aria-label={brand} className="relative z-10 flex items-center">
+        <a
+          href="/"
+          aria-label={brand}
+          className="relative z-10 flex items-center"
+          onClick={() => setOpen(false)}
+        >
           <img
             src={logo}
             alt={brand}
@@ -91,26 +148,26 @@ export default function Navbar({
         <div className="hidden items-center gap-6 lg:flex">
           {isAuthenticated ? (
             <>
-              {/* Si está logueado: Botón Dashboard + Logout */}
-              <button 
-                onClick={() => navigate("/dashboard")}
-                className={primaryButtonStyles}
-              >
+              <button onClick={() => navigate("/dashboard")} className={primaryButtonStyles}>
                 Ir al Dashboard
               </button>
-              
-              <button 
+
+              <button
                 onClick={handleLogout}
                 className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-2"
                 title="Cerrar Sesión"
               >
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                  />
                 </svg>
               </button>
             </>
           ) : (
-            /* Si NO está logueado: Botón original */
             <button onClick={onPrimaryCta} className={primaryButtonStyles}>
               <span>{primaryCtaLabel}</span>
             </button>
@@ -141,23 +198,30 @@ export default function Navbar({
       >
         <div className="flex flex-col gap-4 px-6">
           {isAuthenticated ? (
-             <>
-                <button 
-                  onClick={() => { setOpen(false); navigate("/dashboard"); }}
-                  className={`${primaryButtonStyles} w-full py-3.5 text-base`}
-                >
-                  Ir al Dashboard
-                </button>
-                <button 
-                  onClick={handleLogout}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-sm text-slate-300 active:bg-white/10"
-                >
-                  Cerrar Sesión
-                </button>
-             </>
+            <>
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  navigate("/dashboard");
+                }}
+                className={`${primaryButtonStyles} w-full py-3.5 text-base`}
+              >
+                Ir al Dashboard
+              </button>
+
+              <button
+                onClick={handleLogout}
+                className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-sm text-slate-300 active:bg-white/10"
+              >
+                Cerrar Sesión
+              </button>
+            </>
           ) : (
-            <button 
-              onClick={() => { setOpen(false); onPrimaryCta?.(); }}
+            <button
+              onClick={() => {
+                setOpen(false);
+                onPrimaryCta?.();
+              }}
               className={`${primaryButtonStyles} w-full py-3.5 text-base`}
             >
               {primaryCtaLabel}
