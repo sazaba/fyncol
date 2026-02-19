@@ -135,3 +135,58 @@ export const deleteUser = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, message: "Error al desactivar usuario" });
   }
 };
+
+// ==========================================
+// 5. ACTIVAR / DESACTIVAR (PATCH)
+// ==========================================
+export const toggleActiveUser = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.body;
+
+    if (typeof isActive !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message: "isActive debe ser boolean (true/false).",
+      });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: Number(id) },
+      data: { isActive },
+      select: { id: true, name: true, isActive: true },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: isActive ? "Usuario activado" : "Usuario desactivado",
+      user: updated,
+    });
+  } catch (error) {
+    console.error("Error en toggleActiveUser:", error);
+    return res.status(500).json({ success: false, message: "Error al actualizar estado del usuario" });
+  }
+};
+
+// ==========================================
+// 6. BORRAR REAL (Hard Delete)
+// ==========================================
+export const hardDeleteUser = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const deleted = await prisma.user.delete({
+      where: { id: Number(id) },
+      select: { id: true, name: true },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Usuario eliminado definitivamente",
+      user: deleted,
+    });
+  } catch (error) {
+    console.error("Error en hardDeleteUser:", error);
+    return res.status(500).json({ success: false, message: "Error al eliminar definitivamente" });
+  }
+};

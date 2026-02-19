@@ -1,12 +1,27 @@
-import { Router } from 'express';
-import { createUser, getUsers, updateUser, deleteUser } from '../controllers/user.controller';
+import { Router } from "express";
+import {
+  createUser,
+  getUsers,
+  updateUser,
+  deleteUser,       // soft delete (desactivar)
+  hardDeleteUser,   // hard delete (borrar real)
+  toggleActiveUser, // activar/desactivar
+} from "../controllers/user.controller";
 
 const router = Router();
 
 // Rutas base: /api/users
-router.post('/', createUser);          // Crear
-router.get('/', getUsers);             // Leer todos
-router.put('/:id', updateUser);        // Actualizar uno específico
-router.delete('/:id', deleteUser);     // Desactivar uno específico
+router.post("/", createUser);
+router.get("/", getUsers);
+router.put("/:id", updateUser);
+
+// Activar/Desactivar (toggle explícito)
+router.patch("/:id/active", toggleActiveUser);
+
+// Soft delete (desactiva)
+router.delete("/:id", deleteUser);
+
+// Hard delete (borra de BD)
+router.delete("/:id/hard", hardDeleteUser);
 
 export default router;

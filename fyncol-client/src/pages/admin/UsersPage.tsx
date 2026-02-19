@@ -15,6 +15,9 @@ import {
   FiX,
   FiMail,
   FiAlertTriangle,
+  FiToggleLeft,
+  FiToggleRight,
+  FiSlash,
 } from "react-icons/fi";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
@@ -35,6 +38,7 @@ export default function UsersPage() {
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
+  const [busyId, setBusyId] = useState<number | string | null>(null);
 
   // === ESTADOS PARA CRUD ===
   const [editingId, setEditingId] = useState<number | string | null>(null);
@@ -81,15 +85,44 @@ export default function UsersPage() {
     setAlertState((prev) => ({ ...prev, open: false, onConfirm: null }));
   };
 
-  // 1. READ: Obtener usuarios
+  const getTokenOrFail = () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      openAlert({
+        variant: "danger",
+        title: "Sesión no válida",
+        message: "No se encontró token. Inicia sesión nuevamente.",
+        confirmText: "OK",
+        cancelText: "",
+        onConfirm: () => closeAlert(),
+      });
+      return null;
+    }
+    return token;
+  };
+
+  // 1. READ
   const fetchUsers = async () => {
     try {
-      const token = localStorage.getItem("token");
+      const token = getTokenOrFail();
+      if (!token) return;
+
       const res = await fetch(`${API_URL}/api/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (data.success) setUsers(data.users);
+
+      if (res.ok && data.success) setUsers(data.users);
+      else {
+        openAlert({
+          variant: "danger",
+          title: "No se pudo cargar",
+          message: data.message || "Error trayendo usuarios.",
+          confirmText: "Entendido",
+          cancelText: "",
+          onConfirm: () => closeAlert(),
+        });
+      }
     } catch (error) {
       console.error("Error al obtener usuarios:", error);
       openAlert({
@@ -105,17 +138,19 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 2. CREATE / UPDATE: Guardar cambios
+  // 2. CREATE / UPDATE
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const token = localStorage.getItem("token");
-      const isEditing = editingId !== null;
+      const token = getTokenOrFail();
+      if (!token) return;
 
+      const isEditing = editingId !== null;
       const url = isEditing ? `${API_URL}/api/users/${editingId}` : `${API_URL}/api/users`;
       const method = isEditing ? "PUT" : "POST";
 
@@ -128,7 +163,7 @@ export default function UsersPage() {
         body: JSON.stringify({ ...formData, role: selectedRole }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (res.ok && data.success) {
         closeModal();
@@ -145,7 +180,7 @@ export default function UsersPage() {
         openAlert({
           variant: "danger",
           title: "No se pudo guardar",
-          message: data.message || "Error en la operación",
+          message: data.message || `Error del servidor (${res.status})`,
           confirmText: "Entendido",
           cancelText: "",
           onConfirm: () => closeAlert(),
@@ -165,20 +200,86 @@ export default function UsersPage() {
     }
   };
 
-  // 3. DELETE: Soft Delete
-  const handleDelete = async (id: number | string, name: string) => {
+  // 3. ACTIVAR / DESACTIVAR
+  const handleToggleActive = async (id: number | string, name: string, nextState: boolean) => {
+    const actionLabel = nextState ? "activar" : "desactivar";
+
     openAlert({
-      variant: "danger",
-      title: "Desactivar usuario",
-      message: `¿Seguro que deseas desactivar a "${name}"?`,
-      confirmText: "Sí, desactivar",
+      variant: "info",
+      title: `${nextState ? "Activar" : "Desactivar"} usuario`,
+      message: `¿Seguro que deseas ${actionLabel} a "${name}"?`,
+      confirmText: nextState ? "Sí, activar" : "Sí, desactivar",
       cancelText: "Cancelar",
       onConfirm: async () => {
         closeAlert();
+        const token = getTokenOrFail();
+        if (!token) return;
 
+        setBusyId(id);
         try {
-          const token = localStorage.getItem("token");
-          const res = await fetch(`${API_URL}/api/users/${id}`, {
+          const res = await fetch(`${API_URL}/api/users/${id}/active`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ isActive: nextState }),
+          });
+
+          const data = await res.json().catch(() => ({}));
+
+          if (res.ok && data?.success) {
+            fetchUsers();
+            openAlert({
+              variant: "success",
+              title: nextState ? "Usuario activado" : "Usuario desactivado",
+              message: "El estado se actualizó correctamente.",
+              confirmText: "Listo",
+              cancelText: "",
+              onConfirm: () => closeAlert(),
+            });
+          } else {
+            openAlert({
+              variant: "danger",
+              title: "No se pudo actualizar",
+              message: data?.message || `Error del servidor (${res.status})`,
+              confirmText: "Entendido",
+              cancelText: "",
+              onConfirm: () => closeAlert(),
+            });
+          }
+        } catch (e) {
+          openAlert({
+            variant: "danger",
+            title: "Error",
+            message: "No se pudo actualizar el estado del usuario.",
+            confirmText: "Entendido",
+            cancelText: "",
+            onConfirm: () => closeAlert(),
+          });
+        } finally {
+          setBusyId(null);
+        }
+      },
+    });
+  };
+
+  // 4. BORRAR REAL (Hard Delete)
+  const handleHardDelete = async (id: number | string, name: string) => {
+    openAlert({
+      variant: "danger",
+      title: "Eliminar definitivamente",
+      message: `Esto eliminará a "${name}" de forma PERMANENTE. ¿Deseas continuar?`,
+      confirmText: "Sí, eliminar",
+      cancelText: "Cancelar",
+      onConfirm: async () => {
+        closeAlert();
+        const token = getTokenOrFail();
+        if (!token) return;
+
+        setBusyId(id);
+        try {
+          const res = await fetch(`${API_URL}/api/users/${id}/hard`, {
             method: "DELETE",
             headers: { Authorization: `Bearer ${token}` },
           });
@@ -189,8 +290,8 @@ export default function UsersPage() {
             fetchUsers();
             openAlert({
               variant: "success",
-              title: "Usuario desactivado",
-              message: "El usuario fue desactivado correctamente.",
+              title: "Usuario eliminado",
+              message: "Se eliminó definitivamente.",
               confirmText: "Listo",
               cancelText: "",
               onConfirm: () => closeAlert(),
@@ -198,24 +299,26 @@ export default function UsersPage() {
           } else {
             openAlert({
               variant: "danger",
-              title: "No se pudo desactivar",
+              title: "No se pudo eliminar",
               message:
                 data?.message ||
-                `El servidor respondió con error (${res.status}). Revisa que tu backend tenga DELETE /api/users/:id.`,
+                `Error del servidor (${res.status}). Asegura que exista DELETE /api/users/:id/hard.`,
               confirmText: "Entendido",
               cancelText: "",
               onConfirm: () => closeAlert(),
             });
           }
-        } catch (error) {
+        } catch (e) {
           openAlert({
             variant: "danger",
             title: "Error",
-            message: "No se pudo eliminar/desactivar el usuario.",
+            message: "No se pudo eliminar definitivamente.",
             confirmText: "Entendido",
             cancelText: "",
             onConfirm: () => closeAlert(),
           });
+        } finally {
+          setBusyId(null);
         }
       },
     });
@@ -242,7 +345,7 @@ export default function UsersPage() {
     setSelectedRole("COBRADOR");
   };
 
-  // Bloquea el scroll del body cuando el modal está abierto
+  // Bloquea scroll del body cuando hay modal/alert
   useEffect(() => {
     document.body.style.overflow = showModal || alertState.open ? "hidden" : "unset";
   }, [showModal, alertState.open]);
@@ -287,65 +390,121 @@ export default function UsersPage() {
                 <th className="px-6 py-5">Usuario</th>
                 <th className="px-6 py-5">Documento</th>
                 <th className="px-6 py-5">Rol</th>
+                <th className="px-6 py-5 text-center">Estado</th>
                 <th className="px-6 py-5 text-center">Acciones</th>
               </tr>
             </thead>
+
             <tbody className="divide-y divide-white/5">
-              {users.map((user) => (
-                <tr
-                  key={user.id}
-                  className={`hover:bg-white/[0.02] transition-colors group ${
-                    !user.isActive ? "opacity-50" : ""
-                  }`}
-                >
-                  <td className="px-6 py-4 font-medium text-white flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500/20 to-cyan-500/20 text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-500/10 overflow-hidden">
-                      {user.imageUrl ? (
-                        <img src={user.imageUrl} className="rounded-full h-full w-full object-cover" />
-                      ) : (
-                        user.name?.charAt(0)
-                      )}
-                    </div>
-                    <div className="flex flex-col">
-                      <span>{user.name}</span>
-                      <span className="text-[10px] text-slate-500 uppercase">{user.email}</span>
-                    </div>
-                  </td>
+              {users.map((user) => {
+                const isBusy = busyId === user.id;
+                const active = !!user.isActive;
 
-                  <td className="px-6 py-4 text-slate-400">{user.document}</td>
+                return (
+                  <tr
+                    key={user.id}
+                    className={`hover:bg-white/[0.02] transition-colors group ${!active ? "opacity-60" : ""}`}
+                  >
+                    <td className="px-6 py-4 font-medium text-white flex items-center gap-4">
+                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500/20 to-cyan-500/20 text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-500/10 overflow-hidden">
+                        {user.imageUrl ? (
+                          <img src={user.imageUrl} className="rounded-full h-full w-full object-cover" />
+                        ) : (
+                          user.name?.charAt(0)
+                        )}
+                      </div>
+                      <div className="flex flex-col">
+                        <span>{user.name}</span>
+                        <span className="text-[10px] text-slate-500 uppercase">{user.email}</span>
+                      </div>
+                    </td>
 
-                  <td className="px-6 py-4">
-                    <span className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase border bg-blue-500/10 text-blue-400 border-blue-500/20">
-                      {user.role}
-                    </span>
-                  </td>
+                    <td className="px-6 py-4 text-slate-400">{user.document}</td>
 
-                  <td className="px-6 py-4 text-center">
-                    {/* FIX: visible en mobile/touch, y en md se muestra con hover */}
-                    <div className="flex items-center justify-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => openEditModal(user)}
-                        className="p-2 text-slate-400 hover:text-blue-400 transition-colors"
-                        aria-label="Editar"
+                    <td className="px-6 py-4">
+                      <span className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase border bg-blue-500/10 text-blue-400 border-blue-500/20">
+                        {user.role}
+                      </span>
+                    </td>
+
+                    <td className="px-6 py-4 text-center">
+                      <span
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase border ${
+                          active
+                            ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
+                            : "bg-slate-500/10 text-slate-300 border-white/10"
+                        }`}
                       >
-                        <FiEdit2 size={16} />
-                      </button>
+                        {active ? "Activo" : "Inactivo"}
+                      </span>
+                    </td>
 
-                      <button
-                        onClick={() => handleDelete(user.id, user.name)}
-                        className="p-2 text-slate-400 hover:text-red-400 transition-colors"
-                        aria-label="Eliminar"
-                      >
-                        <FiTrash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex items-center justify-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                        {/* Editar */}
+                        <button
+                          disabled={isBusy}
+                          onClick={() => openEditModal(user)}
+                          className="p-2 text-slate-400 hover:text-blue-400 transition-colors disabled:opacity-40"
+                          aria-label="Editar"
+                          title="Editar"
+                        >
+                          <FiEdit2 size={16} />
+                        </button>
+
+                        {/* Activar / Desactivar (solo uno a la vez) */}
+                        {active ? (
+                          <button
+                            disabled={isBusy}
+                            onClick={() => handleToggleActive(user.id, user.name, false)}
+                            className="p-2 text-slate-400 hover:text-amber-300 transition-colors disabled:opacity-40"
+                            aria-label="Desactivar"
+                            title="Desactivar"
+                          >
+                            <FiToggleLeft size={16} />
+                          </button>
+                        ) : (
+                          <button
+                            disabled={isBusy}
+                            onClick={() => handleToggleActive(user.id, user.name, true)}
+                            className="p-2 text-slate-400 hover:text-emerald-300 transition-colors disabled:opacity-40"
+                            aria-label="Activar"
+                            title="Activar"
+                          >
+                            <FiToggleRight size={16} />
+                          </button>
+                        )}
+
+                        {/* Soft delete (desactivar) rápido si quieres mantener la semántica "basura" */}
+                        <button
+                          disabled={isBusy || !active}
+                          onClick={() => handleToggleActive(user.id, user.name, false)}
+                          className="p-2 text-slate-400 hover:text-red-300 transition-colors disabled:opacity-30"
+                          aria-label="Desactivar (rápido)"
+                          title="Desactivar (rápido)"
+                        >
+                          <FiSlash size={16} />
+                        </button>
+
+                        {/* Borrar real */}
+                        <button
+                          disabled={isBusy}
+                          onClick={() => handleHardDelete(user.id, user.name)}
+                          className="p-2 text-slate-400 hover:text-red-400 transition-colors disabled:opacity-40"
+                          aria-label="Eliminar definitivamente"
+                          title="Eliminar definitivamente"
+                        >
+                          <FiTrash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
 
               {users.length === 0 && (
                 <tr>
-                  <td className="px-6 py-10 text-center text-slate-500" colSpan={4}>
+                  <td className="px-6 py-10 text-center text-slate-500" colSpan={5}>
                     No hay usuarios aún.
                   </td>
                 </tr>
@@ -355,7 +514,7 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* MODAL (PANTALLA COMPLETA MÓVIL) */}
+      {/* MODAL */}
       {showModal && (
         <div className="fixed inset-0 z-[100] flex md:items-center justify-center bg-[#020408]/90 backdrop-blur-md">
           <div className="relative w-full h-[100dvh] md:h-auto md:max-w-[520px] bg-[#05050A] md:bg-[#05050A]/80 md:backdrop-blur-3xl md:border border-white/10 rounded-none md:rounded-[36px] flex flex-col overflow-hidden shadow-2xl animate-[slideUp_0.3s_ease-out]">
@@ -370,7 +529,6 @@ export default function UsersPage() {
 
             <div className="flex-1 px-6 md:px-10 py-8 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               <form id="userForm" onSubmit={handleSaveUser} className="space-y-6">
-                {/* Avatar Preview */}
                 <div className="flex justify-center mb-4">
                   <div className="h-28 w-28 rounded-full bg-[#0B1020]/80 border border-white/10 flex flex-col items-center justify-center text-slate-400 shadow-inner">
                     <FiCamera size={28} className="mb-2" />
