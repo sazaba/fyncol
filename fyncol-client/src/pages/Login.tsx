@@ -6,19 +6,14 @@ import logo from "@/assets/logo.png";
 export default function Login() {
   const navigate = useNavigate();
   
-  // Estados para manejar los inputs y el feedback de carga/error
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // URL de tu Backend (Usa la variable de entorno de Vercel o localhost por defecto)
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
-  // === NUEVO: VERIFICAR SESIÓN ACTIVA (Guest Route) ===
   useEffect(() => {
-    // Si ya existe un token en localStorage, asumimos que está logueado
-    // y lo mandamos de vuelta al dashboard para que no vea el login.
     const token = localStorage.getItem("token");
     if (token) {
       navigate("/dashboard");
@@ -42,14 +37,10 @@ export default function Login() {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        // 1. Guardar token y usuario en localStorage para persistencia
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.user));
-        
-        // 2. Redirigir al Dashboard
         navigate("/dashboard");
       } else {
-        // Mostrar error que viene del backend (ej: "Credenciales inválidas")
         setError(data.message || "Error al iniciar sesión");
       }
     } catch (err) {
@@ -61,14 +52,12 @@ export default function Login() {
   };
 
   return (
-    // Usamos h-[100dvh] en lugar de min-h-screen
-    // Esto fuerza al contenedor a tener EXACTAMENTE el tamaño visible de la pantalla móvil
     <div className="relative flex h-[100dvh] w-full items-center justify-center overflow-hidden bg-[#020408] px-4 selection:bg-blue-500/30 font-inter">
       
-      {/* Background Gradients (Optimizados para GPU) */}
-      <div className="pointer-events-none absolute inset-0 transform-gpu overflow-hidden">
-        <div className="absolute top-1/2 right-[-10%] h-[500px] w-[500px] -translate-y-1/2 rounded-full bg-blue-600/20 blur-[120px] will-change-transform" />
-        <div className="absolute bottom-[-10%] left-[-10%] h-[500px] w-[500px] rounded-full bg-cyan-600/10 blur-[120px] will-change-transform" />
+      {/* Background Gradients: Se quitaron transform-gpu y will-change para evitar el glitch del cuadro negro en Safari */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute top-1/2 right-[-10%] h-[500px] w-[500px] -translate-y-1/2 rounded-full bg-blue-600/20 blur-[120px]" />
+        <div className="absolute bottom-[-10%] left-[-10%] h-[500px] w-[500px] rounded-full bg-cyan-600/10 blur-[120px]" />
       </div>
 
       {/* Login Card */}
@@ -89,10 +78,9 @@ export default function Login() {
           </p>
         </div>
 
-        {/* Form - Conectado a la función handleLogin */}
+        {/* Form */}
         <form className="flex flex-col gap-5" onSubmit={handleLogin}>
           
-          {/* Mensaje de Error (Solo aparece si hay error) */}
           {error && (
             <div className="rounded-lg bg-red-500/10 p-3 text-center text-xs font-medium text-red-400 border border-red-500/20 animate-pulse">
               {error}
@@ -121,7 +109,7 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Password Input */}
+          {/* Password Input (Se limpiaron las clases inválidas de autofill) */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -141,7 +129,7 @@ export default function Login() {
                 type="password"
                 required
                 placeholder="••••••••"
-                className="w-full appearance-none rounded-xl border border-white/10 bg-[#05050A] py-3.5 pl-11 pr-4 text-sm md:text-base text-white placeholder-slate-600 shadow-sm transition-all focus:border-blue-500/50 focus:bg-[#0B1020] focus:outline-none focus:ring-1 focus:ring-blue-500/50 [&:-webkit-autofill]:shadow-[0_0_0_1000px_#05050A_inset] [&:-webkit-autofill]:-webkit-text-fill-color:white [&:-webkit-autofill]:caret-white"
+                className="w-full appearance-none rounded-xl border border-white/10 bg-[#05050A] py-3.5 pl-11 pr-4 text-sm md:text-base text-white placeholder-slate-600 shadow-sm transition-all focus:border-blue-500/50 focus:bg-[#0B1020] focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
