@@ -10,7 +10,9 @@ html {
 }
 
 html, body {
-  height: 100%;
+  /* 🔥 FIX CLAVE: Cambiado de height: 100% a min-height: 100vh */
+  /* Esto permite que la página crezca y window.scrollY funcione */
+  min-height: 100vh; 
   overflow-x: hidden;
   @apply bg-[#020408] text-white; /* Fondo base global Fyncol */
 }
