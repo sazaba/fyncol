@@ -8,15 +8,12 @@ type NavbarProps = {
   userLabel?: string;
   primaryCtaLabel?: string;
   onPrimaryCta?: () => void;
-  // Mantenemos la ref por si tu landing está dentro de un div con overflow
-  scrollContainerRef?: React.RefObject<HTMLElement>;
 };
 
 export default function Navbar({
   brand = "Fyncol",
   primaryCtaLabel = "Iniciar sesión",
   onPrimaryCta,
-  scrollContainerRef,
 }: NavbarProps) {
   const navigate = useNavigate();
 
@@ -39,51 +36,46 @@ export default function Navbar({
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // 2. Lógica de Scroll clonada de Wasaaa (Optimizada para Safari)
+  // 2. Lógica de Scroll Simple y Directa (Escuchando a window)
   useEffect(() => {
-    const target = scrollContainerRef?.current || window;
     let ticking = false;
 
-    const handleScroll = () => {
-      const currentScrollY = scrollContainerRef?.current 
-        ? scrollContainerRef.current.scrollTop 
-        : window.scrollY;
-
+    const controlNavbar = () => {
       if (!ticking) {
         window.requestAnimationFrame(() => {
-          // Fix Safari Overscroll: Si rebota hacia arriba (valores negativos), mostramos y reseteamos
+          const currentScrollY = window.scrollY;
+
+          // Si estamos hasta arriba (o hay rebote en Safari), lo mostramos siempre
           if (currentScrollY <= 0) {
             setIsVisible(true);
             setIsScrolled(false);
-            setLastScrollY(currentScrollY);
-            ticking = false;
-            return;
-          }
-
-          setIsScrolled(currentScrollY > 20);
-
-          // Lógica Wasaaa: Si bajamos más del lastScroll y ya pasamos los 80px, ocultar
-          if (currentScrollY > lastScrollY && currentScrollY > 80) {
-            setIsVisible(false);
           } else {
-            // Si subimos, mostrar
-            setIsVisible(true);
+            // Ponemos el fondo oscuro si bajamos más de 20px
+            setIsScrolled(currentScrollY > 20);
+
+            // Si bajamos más de 80px Y estamos bajando, lo ocultamos
+            if (currentScrollY > lastScrollY && currentScrollY > 80) {
+              setIsVisible(false);
+            } else {
+              // Si estamos subiendo, lo mostramos
+              setIsVisible(true);
+            }
           }
 
           setLastScrollY(currentScrollY);
           ticking = false;
         });
+
         ticking = true;
       }
     };
 
-    target.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("scroll", controlNavbar, { passive: true });
     
-    // Ejecutar una vez al montar para estado inicial
-    handleScroll();
-
-    return () => target.removeEventListener("scroll", handleScroll as any);
-  }, [lastScrollY, scrollContainerRef]);
+    return () => {
+      window.removeEventListener("scroll", controlNavbar);
+    };
+  }, [lastScrollY]);
 
   // Cerrar menú móvil al hacer resize
   useEffect(() => {
@@ -128,7 +120,7 @@ export default function Navbar({
     <>
       <header
         className={[
-          "fixed w-full top-0 z-[100] transition-all duration-300 ease-in-out border-b transform-gpu",
+          "fixed w-full top-0 z-[100] transition-transform duration-300 ease-in-out border-b transform-gpu",
           isScrolled
             ? "bg-[#05050A]/85 backdrop-blur-xl border-white/10 shadow-lg shadow-black/20"
             : "bg-transparent border-transparent py-4",
@@ -212,10 +204,8 @@ export default function Navbar({
           open ? "translate-x-0" : "translate-x-full"
         ].filter(Boolean).join(" ")}
       >
-        {/* Adorno visual (Luz superior derecha) */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.15),transparent_60%)] pointer-events-none" />
 
-        {/* Header del menú móvil */}
         <div className="flex items-center justify-between p-6 border-b border-white/10 relative z-10">
           <span className="font-bold text-xl tracking-tight text-white flex items-center gap-3">
             <img src={logo} alt="logo" className="w-8 h-8 object-contain" />
@@ -232,12 +222,8 @@ export default function Navbar({
           </button>
         </div>
 
-        {/* Contenido del menú móvil */}
         <div className="flex-1 flex flex-col justify-end p-6 overflow-y-auto relative z-10">
           
-          {/* Aquí puedes agregar links de navegación si los tienes, ej: */}
-          {/* <nav className="flex flex-col gap-2 mb-auto mt-4"> ... </nav> */}
-
           <div className="flex flex-col gap-4 mt-8">
             {isAuthenticated ? (
               <>

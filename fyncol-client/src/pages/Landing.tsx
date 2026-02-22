@@ -1,5 +1,5 @@
 // src/pages/Landing.tsx
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/landing/Navbar";
 import Hero from "../components/landing/Hero";
@@ -8,11 +8,7 @@ import Footer from "../components/landing/Footer";
 
 export default function Landing() {
   const navigate = useNavigate();
-  
-  // 1. Lo regresamos a HTMLDivElement para que el <div> nativo no marque error
-  const mainScrollRef = useRef<HTMLDivElement>(null);
 
-  // Observer para las animaciones (reveal-on-scroll)
   useEffect(() => {
     const observerCallback: IntersectionObserverCallback = (entries, observer) => {
       entries.forEach((entry) => {
@@ -38,20 +34,16 @@ export default function Landing() {
   }, []);
 
   return (
-    // 2. Este div ahora acepta el ref sin problemas
-    <div 
-      ref={mainScrollRef}
-      className="h-[100dvh] overflow-y-auto overflow-x-hidden bg-[#020408] text-white selection:bg-blue-500/30 scroll-smooth scrollbar"
-    >
+    // Sin refs, sin altura fija. Un div normal.
+    <div className="bg-[#020408] text-white selection:bg-blue-500/30 scroll-smooth">
       <Navbar
         brand="Fyncol"
         primaryCtaLabel="Iniciar sesión"
         onPrimaryCta={() => navigate("/login")}
-        // 3. Le decimos a TypeScript "confía en mí, es un elemento HTML válido" usando as any
-        scrollContainerRef={mainScrollRef as any}
+        // Ya no le pasamos el ref
       />
 
-      <main className="flex flex-col relative">
+      <main className="flex flex-col relative overflow-hidden">
         <Hero />
         <Features />
       </main>
