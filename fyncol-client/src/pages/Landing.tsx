@@ -1,5 +1,5 @@
 // src/pages/Landing.tsx
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/landing/Navbar";
 import Hero from "../components/landing/Hero";
@@ -8,14 +8,17 @@ import Footer from "../components/landing/Footer";
 
 export default function Landing() {
   const navigate = useNavigate();
+  
+  // 1. Lo regresamos a HTMLDivElement para que el <div> nativo no marque error
+  const mainScrollRef = useRef<HTMLDivElement>(null);
 
-  // Observer para las animaciones tipo Wasaaa
+  // Observer para las animaciones (reveal-on-scroll)
   useEffect(() => {
     const observerCallback: IntersectionObserverCallback = (entries, observer) => {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
           entry.target.classList.add("is-visible");
-          observer.unobserve(entry.target); // Dejar de observar una vez que ya apareció
+          observer.unobserve(entry.target);
         }
       });
     };
@@ -23,7 +26,7 @@ export default function Landing() {
     const observerOptions = {
       root: null,
       rootMargin: "0px",
-      threshold: 0.1, // Se activa cuando el 10% del elemento es visible
+      threshold: 0.1,
     };
 
     const observer = new IntersectionObserver(observerCallback, observerOptions);
@@ -35,15 +38,20 @@ export default function Landing() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#020408] text-white selection:bg-blue-500/30 scroll-smooth">
+    // 2. Este div ahora acepta el ref sin problemas
+    <div 
+      ref={mainScrollRef}
+      className="h-[100dvh] overflow-y-auto overflow-x-hidden bg-[#020408] text-white selection:bg-blue-500/30 scroll-smooth scrollbar"
+    >
       <Navbar
         brand="Fyncol"
         primaryCtaLabel="Iniciar sesión"
         onPrimaryCta={() => navigate("/login")}
+        // 3. Le decimos a TypeScript "confía en mí, es un elemento HTML válido" usando as any
+        scrollContainerRef={mainScrollRef as any}
       />
 
-      <main className="flex flex-col overflow-hidden relative">
-        {/* Si quieres el fondo global con las luces, puedes ponerlo aquí */}
+      <main className="flex flex-col relative">
         <Hero />
         <Features />
       </main>
