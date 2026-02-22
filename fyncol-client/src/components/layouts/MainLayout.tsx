@@ -7,7 +7,6 @@ import { FiMenu } from "react-icons/fi";
 export default function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // (Opcional pero recomendado) Si el sidebar está abierto en móvil, bloquea el scroll del body
   useEffect(() => {
     document.body.style.overflow = sidebarOpen ? "hidden" : "auto";
     return () => {
@@ -16,9 +15,7 @@ export default function MainLayout() {
   }, [sidebarOpen]);
 
   return (
-    // ✅ En móvil: NO fijamos altura, NO escondemos overflow (body scroll normal)
-    // ✅ En desktop: altura fija y overflow hidden para que el scroll sea interno y limpio
-    <div className="w-full bg-[#020408] text-white font-inter md:h-screen md:overflow-hidden">
+    <div className="w-full bg-[#020408] text-white font-inter md:h-screen md:overflow-hidden selection:bg-blue-500/30">
       <div className="flex w-full md:h-full">
         <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
 
@@ -41,9 +38,10 @@ export default function MainLayout() {
             </button>
           </header>
 
-      <div className="bg-[#020408] md:flex-1 md:overflow-y-auto md:custom-scrollbar">
-  <Outlet />
-</div>
+          {/* Aplicamos la clase scrollbar de index.css en lugar de custom-scrollbar */}
+          <div className="bg-[#020408] md:flex-1 md:overflow-y-auto scrollbar">
+            <Outlet />
+          </div>
 
         </main>
       </div>

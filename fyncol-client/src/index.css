@@ -5,9 +5,14 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  scroll-behavior: smooth;
+}
+
 html, body {
   height: 100%;
   overflow-x: hidden;
+  @apply bg-[#020408] text-white; /* Fondo base global Fyncol */
 }
 
 body {
@@ -27,40 +32,44 @@ input:-webkit-autofill:active {
   transition: background-color 5000s ease-in-out 0s;
 }
 
-@keyframes slideUp {
-  from {
-    transform: translateY(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
 /* =========================
-   SCROLLBAR: ocultar (mantiene el scroll)
+   SCROLLBAR SUTIL TIPO WASAAA
    ========================= */
-
-.custom-scrollbar {
-  -ms-overflow-style: none;  /* IE/Edge viejo */
-  scrollbar-width: none;     /* Firefox */
+.scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
 }
 
-.custom-scrollbar::-webkit-scrollbar {
-  width: 0px;
-  height: 0px;
-  display: none;             /* Chrome/Safari */
+.scrollbar:hover {
+  scrollbar-color: #2A3942 transparent;
+}
+
+.scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scrollbar::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+}
+
+.scrollbar:hover::-webkit-scrollbar-thumb {
+  background: #2A3942;
+}
+
+.scrollbar::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 /* (Opcional) mejora sensación en móviles */
 @media (max-width: 768px) {
-  body {
+  .scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
     overscroll-behavior-y: none;
   }
-  body::-webkit-scrollbar {
+  .scrollbar::-webkit-scrollbar {
     width: 0;
     height: 0;
     display: none;
@@ -68,27 +77,28 @@ input:-webkit-autofill:active {
 }
 
 /* =========================
-   SCROLL GLOBAL: ocultar barra pero permitir scroll
+   ANIMACIONES ON SCROLL
    ========================= */
-
-html, body {
-  height: 100%;
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-/* Firefox */
-html {
-  scrollbar-width: none;
+.reveal-on-scroll {
+  opacity: 0;
+  animation-fill-mode: forwards;
 }
 
-/* IE/Edge viejo */
-body {
-  -ms-overflow-style: none;
+.reveal-on-scroll.is-visible {
+  animation: fadeInUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
-/* Chrome/Safari */
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
-}
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }

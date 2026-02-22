@@ -7,12 +7,6 @@ type NavbarProps = {
   userLabel?: string;
   primaryCtaLabel?: string;
   onPrimaryCta?: () => void;
-
-  /**
-   * Si el scroll NO ocurre en window (ej: dashboard con overflow-y-auto),
-   * pásale el ref del contenedor scrolleable.
-   * Si no lo pasas, usa window (landing).
-   */
   scrollContainerRef?: React.RefObject<HTMLElement>;
 };
 
@@ -32,7 +26,6 @@ export default function Navbar({
   const lastYRef = useRef(0);
   const tickingRef = useRef(false);
 
-  // Mantener auth actualizada (incluye cambios entre tabs)
   useEffect(() => {
     const syncAuth = () => setIsAuthenticated(!!localStorage.getItem("token"));
     syncAuth();
@@ -50,10 +43,7 @@ export default function Navbar({
       if (window.innerWidth >= 1024) setOpen(false);
     };
 
-    // Detectar el scroller real
     const el = scrollContainerRef?.current ?? null;
-
-    // Inicializar lastY según dónde se hace scroll
     lastYRef.current = el ? el.scrollTop : window.scrollY;
 
     const getY = () => (el ? el.scrollTop : window.scrollY);
@@ -65,21 +55,17 @@ export default function Navbar({
       requestAnimationFrame(() => {
         const y = getY() || 0;
 
-        // Efecto "glass" cuando baja un poquito
-        setScrolled(y > 10);
+        setScrolled(y > 20);
 
         const delta = y - lastYRef.current;
 
-        // Evita jitter con umbral pequeño
         if (Math.abs(delta) > 6) {
-          // Baja => ocultar. Sube => mostrar.
-          if (y > 60 && delta > 0) setHidden(true);
+          if (y > 100 && delta > 0) setHidden(true);
           if (delta < 0) setHidden(false);
 
           lastYRef.current = y;
         }
 
-        // Siempre visible cerca del top
         if (y < 20) setHidden(false);
 
         tickingRef.current = false;
@@ -88,7 +74,6 @@ export default function Navbar({
 
     window.addEventListener("resize", onResize);
 
-    // Listener al scroller correcto
     if (el) el.addEventListener("scroll", onScroll, { passive: true });
     else window.addEventListener("scroll", onScroll, { passive: true });
 
@@ -97,7 +82,6 @@ export default function Navbar({
       if (el) el.removeEventListener("scroll", onScroll as any);
       else window.removeEventListener("scroll", onScroll as any);
     };
-    // IMPORTANTE: escuchar cuando el ref "aparece"
   }, [scrollContainerRef?.current]);
 
   const handleLogout = () => {
@@ -109,52 +93,53 @@ export default function Navbar({
   };
 
   const buttonBaseStyles =
-    "relative inline-flex items-center justify-center font-semibold text-white transition-all active:scale-95 duration-200";
+    "relative inline-flex items-center justify-center font-semibold text-[#020408] transition-all active:scale-95 duration-200";
 
+  // Botón actualizado a verde neón
   const primaryButtonStyles = `
-    ${buttonBaseStyles} rounded-full bg-blue-600 px-6 py-2.5 text-[15px]
-    shadow-[0_0_20px_-5px_rgba(37,99,235,0.5)]
-    hover:bg-blue-500 hover:shadow-[0_0_25px_-5px_rgba(37,99,235,0.6)]
-    before:absolute before:inset-0 before:rounded-full before:bg-gradient-to-r
-    before:from-cyan-400 before:via-blue-500 before:to-indigo-500
-    before:opacity-0 before:transition-opacity hover:before:opacity-100 before:-z-10
+    ${buttonBaseStyles} rounded-full bg-green-500 px-6 py-2.5 text-[15px]
+    shadow-[0_0_20px_-5px_rgba(74,222,128,0.5)] border border-white/10
+    hover:bg-green-400 hover:shadow-[0_0_25px_-5px_rgba(74,222,128,0.6)] hover:scale-105
   `;
 
   return (
     <header
       className={[
-        "fixed inset-x-0 top-0 z-50 transition-all duration-300 ease-in-out transform-gpu",
-        hidden ? "-translate-y-full" : "translate-y-0",
+        "fixed w-full top-0 z-[100] transition-all duration-300 ease-in-out border-b",
         scrolled
-          ? "bg-[#05050A]/80 backdrop-blur-xl border-b border-white/5 py-3"
-          : "bg-transparent py-4",
-      ].join(" ")}
+          ? "bg-[#05050A]/80 backdrop-blur-xl border-white/10 shadow-lg shadow-black/20"
+          : "bg-transparent border-transparent py-4",
+        hidden ? "-translate-y-full" : "translate-y-0"
+      ].filter(Boolean).join(" ")}
     >
-      <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-5 md:px-8">
+      <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-5 md:px-6 h-16 md:h-20">
         <a
           href="/"
           aria-label={brand}
-          className="relative z-10 flex items-center"
+          className="relative group z-50 flex items-center gap-3"
           onClick={() => setOpen(false)}
         >
-          <img
-            src={logo}
-            alt={brand}
-            className="h-8 w-auto md:h-9 object-contain brightness-110 drop-shadow-lg"
-          />
+          <div className="relative">
+            <div className="absolute inset-0 bg-green-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <img
+              src={logo}
+              alt={brand}
+              className="relative h-9 w-auto md:h-11 object-contain brightness-110 drop-shadow-lg transition-transform duration-300 group-hover:scale-105"
+            />
+          </div>
         </a>
 
         {/* Desktop Menu */}
         <div className="hidden items-center gap-6 lg:flex">
           {isAuthenticated ? (
-            <>
+            <div className="flex items-center gap-4 animate-in fade-in duration-500">
               <button onClick={() => navigate("/dashboard")} className={primaryButtonStyles}>
                 Ir al Dashboard
               </button>
 
               <button
                 onClick={handleLogout}
-                className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-2"
+                className="rounded-full p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                 title="Cerrar Sesión"
               >
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -166,7 +151,7 @@ export default function Navbar({
                   />
                 </svg>
               </button>
-            </>
+            </div>
           ) : (
             <button onClick={onPrimaryCta} className={primaryButtonStyles}>
               <span>{primaryCtaLabel}</span>
@@ -176,7 +161,7 @@ export default function Navbar({
 
         {/* Mobile Toggle */}
         <button
-          className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white active:bg-white/10 lg:hidden"
+          className="relative z-50 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 active:scale-95 transition-all lg:hidden"
           onClick={() => setOpen(!open)}
           aria-label="Toggle menu"
         >
@@ -192,11 +177,12 @@ export default function Navbar({
 
       {/* Mobile Menu Dropdown */}
       <div
-        className={`fixed inset-x-0 top-0 z-0 bg-[#05050A] pt-24 pb-8 shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:hidden ${
+        className={[
+          "fixed inset-x-0 top-0 z-40 bg-[#05050A]/95 backdrop-blur-2xl border-b border-white/10 pt-24 pb-8 shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:hidden",
           open ? "translate-y-0" : "-translate-y-full"
-        }`}
+        ].filter(Boolean).join(" ")}
       >
-        <div className="flex flex-col gap-4 px-6">
+        <div className="flex flex-col gap-4 px-6 relative z-10">
           {isAuthenticated ? (
             <>
               <button
@@ -211,7 +197,7 @@ export default function Navbar({
 
               <button
                 onClick={handleLogout}
-                className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-sm text-slate-300 active:bg-white/10"
+                className="w-full rounded-xl border border-red-900/30 bg-red-950/10 py-3 text-sm text-red-400 hover:bg-red-900/20 active:scale-95 transition-all"
               >
                 Cerrar Sesión
               </button>
@@ -222,7 +208,7 @@ export default function Navbar({
                 setOpen(false);
                 onPrimaryCta?.();
               }}
-              className={`${primaryButtonStyles} w-full py-3.5 text-base`}
+              className={`${primaryButtonStyles} w-full py-3.5 text-base text-center flex justify-center items-center`}
             >
               {primaryCtaLabel}
             </button>
