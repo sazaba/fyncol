@@ -41,27 +41,37 @@ export default function GestionCapital() {
   }, [isAdmin]);
 
   const fetchRoutes = async () => {
+    const URL = "http://localhost:3000/api/capital";
+    console.log("DEBUG: Iniciando petición a:", URL);
+
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:3000/api/capital", {
+      console.log("DEBUG: Token en localStorage:", token ? "Existe" : "NO EXISTE");
+
+      const res = await fetch(URL, {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
+
+      console.log("DEBUG: Status de respuesta:", res.status);
+
       const data = await res.json();
+      console.log("DEBUG: Datos recibidos:", data);
       
       if (data.success) {
         setRoutes(data.data);
       } else {
         setError(data.message || "Error al obtener las rutas");
       }
-    } catch (err) {
-      setError("Error de conexión al servidor");
+    } catch (err: any) {
+      // Este bloque captura el ERR_CONNECTION_REFUSED
+      console.error("DEBUG: Error capturado:", err);
+      setError(`Error de red: ${err.message}. Verifica que el servidor esté encendido en el puerto 3000.`);
     } finally {
       setLoading(false);
     }
   };
-
   const openModal = (route: RouteData, type: "invest" | "withdraw") => {
     setSelectedRoute(route);
     setTransactionType(type);
