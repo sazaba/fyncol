@@ -15,7 +15,11 @@ import {
   FiRefreshCw,
   FiUserPlus,
   FiMail,
-  FiLock
+  FiLock,
+  FiCreditCard,
+  FiPhone,
+  FiShield,
+  FiX
 } from "react-icons/fi";
 
 // --- Interfaces ---
@@ -25,6 +29,10 @@ interface User {
   role: string;
   isActive?: boolean;
   status?: string;
+  document?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
 }
 
 interface Route {
@@ -53,6 +61,7 @@ type ReplacementState = {
   newUserId: number;
   oldRouteId: number;
   replacementUserId: string;
+  isDirectSwap: boolean; // Nuevo estado para saber si estamos haciendo swap 1 a 1
 };
 
 export default function Rutas() {
@@ -71,13 +80,21 @@ export default function Rutas() {
   const [alertState, setAlertState] = useState<PremiumAlertState>({ open: false, variant: "info", title: "", message: "" });
   
   const [replacementModal, setReplacementModal] = useState<ReplacementState>({
-    isOpen: false, targetRouteId: 0, newUserId: 0, oldRouteId: 0, replacementUserId: ''
+    isOpen: false, targetRouteId: 0, newUserId: 0, oldRouteId: 0, replacementUserId: '', isDirectSwap: false
   });
 
-  // Estado para el modal de Creación Rápida de Usuario
+  // Estado para el modal de Creación (Alineado con UsersPage)
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [isSavingUser, setIsSavingUser] = useState(false);
-  const [newUserForm, setNewUserForm] = useState({ name: '', email: '', password: '' });
+  const [newUserForm, setNewUserForm] = useState({ 
+    name: '', document: '', email: '', address: '', phone: '', password: '', role: 'COBRADOR' 
+  });
+
+  const roles = [
+    { label: "Cobrador", value: "COBRADOR" },
+    { label: "Administrador", value: "ADMIN" },
+    { label: "Supervisor", value: "SUPERVISOR" },
+  ];
 
   const openAlert = (payload: Partial<PremiumAlertState>) => setAlertState((prev) => ({ ...prev, open: true, ...payload }));
   const closeAlert = () => setAlertState((prev) => ({ ...prev, open: false, onConfirm: null }));
@@ -185,7 +202,8 @@ export default function Rutas() {
             targetRouteId: routeId,
             newUserId: Number(newUserId),
             oldRouteId: result.oldRouteId,
-            replacementUserId: ''
+            replacementUserId: '',
+            isDirectSwap: false
           });
           return;
         }
@@ -209,35 +227,58 @@ export default function Rutas() {
     }
   };
 
-  // --- Controlador para crear un usuario de emergencia ---
+  // Lógica para el botón "Intercambiar Conductores"
+  const handleDirectSwap = () => {
+    // Buscamos quién es el conductor actual de la ruta destino (la que queremos invadir)
+    const targetRoute = routes.find(r => r.id === replacementModal.targetRouteId);
+    
+    if (!targetRoute || !targetRoute.assignedTo) {
+        alert("La ruta destino no tiene un conductor para intercambiar.");
+        return;
+    }
+
+    // El reemplazo será el conductor actual de la ruta que estamos invadiendo
+    setReplacementModal(prev => ({
+        ...prev,
+        isDirectSwap: true,
+        replacementUserId: targetRoute.assignedTo!.id.toString()
+    }));
+  };
+
   const handleCreateEmergencyUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserForm.name || !newUserForm.email || !newUserForm.password) return;
+    if (!newUserForm.name || !newUserForm.email || !newUserForm.password || !newUserForm.document) return;
     
     setIsSavingUser(true);
     try {
       const res = await fetch(`${API_URL}/users`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ ...newUserForm, role: 'COBRADOR' })
+        body: JSON.stringify(newUserForm)
       });
 
       const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Error al crear usuario");
+      if (!res.ok) throw new Error(result.message || result.error || "Error al crear usuario");
 
-      // Añadimos el nuevo usuario a la lista de colaboradores local
       const newUser = result.user || result;
+      
+      // TRUCO PARA EVITAR EL BUG: Actualizamos el estado, y forzamos la selección con un pequeño delay
+      // para permitir que React re-renderice la lista de colaboradores primero.
       setCollaborators(prev => [...prev, newUser]);
       
-      // Auto-seleccionamos este nuevo usuario como reemplazo en el modal
-      setReplacementModal(prev => ({ ...prev, replacementUserId: newUser.id.toString() }));
+      setTimeout(() => {
+          setReplacementModal(prev => ({ 
+              ...prev, 
+              replacementUserId: newUser.id.toString(),
+              isDirectSwap: false 
+          }));
+      }, 100);
       
-      // Limpiamos y cerramos
-      setNewUserForm({ name: '', email: '', password: '' });
+      setNewUserForm({ name: '', document: '', email: '', address: '', phone: '', password: '', role: 'COBRADOR' });
       setUserModalOpen(false);
 
     } catch (err: any) {
-      alert(err.message); // Usamos un alert simple para no pisar el modal actual
+      alert(err.message); 
     } finally {
       setIsSavingUser(false);
     }
@@ -331,31 +372,59 @@ export default function Rutas() {
             </div>
             
             <div className="mb-6 relative z-[70] space-y-4">
-              <SearchableSelect 
-                label="Cobrador de Reemplazo" icon={FiUser} 
-                options={freeUsers.map(c => ({ label: c.name, value: c.id.toString() }))} 
-                value={replacementModal.replacementUserId} 
-                onChange={(val: string) => setReplacementModal(prev => ({...prev, replacementUserId: val}))} 
-                placeholder={freeUsers.length === 0 ? "Selecciona un cobrador" : "Selecciona reemplazo libre"}
-                disabled={freeUsers.length === 0}
-              />
               
-              {/* ALERTA Y BOTÓN DE EMERGENCIA SI NO HAY LIBRES */}
-              {freeUsers.length === 0 && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-center">
-                  <p className="text-red-400 text-xs font-bold mb-3">Bloqueo: No hay personal libre disponible para cubrir el puesto.</p>
-                  <button 
-                    onClick={() => setUserModalOpen(true)}
-                    className="flex items-center justify-center gap-2 w-full py-2.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-xl transition-all"
-                  >
-                    <FiUserPlus /> Crear Nuevo Cobrador
-                  </button>
-                </div>
+              {/* COMPONENTES DEPENDIENDO DEL MODO DE SWAP */}
+              {!replacementModal.isDirectSwap ? (
+                  <>
+                    <SearchableSelect 
+                        label="Cobrador de Reemplazo" icon={FiUser} 
+                        options={freeUsers.map(c => ({ label: c.name, value: c.id.toString() }))} 
+                        value={replacementModal.replacementUserId} 
+                        onChange={(val: string) => setReplacementModal(prev => ({...prev, replacementUserId: val}))} 
+                        placeholder={freeUsers.length === 0 ? "Selecciona un cobrador" : "Selecciona reemplazo libre"}
+                        disabled={freeUsers.length === 0}
+                    />
+
+                    {routes.find(r => r.id === replacementModal.targetRouteId)?.assignedTo && (
+                        <button 
+                            onClick={handleDirectSwap}
+                            className="w-full py-2 text-sm text-blue-400 border border-blue-500/20 rounded-xl hover:bg-blue-500/10 transition-colors"
+                        >
+                            <FiRefreshCw className="inline mr-2" />
+                            Intercambiar conductores entre rutas
+                        </button>
+                    )}
+
+                    {freeUsers.length === 0 && (
+                        <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-center">
+                        <p className="text-red-400 text-xs font-bold mb-3">Bloqueo: No hay personal libre disponible para cubrir el puesto.</p>
+                        <button 
+                            onClick={() => setUserModalOpen(true)}
+                            className="flex items-center justify-center gap-2 w-full py-2.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-xl transition-all"
+                        >
+                            <FiUserPlus /> Crear Nuevo Cobrador
+                        </button>
+                        </div>
+                    )}
+                  </>
+              ) : (
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 text-center">
+                      <p className="text-blue-400 text-sm font-medium">
+                          Se realizará un intercambio directo. 
+                          El conductor actual de la ruta destino pasará a la Ruta {replacementModal.oldRouteId}.
+                      </p>
+                      <button 
+                          onClick={() => setReplacementModal(prev => ({...prev, isDirectSwap: false, replacementUserId: ''}))}
+                          className="mt-3 text-xs text-slate-400 hover:text-white underline"
+                      >
+                          Cancelar intercambio directo
+                      </button>
+                  </div>
               )}
             </div>
 
             <div className="flex gap-3 justify-end font-sans">
-              <button onClick={() => setReplacementModal(prev => ({...prev, isOpen: false}))} className="px-5 py-3 rounded-xl border border-white/10 text-slate-400 text-sm font-bold hover:bg-white/5 w-full uppercase tracking-widest text-[10px]">Cancelar</button>
+              <button onClick={() => setReplacementModal(prev => ({...prev, isOpen: false, isDirectSwap: false}))} className="px-5 py-3 rounded-xl border border-white/10 text-slate-400 text-sm font-bold hover:bg-white/5 w-full uppercase tracking-widest text-[10px]">Cancelar</button>
               <button 
                 onClick={() => executeReassign(replacementModal.targetRouteId, replacementModal.newUserId.toString(), replacementModal.replacementUserId)} 
                 disabled={!replacementModal.replacementUserId}
@@ -368,33 +437,80 @@ export default function Rutas() {
         </div>
       )}
 
-      {/* MODAL 2: CREACIÓN RÁPIDA DE USUARIO (SOBREPUESTO) */}
+      {/* MODAL 2: CREACIÓN DE USUARIO ALINEADO A USERSPAGE */}
       {userModalOpen && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-xl px-4">
-          <div className="w-full max-w-[400px] rounded-[32px] border border-blue-500/30 bg-[#0B1020] shadow-2xl p-8 animate-[slideUp_0.2s_ease-out]">
-            <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><FiUserPlus className="text-blue-500"/> Alta Rápida de Empleado</h3>
+        <div className="fixed inset-0 z-[300] flex md:items-center justify-center bg-[#020408]/90 backdrop-blur-md px-0 md:px-4">
+          <div className="relative w-full h-[100dvh] md:h-auto md:w-[min(920px,92vw)] md:max-h-[85dvh] bg-[#05050A] md:bg-[#05050A]/80 md:backdrop-blur-3xl md:border border-white/10 rounded-none md:rounded-[36px] flex flex-col overflow-hidden shadow-2xl animate-[slideUp_0.3s_ease-out]">
             
-            <form onSubmit={handleCreateEmergencyUser} className="space-y-4">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-blue-400/50"><FiUser size={18} /></div>
-                <input required type="text" placeholder="Nombre completo" value={newUserForm.name} onChange={e => setNewUserForm({...newUserForm, name: e.target.value})} className="w-full bg-[#05050A]/40 border border-white/10 rounded-2xl pl-11 pr-4 py-3 text-base md:text-sm text-white focus:border-blue-500 outline-none transition-all" />
+            <div className="flex justify-between items-start px-6 md:px-10 pt-8 md:pt-9 pb-4 shrink-0 border-b border-white/[0.05]">
+              <div>
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <FiUserPlus className="text-blue-500"/> Alta Rápida de Empleado
+                </h2>
+                <p className="text-sm text-slate-400 mt-1 hidden md:block">
+                  Completa la información para asignar inmediatamente a la ruta.
+                </p>
               </div>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-blue-400/50"><FiMail size={18} /></div>
-                <input required type="email" placeholder="Correo electrónico" value={newUserForm.email} onChange={e => setNewUserForm({...newUserForm, email: e.target.value})} className="w-full bg-[#05050A]/40 border border-white/10 rounded-2xl pl-11 pr-4 py-3 text-base md:text-sm text-white focus:border-blue-500 outline-none transition-all" />
-              </div>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-blue-400/50"><FiLock size={18} /></div>
-                <input required type="password" placeholder="Contraseña temporal" value={newUserForm.password} onChange={e => setNewUserForm({...newUserForm, password: e.target.value})} className="w-full bg-[#05050A]/40 border border-white/10 rounded-2xl pl-11 pr-4 py-3 text-base md:text-sm text-white focus:border-blue-500 outline-none transition-all" />
-              </div>
-              
-              <div className="flex gap-3 pt-4">
-                <button type="button" onClick={() => setUserModalOpen(false)} className="px-5 py-3 rounded-xl border border-white/10 text-slate-400 text-xs font-bold hover:bg-white/5 w-full uppercase tracking-widest">Cancelar</button>
-                <button type="submit" disabled={isSavingUser} className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-500 text-white w-full uppercase tracking-widest disabled:opacity-50">
-                  {isSavingUser ? <FiLoader className="animate-spin" /> : "Crear y Asignar"}
-                </button>
-              </div>
-            </form>
+              <button onClick={() => setUserModalOpen(false)} className="p-2 text-slate-500 hover:text-white" aria-label="Cerrar">
+                <FiX size={24} />
+              </button>
+            </div>
+
+            <div className="flex-1 px-6 md:px-10 py-8 md:py-9 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <form id="emergencyUserForm" onSubmit={handleCreateEmergencyUser} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <InputGroup
+                    label="Nombre Completo" placeholder="Juan Pérez" icon={FiUser}
+                    value={newUserForm.name} onChange={(e: any) => setNewUserForm({ ...newUserForm, name: e.target.value })}
+                    required
+                  />
+                  <InputGroup
+                    label="Cédula (CC)" placeholder="123456" type="number" icon={FiCreditCard}
+                    value={newUserForm.document} onChange={(e: any) => setNewUserForm({ ...newUserForm, document: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <InputGroup
+                    label="Correo Electrónico" placeholder="correo@ejemplo.com" type="email" icon={FiMail}
+                    value={newUserForm.email} onChange={(e: any) => setNewUserForm({ ...newUserForm, email: e.target.value })}
+                    required
+                  />
+                  <InputGroup
+                    label="Contraseña" placeholder="********" type="password" icon={FiLock}
+                    value={newUserForm.password} onChange={(e: any) => setNewUserForm({ ...newUserForm, password: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <InputGroup
+                  label="Dirección" placeholder="Calle 123" icon={FiMapPin}
+                  value={newUserForm.address} onChange={(e: any) => setNewUserForm({ ...newUserForm, address: e.target.value })}
+                />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <InputGroup
+                    label="Teléfono" placeholder="300..." type="tel" icon={FiPhone}
+                    value={newUserForm.phone} onChange={(e: any) => setNewUserForm({ ...newUserForm, phone: e.target.value })}
+                  />
+                  <CustomSelect
+                    label="Rol de Acceso" icon={FiShield} options={roles}
+                    value={newUserForm.role} onChange={(val: string) => setNewUserForm({ ...newUserForm, role: val })}
+                  />
+                </div>
+              </form>
+            </div>
+
+            <div className="px-6 md:px-10 pt-5 pb-8 border-t border-white/[0.05] bg-[#020408]/50 flex gap-4 backdrop-blur-xl shrink-0">
+              <button type="button" onClick={() => setUserModalOpen(false)} className="w-1/3 py-3.5 rounded-2xl border border-white/5 text-slate-400 font-medium hover:bg-white/5 transition-colors">
+                Cancelar
+              </button>
+              <button form="emergencyUserForm" type="submit" disabled={isSavingUser} className="w-2/3 py-3.5 rounded-2xl bg-blue-600 text-white font-bold shadow-[0_0_20px_rgba(37,99,235,0.4)] disabled:opacity-50 active:scale-[0.99] flex items-center justify-center gap-2">
+                {isSavingUser ? <FiLoader className="animate-spin" /> : "Guardar y Asignar"}
+              </button>
+            </div>
+
           </div>
         </div>
       )}
@@ -418,7 +534,87 @@ export default function Rutas() {
   );
 }
 
-// ... (El componente SearchableSelect se mantiene igual)
+// Helpers Formulario Alineado
+function InputGroup({ label, type = "text", placeholder, icon: Icon, value, onChange, required }: any) {
+  return (
+    <div className="space-y-2 relative group">
+      <label className="text-[10px] md:text-xs font-semibold text-slate-400 uppercase tracking-widest pl-1">
+        {label}
+      </label>
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-500 group-focus-within:text-blue-400">
+          <Icon size={18} />
+        </div>
+        <input
+          type={type}
+          required={required}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          className="w-full bg-[#0B1020]/50 border border-white/5 rounded-2xl pl-11 pr-4 py-3.5 text-base md:text-sm text-white focus:border-blue-500/50 outline-none focus:ring-4 focus:ring-blue-500/10 transition-all shadow-inner"
+        />
+      </div>
+    </div>
+  );
+}
+
+function CustomSelect({ label, icon: Icon, options, value, onChange }: any) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const displayLabel = options.find((opt: any) => opt.value === value)?.label || value;
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (!dropdownRef.current) return;
+      if (!dropdownRef.current.contains(e.target as Node)) setIsOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div className="space-y-2 relative group" ref={dropdownRef}>
+      <label className="text-[10px] md:text-xs font-semibold text-slate-400 uppercase tracking-widest pl-1">
+        {label}
+      </label>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="w-full flex items-center justify-between bg-[#0B1020]/50 border border-white/5 rounded-2xl pl-11 pr-4 py-3.5 text-base md:text-sm text-white focus:border-blue-500/50 outline-none transition-all shadow-inner"
+        >
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-500">
+            <Icon size={18} />
+          </div>
+          <span>{displayLabel}</span>
+          <FiChevronDown size={18} className={`transition-transform duration-300 ${isOpen ? "rotate-180 text-blue-400" : ""}`} />
+        </button>
+
+        {isOpen && (
+          <div className="absolute z-50 mt-2 w-full bg-[#0B1020] border border-white/10 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl">
+            {options.map((opt: any) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  onChange(opt.value);
+                  setIsOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-4 py-3 text-sm text-left ${
+                  value === opt.value ? "bg-blue-500/10 text-blue-400" : "text-slate-300 hover:bg-white/5"
+                }`}
+              >
+                <span>{opt.label}</span>
+                {value === opt.value && <FiCheck size={16} />}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SearchableSelect({ label, icon: Icon, options, value, onChange, disabled, placeholder = "Seleccionar...", compact = false, isBusy = false }: any) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
