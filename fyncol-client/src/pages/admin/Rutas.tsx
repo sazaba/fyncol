@@ -12,7 +12,10 @@ import {
   FiMap,
   FiDollarSign,
   FiSearch,
-  // FiTrash2,
+  FiRefreshCw,
+  FiUserPlus,
+  FiMail,
+  FiLock
 } from "react-icons/fi";
 
 // --- Interfaces ---
@@ -20,8 +23,8 @@ interface User {
   id: number;
   name: string;
   role: string;
-  isActive?: boolean; // Propiedad inferida para estado booleano
-  status?: string;    // Propiedad inferida para estado en texto
+  isActive?: boolean;
+  status?: string;
 }
 
 interface Route {
@@ -44,53 +47,53 @@ type PremiumAlertState = {
   onConfirm?: (() => void) | null;
 };
 
+type ReplacementState = {
+  isOpen: boolean;
+  targetRouteId: number;
+  newUserId: number;
+  oldRouteId: number;
+  replacementUserId: string;
+};
+
 export default function Rutas() {
-  // --- Estados de Datos ---
   const [routes, setRoutes] = useState<Route[]>([]);
   const [collaborators, setCollaborators] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
   
-  // --- Estados del Formulario ---
   const [selectedCountry, setSelectedCountry] = useState('');
   const [selectedState, setSelectedState] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
   const [currency, setCurrency] = useState('');
   const [assignedToId, setAssignedToId] = useState('');
 
-  // --- Sistema de Alertas ---
-  const [alertState, setAlertState] = useState<PremiumAlertState>({
-    open: false,
-    variant: "info",
-    title: "",
-    message: "",
-    confirmText: "Confirmar",
-    cancelText: "Cancelar",
-    onConfirm: null,
+  const [alertState, setAlertState] = useState<PremiumAlertState>({ open: false, variant: "info", title: "", message: "" });
+  
+  const [replacementModal, setReplacementModal] = useState<ReplacementState>({
+    isOpen: false, targetRouteId: 0, newUserId: 0, oldRouteId: 0, replacementUserId: ''
   });
 
-  const openAlert = (payload: Partial<PremiumAlertState>) => {
-    setAlertState((prev) => ({ ...prev, open: true, ...payload }));
-  };
+  // Estado para el modal de Creación Rápida de Usuario
+  const [userModalOpen, setUserModalOpen] = useState(false);
+  const [isSavingUser, setIsSavingUser] = useState(false);
+  const [newUserForm, setNewUserForm] = useState({ name: '', email: '', password: '' });
 
+  const openAlert = (payload: Partial<PremiumAlertState>) => setAlertState((prev) => ({ ...prev, open: true, ...payload }));
   const closeAlert = () => setAlertState((prev) => ({ ...prev, open: false, onConfirm: null }));
 
-  // --- Configuración API ---
   const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
   const API_URL = BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`;
   const token = localStorage.getItem('token');
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-  };
+  const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) };
 
-  // --- Geografía Memorizada para Rendimiento ---
   const countries = useMemo(() => Country.getAllCountries().map(c => ({ label: c.name, value: c.isoCode })), []);
   const states = useMemo(() => selectedCountry ? State.getStatesOfCountry(selectedCountry).map(s => ({ label: s.name, value: s.isoCode })) : [], [selectedCountry]);
   const cities = useMemo(() => selectedState ? City.getCitiesOfState(selectedCountry, selectedState).map(c => ({ label: c.name, value: c.name })) : [], [selectedState, selectedCountry]);
 
-  // --- Carga Inicial ---
+  const assignedUserIds = useMemo(() => routes.map(r => r.assignedTo?.id).filter(Boolean) as number[], [routes]);
+  const freeUsers = useMemo(() => collaborators.filter(c => !assignedUserIds.includes(c.id)), [collaborators, assignedUserIds]);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -107,45 +110,34 @@ export default function Rutas() {
 
         if (usersRes.ok) {
           const uData = await usersRes.json();
-          const usersArray = uData.users || [];
-          
-          // FILTRO CORREGIDO: Filtra rol y verifica que no esté desactivado
-          setCollaborators(usersArray.filter((u: User) => {
+          setCollaborators((uData.users || []).filter((u: User) => {
             const hasValidRole = u.role === 'COBRADOR' || u.role === 'SUPERVISOR';
-            const isActiveUser = u.isActive !== false && u.status?.toLowerCase() !== 'inactivo';
-            return hasValidRole && isActiveUser;
+            return hasValidRole && u.isActive !== false && u.status?.toLowerCase() !== 'inactivo';
           }));
         }
       } catch (error) {
-        openAlert({ variant: "danger", title: "Error de conexión", message: "No se pudieron cargar los datos." });
-      } finally {
-        setLoading(false);
-      }
+        openAlert({ variant: "danger", title: "Error", message: "Error cargando datos." });
+      } finally { setLoading(false); }
     };
     fetchData();
   }, []);
 
-  // --- Handlers ---
   const handleCountryChange = (val: string) => {
     setSelectedCountry(val);
-    const countryData = Country.getCountryByCode(val);
-    setCurrency(countryData?.currency || '');
-    setSelectedState('');
-    setSelectedCity('');
+    setCurrency(Country.getCountryByCode(val)?.currency || '');
+    setSelectedState(''); setSelectedCity('');
   };
 
   const handleCreateRoute = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCity) return;
-
     setIsSaving(true);
     try {
-      const countryName = Country.getCountryByCode(selectedCountry)?.name || '';
       const res = await fetch(`${API_URL}/rutas`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          country: countryName,
+          country: Country.getCountryByCode(selectedCountry)?.name || '',
           city: selectedCity,
           currency,
           assignedToId: assignedToId ? Number(assignedToId) : null
@@ -156,93 +148,139 @@ export default function Rutas() {
         const result = await res.json();
         setRoutes([...routes, result.data || result]);
         setSelectedCountry(''); setSelectedState(''); setSelectedCity(''); setCurrency(''); setAssignedToId('');
-        openAlert({ variant: "success", title: "Ruta creada", message: "Configuración guardada exitosamente." });
+        openAlert({ variant: "success", title: "Éxito", message: "Ruta creada." });
       }
-    } catch (error) {
-      openAlert({ variant: "danger", title: "Error", message: "No se pudo crear la ruta." });
-    } finally {
-      setIsSaving(false);
-    }
+    } catch {
+      openAlert({ variant: "danger", title: "Error", message: "Fallo al crear." });
+    } finally { setIsSaving(false); }
   };
 
   const confirmReassign = (routeId: number, newUserId: string) => {
-    const userName = collaborators.find(c => c.id === Number(newUserId))?.name || "un nuevo cobrador";
+    const userName = collaborators.find(c => c.id === Number(newUserId))?.name || "un cobrador";
     openAlert({
-      variant: "info",
-      title: "Reasignar Cobrador",
-      message: `¿Deseas asignar esta ruta a ${userName}?`,
-      confirmText: "Si, Reasignar",
-      onConfirm: () => handleReassign(routeId, newUserId)
+      variant: "info", title: "Reasignar", message: `¿Asignar esta ruta a ${userName}?`, confirmText: "Proceder",
+      onConfirm: () => executeReassign(routeId, newUserId)
     });
   };
 
-  const handleReassign = async (routeId: number, newUserId: string) => {
+  const executeReassign = async (routeId: number, newUserId: string, replacementId?: string) => {
     closeAlert();
     setBusyId(routeId);
     try {
+      const payload: any = { assignedToId: newUserId ? Number(newUserId) : null };
+      if (replacementId) payload.replacementId = Number(replacementId);
+
       const res = await fetch(`${API_URL}/rutas/${routeId}/reasignar`, {
         method: 'PATCH',
         headers,
-        body: JSON.stringify({ assignedToId: newUserId ? Number(newUserId) : null })
+        body: JSON.stringify(payload)
       });
-      if (res.ok) {
-        const result = await res.json();
-        setRoutes(routes.map(r => r.id === routeId ? (result.data || result) : r));
-        openAlert({ variant: "success", title: "Actualizado", message: "Cambio realizado correctamente." });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        if (result.code === 'REQUIRES_REPLACEMENT') {
+          setReplacementModal({
+            isOpen: true,
+            targetRouteId: routeId,
+            newUserId: Number(newUserId),
+            oldRouteId: result.oldRouteId,
+            replacementUserId: ''
+          });
+          return;
+        }
+        throw new Error(result.error || "Error");
       }
-    } catch {
-      openAlert({ variant: "danger", title: "Error", message: "No se pudo actualizar la ruta." });
+
+      if (result.updatedRoutes) {
+        setRoutes(prev => prev.map(r => {
+          const updated = result.updatedRoutes.find((ur: Route) => ur.id === r.id);
+          return updated ? updated : r;
+        }));
+      }
+      
+      setReplacementModal(prev => ({ ...prev, isOpen: false }));
+      openAlert({ variant: "success", title: "Actualizado", message: "Asignación completada." });
+
+    } catch (err: any) {
+      openAlert({ variant: "danger", title: "Error", message: err.message });
     } finally {
       setBusyId(null);
     }
   };
 
+  // --- Controlador para crear un usuario de emergencia ---
+  const handleCreateEmergencyUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUserForm.name || !newUserForm.email || !newUserForm.password) return;
+    
+    setIsSavingUser(true);
+    try {
+      const res = await fetch(`${API_URL}/users`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ ...newUserForm, role: 'COBRADOR' })
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Error al crear usuario");
+
+      // Añadimos el nuevo usuario a la lista de colaboradores local
+      const newUser = result.user || result;
+      setCollaborators(prev => [...prev, newUser]);
+      
+      // Auto-seleccionamos este nuevo usuario como reemplazo en el modal
+      setReplacementModal(prev => ({ ...prev, replacementUserId: newUser.id.toString() }));
+      
+      // Limpiamos y cerramos
+      setNewUserForm({ name: '', email: '', password: '' });
+      setUserModalOpen(false);
+
+    } catch (err: any) {
+      alert(err.message); // Usamos un alert simple para no pisar el modal actual
+    } finally {
+      setIsSavingUser(false);
+    }
+  };
+
   return (
-    <div className="max-w-6xl mx-auto px-4 md:px-8 pt-8 md:pt-10 pb-20">
-      {/* HEADER */}
+    <div className="max-w-6xl mx-auto px-4 md:px-8 pt-8 md:pt-10 pb-20 relative">
       <div className="mb-10">
         <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight font-display">Gestión de Rutas</h1>
         <p className="text-sm text-slate-400 mt-1 font-sans">Administra los territorios y asigna cobradores operativos.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        
-        {/* PANEL IZQUIERDO: FORMULARIO */}
+        {/* PANEL IZQUIERDO */}
         <div className="lg:col-span-4 rounded-[32px] border border-white/10 bg-[#0B1020]/40 backdrop-blur-md p-6 md:p-8 shadow-2xl space-y-6">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-blue-600/20 flex items-center justify-center text-blue-400 border border-blue-500/20">
-              <FiPlus size={20} />
-            </div>
+            <div className="h-10 w-10 rounded-2xl bg-blue-600/20 flex items-center justify-center text-blue-400 border border-blue-500/20"><FiPlus size={20} /></div>
             <h2 className="text-xl font-bold text-white font-display">Nueva Ruta</h2>
           </div>
-
           <form onSubmit={handleCreateRoute} className="space-y-5">
             <SearchableSelect label="País" icon={FiGlobe} options={countries} value={selectedCountry} onChange={handleCountryChange} />
-            <SearchableSelect label="Estado / Departamento" icon={FiMapPin} options={states} value={selectedState} onChange={(val: string) => {setSelectedState(val); setSelectedCity('');}} disabled={!selectedCountry} />
+            <SearchableSelect label="Estado" icon={FiMapPin} options={states} value={selectedState} onChange={(val: string) => {setSelectedState(val); setSelectedCity('');}} disabled={!selectedCountry} />
             <SearchableSelect label="Ciudad" icon={FiMap} options={cities} value={selectedCity} onChange={setSelectedCity} disabled={!selectedState} />
-            
             <div className="space-y-2 relative group">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1 font-sans">Divisa de Cartera</label>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1 font-sans">Divisa</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-blue-400/50"><FiDollarSign size={18} /></div>
-                <input type="text" value={currency} readOnly placeholder="Autocompletado" className="w-full bg-[#05050A]/40 border border-white/5 rounded-2xl pl-11 pr-4 py-3.5 text-base md:text-sm text-blue-400 font-bold outline-none cursor-not-allowed shadow-inner" />
+                <input type="text" value={currency} readOnly placeholder="Autocompletado" className="w-full bg-[#05050A]/40 border border-white/5 rounded-2xl pl-11 pr-4 py-3.5 text-base md:text-sm text-blue-400 font-bold outline-none cursor-not-allowed" />
               </div>
             </div>
-
-            <SearchableSelect label="Asignar Cobrador" icon={FiUser} options={collaborators.map(c => ({ label: c.name, value: c.id.toString() }))} value={assignedToId} onChange={setAssignedToId} placeholder="Sin asignar por ahora" />
-
-            <button 
-              type="submit" 
-              disabled={isSaving || !selectedCity}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:opacity-50 text-white font-bold py-4 rounded-2xl transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] active:scale-[0.98] mt-4 flex items-center justify-center gap-3"
-            >
-              {isSaving ? <FiLoader className="animate-spin" /> : <FiCheck />}
-              {isSaving ? "Guardando..." : "Crear Nueva Ruta"}
+            <SearchableSelect 
+              label="Asignar Cobrador" icon={FiUser} 
+              options={freeUsers.map(c => ({ label: c.name, value: c.id.toString() }))} 
+              value={assignedToId} onChange={setAssignedToId} 
+              placeholder={freeUsers.length === 0 ? "No hay libres" : "Sin asignar"} disabled={freeUsers.length === 0}
+            />
+            <button type="submit" disabled={isSaving || !selectedCity} className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:opacity-50 text-white font-bold py-4 rounded-2xl transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] mt-4 flex items-center justify-center gap-3">
+              {isSaving ? <FiLoader className="animate-spin" /> : <FiCheck />} {isSaving ? "Guardando..." : "Crear Ruta"}
             </button>
           </form>
         </div>
 
-        {/* PANEL DERECHO: LISTA */}
+        {/* PANEL DERECHO */}
         <div className="lg:col-span-8 space-y-4">
           <div className="flex items-center justify-between mb-2 px-2">
             <h3 className="text-sm font-black text-slate-500 uppercase tracking-[0.2em]">Rutas Registradas</h3>
@@ -250,41 +288,29 @@ export default function Rutas() {
           </div>
 
           {loading ? (
-            <div className="flex flex-col items-center justify-center p-20 text-slate-500 bg-[#0B1020]/20 rounded-[32px] border border-white/5">
-              <FiLoader className="animate-spin mb-4 text-blue-500" size={40} />
-              <p className="font-medium">Sincronizando sistema...</p>
-            </div>
-          ) : routes.length === 0 ? (
-            <div className="rounded-[32px] border border-white/5 bg-[#0B1020]/20 p-16 text-center text-slate-600 font-medium">
-              No hay rutas operativas en este momento.
-            </div>
+            <div className="flex flex-col items-center justify-center p-20 text-slate-500 bg-[#0B1020]/20 rounded-[32px] border border-white/5"><FiLoader className="animate-spin mb-4 text-blue-500" size={40} /><p>Cargando...</p></div>
           ) : (
             <div className="grid grid-cols-1 gap-4">
               {routes.map((ruta) => (
-                // Z-INDEX CORREGIDO: z-10 por defecto, pero sube a z-50 en hover o focus (cuando el menú se abre)
-                <div key={ruta.id} className="group relative z-10 hover:z-50 focus-within:z-[60] rounded-[32px] border border-white/5 bg-[#0B1020]/40 backdrop-blur-sm p-6 hover:bg-[#0B1020]/60 hover:border-blue-500/30 transition-all shadow-xl flex flex-col md:flex-row items-center gap-6">
-                  
-                  {/* GEOMETRÍA CORREGIDA: Cambiado de círculo w-14 a píldora responsiva */}
+                <div key={ruta.id} className="group relative z-10 hover:z-50 focus-within:z-[60] rounded-[32px] border border-white/5 bg-[#0B1020]/40 backdrop-blur-sm p-6 flex flex-col md:flex-row items-center gap-6">
                   <div className="h-14 px-5 min-w-[100px] rounded-3xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shrink-0 whitespace-nowrap">
                     Ruta {ruta.id}
                   </div>
-                  
                   <div className="flex-1 min-w-0">
                     <h4 className="text-white font-bold text-lg truncate font-display">{ruta.city}, {ruta.country}</h4>
                     <span className="text-[10px] font-black bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20 uppercase tracking-tighter">{ruta.currency}</span>
                   </div>
-
                   <div className="w-full md:w-64">
                     <SearchableSelect 
-                      options={collaborators.map(c => ({ label: c.name, value: c.id.toString() }))} 
+                      options={collaborators.map(c => ({ 
+                        label: c.name + (assignedUserIds.includes(c.id) && c.id !== ruta.assignedTo?.id ? ' (Ocupado)' : ''), 
+                        value: c.id.toString() 
+                      }))} 
                       value={ruta.assignedTo?.id?.toString() || ''} 
                       onChange={(v: string) => confirmReassign(ruta.id, v)} 
-                      placeholder="Sin cobrador"
-                      compact
-                      isBusy={busyId === ruta.id}
+                      placeholder="Sin cobrador" compact isBusy={busyId === ruta.id}
                     />
                   </div>
-
                 </div>
               ))}
             </div>
@@ -292,28 +318,98 @@ export default function Rutas() {
         </div>
       </div>
 
-      {/* MODAL DE ALERTAS PREMIUM */}
-      {alertState.open && (
+      {/* MODAL 1: REEMPLAZO OBLIGATORIO */}
+      {replacementModal.isOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md px-4">
+          <div className="w-full max-w-[440px] rounded-[40px] border border-white/10 bg-[#05050A] shadow-2xl overflow-hidden p-8">
+            <div className="flex flex-col items-center text-center mb-6">
+              <div className="h-16 w-16 rounded-3xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center mb-4"><FiRefreshCw size={28} /></div>
+              <h3 className="text-white font-bold text-xl font-display">Sustitución Requerida</h3>
+              <p className="text-slate-400 text-sm mt-2 leading-relaxed">
+                El cobrador seleccionado ya administra la <strong className="text-white">Ruta {replacementModal.oldRouteId}</strong>. Asigna un reemplazo para esa ruta.
+              </p>
+            </div>
+            
+            <div className="mb-6 relative z-[70] space-y-4">
+              <SearchableSelect 
+                label="Cobrador de Reemplazo" icon={FiUser} 
+                options={freeUsers.map(c => ({ label: c.name, value: c.id.toString() }))} 
+                value={replacementModal.replacementUserId} 
+                onChange={(val: string) => setReplacementModal(prev => ({...prev, replacementUserId: val}))} 
+                placeholder={freeUsers.length === 0 ? "Selecciona un cobrador" : "Selecciona reemplazo libre"}
+                disabled={freeUsers.length === 0}
+              />
+              
+              {/* ALERTA Y BOTÓN DE EMERGENCIA SI NO HAY LIBRES */}
+              {freeUsers.length === 0 && (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-center">
+                  <p className="text-red-400 text-xs font-bold mb-3">Bloqueo: No hay personal libre disponible para cubrir el puesto.</p>
+                  <button 
+                    onClick={() => setUserModalOpen(true)}
+                    className="flex items-center justify-center gap-2 w-full py-2.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-xl transition-all"
+                  >
+                    <FiUserPlus /> Crear Nuevo Cobrador
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 justify-end font-sans">
+              <button onClick={() => setReplacementModal(prev => ({...prev, isOpen: false}))} className="px-5 py-3 rounded-xl border border-white/10 text-slate-400 text-sm font-bold hover:bg-white/5 w-full uppercase tracking-widest text-[10px]">Cancelar</button>
+              <button 
+                onClick={() => executeReassign(replacementModal.targetRouteId, replacementModal.newUserId.toString(), replacementModal.replacementUserId)} 
+                disabled={!replacementModal.replacementUserId}
+                className="px-5 py-3 rounded-xl font-bold text-sm bg-blue-600 text-white w-full uppercase tracking-widest text-[10px] disabled:opacity-50 disabled:bg-slate-700"
+              >
+                Confirmar Cambio
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: CREACIÓN RÁPIDA DE USUARIO (SOBREPUESTO) */}
+      {userModalOpen && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-xl px-4">
+          <div className="w-full max-w-[400px] rounded-[32px] border border-blue-500/30 bg-[#0B1020] shadow-2xl p-8 animate-[slideUp_0.2s_ease-out]">
+            <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><FiUserPlus className="text-blue-500"/> Alta Rápida de Empleado</h3>
+            
+            <form onSubmit={handleCreateEmergencyUser} className="space-y-4">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-blue-400/50"><FiUser size={18} /></div>
+                <input required type="text" placeholder="Nombre completo" value={newUserForm.name} onChange={e => setNewUserForm({...newUserForm, name: e.target.value})} className="w-full bg-[#05050A]/40 border border-white/10 rounded-2xl pl-11 pr-4 py-3 text-base md:text-sm text-white focus:border-blue-500 outline-none transition-all" />
+              </div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-blue-400/50"><FiMail size={18} /></div>
+                <input required type="email" placeholder="Correo electrónico" value={newUserForm.email} onChange={e => setNewUserForm({...newUserForm, email: e.target.value})} className="w-full bg-[#05050A]/40 border border-white/10 rounded-2xl pl-11 pr-4 py-3 text-base md:text-sm text-white focus:border-blue-500 outline-none transition-all" />
+              </div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-blue-400/50"><FiLock size={18} /></div>
+                <input required type="password" placeholder="Contraseña temporal" value={newUserForm.password} onChange={e => setNewUserForm({...newUserForm, password: e.target.value})} className="w-full bg-[#05050A]/40 border border-white/10 rounded-2xl pl-11 pr-4 py-3 text-base md:text-sm text-white focus:border-blue-500 outline-none transition-all" />
+              </div>
+              
+              <div className="flex gap-3 pt-4">
+                <button type="button" onClick={() => setUserModalOpen(false)} className="px-5 py-3 rounded-xl border border-white/10 text-slate-400 text-xs font-bold hover:bg-white/5 w-full uppercase tracking-widest">Cancelar</button>
+                <button type="submit" disabled={isSavingUser} className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-500 text-white w-full uppercase tracking-widest disabled:opacity-50">
+                  {isSavingUser ? <FiLoader className="animate-spin" /> : "Crear y Asignar"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE ALERTAS ESTÁNDAR */}
+      {alertState.open && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-md px-4">
           <div className="w-full max-w-[440px] rounded-[40px] border border-white/10 bg-[#05050A] shadow-2xl overflow-hidden animate-[slideUp_0.2s_ease-out] transform-gpu">
             <div className="p-8 flex items-start gap-5">
-              <div className={`h-14 w-14 rounded-[22px] flex items-center justify-center border shrink-0 ${
-                alertState.variant === "danger" ? "bg-red-500/10 border-red-500/20 text-red-400" :
-                alertState.variant === "success" ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" :
-                "bg-blue-500/10 border-blue-500/20 text-blue-400"
-              }`}><FiAlertTriangle size={24} /></div>
-              <div>
-                <h3 className="text-white font-bold text-xl font-display">{alertState.title}</h3>
-                <p className="text-slate-400 text-sm mt-2 leading-relaxed">{alertState.message}</p>
-              </div>
+              <div className={`h-14 w-14 rounded-[22px] flex items-center justify-center border shrink-0 ${alertState.variant === "danger" ? "bg-red-500/10 border-red-500/20 text-red-400" : alertState.variant === "success" ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-blue-500/10 border-blue-500/20 text-blue-400"}`}><FiAlertTriangle size={24} /></div>
+              <div><h3 className="text-white font-bold text-xl font-display">{alertState.title}</h3><p className="text-slate-400 text-sm mt-2 leading-relaxed">{alertState.message}</p></div>
             </div>
             <div className="px-8 pb-8 flex gap-3 justify-end font-sans">
               {alertState.cancelText && <button onClick={closeAlert} className="px-5 py-2.5 rounded-xl border border-white/10 text-slate-400 text-sm font-bold hover:bg-white/5 transition-all uppercase tracking-widest text-[10px]"> {alertState.cancelText} </button>}
-              <button onClick={() => alertState.onConfirm ? alertState.onConfirm() : closeAlert()} className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg uppercase tracking-widest text-[10px] ${
-                alertState.variant === "danger" ? "bg-red-600 text-white shadow-red-600/20" :
-                alertState.variant === "success" ? "bg-emerald-600 text-white shadow-emerald-600/20" :
-                "bg-blue-600 text-white shadow-blue-600/20"
-              }`}>{alertState.confirmText || "Aceptar"}</button>
+              <button onClick={() => alertState.onConfirm ? alertState.onConfirm() : closeAlert()} className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg uppercase tracking-widest text-[10px] ${alertState.variant === "danger" ? "bg-red-600 text-white shadow-red-600/20" : alertState.variant === "success" ? "bg-emerald-600 text-white shadow-emerald-600/20" : "bg-blue-600 text-white shadow-blue-600/20"}`}>{alertState.confirmText || "Aceptar"}</button>
             </div>
           </div>
         </div>
@@ -322,7 +418,7 @@ export default function Rutas() {
   );
 }
 
-// --- Componente SearchableSelect PREMIUM (Con Búsqueda por Teclado y Optimizado para Móvil) ---
+// ... (El componente SearchableSelect se mantiene igual)
 function SearchableSelect({ label, icon: Icon, options, value, onChange, disabled, placeholder = "Seleccionar...", compact = false, isBusy = false }: any) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -348,12 +444,7 @@ function SearchableSelect({ label, icon: Icon, options, value, onChange, disable
     <div className={`space-y-1.5 relative group ${disabled ? 'opacity-40' : ''}`} ref={dropdownRef}>
       {label && <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1 font-sans">{label}</label>}
       <div className="relative">
-        <button
-          type="button"
-          disabled={disabled || isBusy}
-          onClick={() => { setIsOpen(!isOpen); setSearchTerm(''); }}
-          className={`w-full flex items-center justify-between bg-[#0B1020]/50 border border-white/5 rounded-2xl px-4 ${compact ? 'py-2.5' : 'py-3.5'} text-base md:text-sm text-white focus:border-blue-500/50 outline-none transition-all shadow-inner hover:bg-[#0B1020]/80`}
-        >
+        <button type="button" disabled={disabled || isBusy} onClick={() => { setIsOpen(!isOpen); setSearchTerm(''); }} className={`w-full flex items-center justify-between bg-[#0B1020]/50 border border-white/5 rounded-2xl px-4 ${compact ? 'py-2.5' : 'py-3.5'} text-base md:text-sm text-white focus:border-blue-500/50 outline-none transition-all shadow-inner hover:bg-[#0B1020]/80`}>
           <div className="flex items-center gap-3 overflow-hidden">
             {isBusy ? <FiLoader className="animate-spin text-blue-500" /> : Icon && <Icon size={18} className={isOpen ? 'text-blue-400' : 'text-slate-500'} />}
             <span className={`truncate ${value ? 'text-white' : 'text-slate-500'} font-medium`}>{isBusy ? 'Cargando...' : displayLabel}</span>
@@ -365,24 +456,12 @@ function SearchableSelect({ label, icon: Icon, options, value, onChange, disable
           <div className="absolute z-50 mt-2 w-full bg-[#0B1020]/95 border border-white/10 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden animate-[slideDown_0.2s] transform-gpu">
             <div className="p-3 border-b border-white/5 flex items-center gap-2 sticky top-0 bg-[#0B1020] z-10">
               <FiSearch className="text-slate-500 ml-2" />
-              <input 
-                ref={inputRef}
-                type="text" 
-                value={searchTerm} 
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar..."
-                className="w-full bg-transparent py-2 text-base md:text-sm text-white outline-none placeholder:text-slate-600"
-              />
+              <input ref={inputRef} type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar..." className="w-full bg-transparent py-2 text-base md:text-sm text-white outline-none placeholder:text-slate-600" />
             </div>
             <div className="max-h-60 overflow-y-auto custom-scrollbar">
               {filteredOptions.length > 0 ? (
                 filteredOptions.map((opt: any) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => { onChange(opt.value); setIsOpen(false); }}
-                    className={`w-full flex items-center justify-between px-5 py-4 text-sm md:text-xs text-left transition-all hover:bg-white/5 ${value === opt.value ? "bg-blue-600 text-white font-bold" : "text-slate-300"}`}
-                  >
+                  <button key={opt.value} type="button" onClick={() => { onChange(opt.value); setIsOpen(false); }} className={`w-full flex items-center justify-between px-5 py-4 text-sm md:text-xs text-left transition-all hover:bg-white/5 ${value === opt.value ? "bg-blue-600 text-white font-bold" : "text-slate-300"}`}>
                     <span className="truncate">{opt.label}</span>
                     {value === opt.value && <FiCheck size={14} />}
                   </button>
