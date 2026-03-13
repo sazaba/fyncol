@@ -20,6 +20,8 @@ interface User {
   id: number;
   name: string;
   role: string;
+  isActive?: boolean; // Propiedad inferida para estado booleano
+  status?: string;    // Propiedad inferida para estado en texto
 }
 
 interface Route {
@@ -106,7 +108,13 @@ export default function Rutas() {
         if (usersRes.ok) {
           const uData = await usersRes.json();
           const usersArray = uData.users || [];
-          setCollaborators(usersArray.filter((u: User) => u.role === 'COBRADOR' || u.role === 'SUPERVISOR'));
+          
+          // FILTRO CORREGIDO: Filtra rol y verifica que no esté desactivado
+          setCollaborators(usersArray.filter((u: User) => {
+            const hasValidRole = u.role === 'COBRADOR' || u.role === 'SUPERVISOR';
+            const isActiveUser = u.isActive !== false && u.status?.toLowerCase() !== 'inactivo';
+            return hasValidRole && isActiveUser;
+          }));
         }
       } catch (error) {
         openAlert({ variant: "danger", title: "Error de conexión", message: "No se pudieron cargar los datos." });
@@ -189,32 +197,6 @@ export default function Rutas() {
     }
   };
 
-  // const confirmDelete = (route: Route) => {
-  //   openAlert({
-  //     variant: "danger",
-  //     title: "Eliminar Ruta",
-  //     message: `¿Estás seguro de eliminar permanentemente la Ruta ${route.id} en ${route.city}?`,
-  //     confirmText: "Sí, Eliminar",
-  //     onConfirm: () => handleDelete(route.id)
-  //   });
-  // };
-
-  // const handleDelete = async (id: number) => {
-  //   closeAlert();
-  //   setBusyId(id);
-  //   try {
-  //     const res = await fetch(`${API_URL}/rutas/${id}`, { method: 'DELETE', headers });
-  //     if (res.ok) {
-  //       setRoutes(routes.filter(r => r.id !== id));
-  //       openAlert({ variant: "success", title: "Eliminado", message: "La ruta ha sido removida del sistema." });
-  //     }
-  //   } catch {
-  //     openAlert({ variant: "danger", title: "Error", message: "No se pudo eliminar la ruta." });
-  //   } finally {
-  //     setBusyId(null);
-  //   }
-  // };
-
   return (
     <div className="max-w-6xl mx-auto px-4 md:px-8 pt-8 md:pt-10 pb-20">
       {/* HEADER */}
@@ -279,8 +261,13 @@ export default function Rutas() {
           ) : (
             <div className="grid grid-cols-1 gap-4">
               {routes.map((ruta) => (
-                <div key={ruta.id} className="group relative rounded-[32px] border border-white/5 bg-[#0B1020]/40 backdrop-blur-sm p-6 hover:bg-[#0B1020]/60 hover:border-blue-500/30 transition-all shadow-xl flex flex-col md:flex-row items-center gap-6">
-                  <div className="h-14 w-14 rounded-3xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shrink-0">{ruta.id}</div>
+                // Z-INDEX CORREGIDO: z-10 por defecto, pero sube a z-50 en hover o focus (cuando el menú se abre)
+                <div key={ruta.id} className="group relative z-10 hover:z-50 focus-within:z-[60] rounded-[32px] border border-white/5 bg-[#0B1020]/40 backdrop-blur-sm p-6 hover:bg-[#0B1020]/60 hover:border-blue-500/30 transition-all shadow-xl flex flex-col md:flex-row items-center gap-6">
+                  
+                  {/* GEOMETRÍA CORREGIDA: Cambiado de círculo w-14 a píldora responsiva */}
+                  <div className="h-14 px-5 min-w-[100px] rounded-3xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shrink-0 whitespace-nowrap">
+                    Ruta {ruta.id}
+                  </div>
                   
                   <div className="flex-1 min-w-0">
                     <h4 className="text-white font-bold text-lg truncate font-display">{ruta.city}, {ruta.country}</h4>
@@ -298,13 +285,6 @@ export default function Rutas() {
                     />
                   </div>
 
-                  {/* <button 
-                    onClick={() => confirmDelete(ruta)}
-                    className="p-3.5 rounded-2xl bg-red-500/10 text-red-500 hover:bg-red-600 hover:text-white transition-all opacity-0 group-hover:opacity-100 shadow-lg"
-                    title="Eliminar Ruta"
-                  >
-                    <FiTrash2 size={18} />
-                  </button> */}
                 </div>
               ))}
             </div>
