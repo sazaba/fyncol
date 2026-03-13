@@ -53,23 +53,31 @@ export default function Rutas() {
         const routesRes = await fetch(`${API_URL}/rutas`, { headers });
         if (routesRes.ok) {
           const routesData = await routesRes.json();
-          // Manejar si el backend lo devuelve dentro de una propiedad 'data'
           setRoutes(routesData.data || routesData || []);
         }
 
-        // 2. Obtener Usuarios (Colaboradores)
+        // 2. Obtener Usuarios (Cobradores y Supervisores)
         const usersRes = await fetch(`${API_URL}/users`, { headers });
         if (usersRes.ok) {
           const usersData = await usersRes.json();
           
+          // --- MODO DIAGNÓSTICO: Mira la consola (F12) para ver esto ---
+          console.log("1. Data cruda que llega del backend:", usersData);
+          
           // Extraemos el array desde la propiedad 'users'
           const usersArray = Array.isArray(usersData) ? usersData : (usersData.users || []);
+          console.log("2. Array de usuarios extraído:", usersArray);
           
-          // Filtramos solo los roles operativos
+          // Filtramos estrictamente según tu esquema de Prisma
           const operativos = usersArray.filter((u: User) => 
-            u.role === 'COBRADOR' || u.role === 'SUPERVISOR' || u.role === 'COLABORADOR'
+            u.role === 'COBRADOR' || u.role === 'SUPERVISOR'
           );
           
+          console.log("3. Usuarios operativos (Cobradores/Supervisores) filtrados:", operativos);
+          // -------------------------------------------------------------
+
+          // Si hay operativos, mostramos esos. Si por alguna razón el array de operativos 
+          // está vacío pero SÍ hay usuarios en general, mostramos todos por precaución.
           setCollaborators(operativos.length > 0 ? operativos : usersArray);
         } else {
            console.error("Error del servidor al obtener usuarios:", usersRes.statusText);
