@@ -21,7 +21,26 @@ model User {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   imageUrl  String?  @db.VarChar(255)
 
+  // Relación: Un usuario (colaborador) puede tener varias rutas asignadas a lo largo del tiempo o simultáneas.
+  routes    Route[]
+
   @@map("users")
+}
+
+model Route {
+  id           Int      @id @default(autoincrement()) // Esto generará automáticamente el 1, 2, 3...
+  country      String   @db.VarChar(100)
+  city         String   @db.VarChar(100)
+  currency     String   @db.VarChar(10)               // Ejemplo: COP, USD, MXN
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  // Relación con el Colaborador asignado
+  assignedToId Int?     @map("assigned_to_id")
+  assignedTo   User?    @relation(fields: [assignedToId], references: [id])
+
+  @@map("routes")
 }
 
 enum Role {
