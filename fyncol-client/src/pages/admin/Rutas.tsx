@@ -47,7 +47,7 @@ export default function Rutas() {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [collaborators, setCollaborators] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false); // Estado para carga al guardar
+  const [isSaving, setIsSaving] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
   
   // --- Estados del Formulario ---
@@ -243,7 +243,7 @@ export default function Rutas() {
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1 font-sans">Divisa de Cartera</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-blue-400/50"><FiDollarSign size={18} /></div>
-                <input type="text" value={currency} readOnly placeholder="Autocompletado" className="w-full bg-[#05050A]/40 border border-white/5 rounded-2xl pl-11 pr-4 py-3.5 text-sm text-blue-400 font-bold outline-none cursor-not-allowed shadow-inner" />
+                <input type="text" value={currency} readOnly placeholder="Autocompletado" className="w-full bg-[#05050A]/40 border border-white/5 rounded-2xl pl-11 pr-4 py-3.5 text-base md:text-sm text-blue-400 font-bold outline-none cursor-not-allowed shadow-inner" />
               </div>
             </div>
 
@@ -315,7 +315,7 @@ export default function Rutas() {
       {/* MODAL DE ALERTAS PREMIUM */}
       {alertState.open && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md px-4">
-          <div className="w-full max-w-[440px] rounded-[40px] border border-white/10 bg-[#05050A] shadow-2xl overflow-hidden animate-[slideUp_0.2s_ease-out]">
+          <div className="w-full max-w-[440px] rounded-[40px] border border-white/10 bg-[#05050A] shadow-2xl overflow-hidden animate-[slideUp_0.2s_ease-out] transform-gpu">
             <div className="p-8 flex items-start gap-5">
               <div className={`h-14 w-14 rounded-[22px] flex items-center justify-center border shrink-0 ${
                 alertState.variant === "danger" ? "bg-red-500/10 border-red-500/20 text-red-400" :
@@ -342,7 +342,7 @@ export default function Rutas() {
   );
 }
 
-// --- Componente SearchableSelect PREMIUM (Con Búsqueda por Teclado) ---
+// --- Componente SearchableSelect PREMIUM (Con Búsqueda por Teclado y Optimizado para Móvil) ---
 function SearchableSelect({ label, icon: Icon, options, value, onChange, disabled, placeholder = "Seleccionar...", compact = false, isBusy = false }: any) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -372,7 +372,7 @@ function SearchableSelect({ label, icon: Icon, options, value, onChange, disable
           type="button"
           disabled={disabled || isBusy}
           onClick={() => { setIsOpen(!isOpen); setSearchTerm(''); }}
-          className={`w-full flex items-center justify-between bg-[#0B1020]/50 border border-white/5 rounded-2xl px-4 ${compact ? 'py-2.5' : 'py-3.5'} text-sm text-white focus:border-blue-500/50 outline-none transition-all shadow-inner hover:bg-[#0B1020]/80`}
+          className={`w-full flex items-center justify-between bg-[#0B1020]/50 border border-white/5 rounded-2xl px-4 ${compact ? 'py-2.5' : 'py-3.5'} text-base md:text-sm text-white focus:border-blue-500/50 outline-none transition-all shadow-inner hover:bg-[#0B1020]/80`}
         >
           <div className="flex items-center gap-3 overflow-hidden">
             {isBusy ? <FiLoader className="animate-spin text-blue-500" /> : Icon && <Icon size={18} className={isOpen ? 'text-blue-400' : 'text-slate-500'} />}
@@ -382,7 +382,7 @@ function SearchableSelect({ label, icon: Icon, options, value, onChange, disable
         </button>
 
         {isOpen && (
-          <div className="absolute z-50 mt-2 w-full bg-[#0B1020] border border-white/10 rounded-2xl shadow-2xl backdrop-blur-2xl overflow-hidden animate-[slideDown_0.2s]">
+          <div className="absolute z-50 mt-2 w-full bg-[#0B1020]/95 border border-white/10 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden animate-[slideDown_0.2s] transform-gpu">
             <div className="p-3 border-b border-white/5 flex items-center gap-2 sticky top-0 bg-[#0B1020] z-10">
               <FiSearch className="text-slate-500 ml-2" />
               <input 
@@ -391,7 +391,7 @@ function SearchableSelect({ label, icon: Icon, options, value, onChange, disable
                 value={searchTerm} 
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Buscar..."
-                className="w-full bg-transparent py-1 text-sm text-white outline-none placeholder:text-slate-600"
+                className="w-full bg-transparent py-2 text-base md:text-sm text-white outline-none placeholder:text-slate-600"
               />
             </div>
             <div className="max-h-60 overflow-y-auto custom-scrollbar">
@@ -401,7 +401,7 @@ function SearchableSelect({ label, icon: Icon, options, value, onChange, disable
                     key={opt.value}
                     type="button"
                     onClick={() => { onChange(opt.value); setIsOpen(false); }}
-                    className={`w-full flex items-center justify-between px-5 py-3 text-xs text-left transition-all hover:bg-white/5 ${value === opt.value ? "bg-blue-600 text-white font-bold" : "text-slate-300"}`}
+                    className={`w-full flex items-center justify-between px-5 py-4 text-sm md:text-xs text-left transition-all hover:bg-white/5 ${value === opt.value ? "bg-blue-600 text-white font-bold" : "text-slate-300"}`}
                   >
                     <span className="truncate">{opt.label}</span>
                     {value === opt.value && <FiCheck size={14} />}
