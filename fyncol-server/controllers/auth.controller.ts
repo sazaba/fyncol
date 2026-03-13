@@ -8,6 +8,8 @@ import { AuthRequest } from '../middleware/auth.middleware'; // Ajustado el nomb
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'fyncol_secret_key';
 
+// fyncol-server/controllers/auth.controller.ts
+
 export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
   try {
@@ -15,15 +17,23 @@ export const login = async (req: Request, res: Response) => {
     
     if (!user) return res.status(401).json({ success: false, message: 'Usuario no encontrado' });
 
-    // Verificamos si el usuario está activo antes de dejarlo entrar
     if (!user.isActive) {
-      return res.status(403).json({ success: false, message: 'Tu cuenta está desactivada. Contacta al administrador.' });
+      return res.status(403).json({ success: false, message: 'Tu cuenta está desactivada.' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ success: false, message: 'Contraseña incorrecta' });
 
-    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '12h' });
+    // --- CAMBIO AQUÍ: Agregamos el role al token ---
+    const token = jwt.sign(
+      { 
+        id: user.id, 
+        email: user.email, 
+        role: user.role // <--- ESTO FALTABA
+      }, 
+      JWT_SECRET, 
+      { expiresIn: '12h' }
+    );
 
     res.json({
       success: true,
@@ -32,7 +42,7 @@ export const login = async (req: Request, res: Response) => {
         name: user.name, 
         email: user.email, 
         role: user.role,
-        imageUrl: user.imageUrl // Incluimos la imagen en el login
+        imageUrl: user.imageUrl 
       }
     });
   } catch (error) {
