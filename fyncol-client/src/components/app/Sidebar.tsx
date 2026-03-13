@@ -2,11 +2,12 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png"; 
-import { FiHome, FiSettings, FiUsers, FiLogOut, FiChevronDown, FiX, FiGlobe } from "react-icons/fi";
+import { FiHome, FiSettings, FiUsers, FiLogOut, FiChevronDown, FiX, FiGlobe, FiMap } from "react-icons/fi";
 
 export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (val: boolean) => void }) {
   const location = useLocation();
   const navigate = useNavigate();
+  // Puedes inicializar esto en true o false según prefieras
   const [isAdminOpen, setIsAdminOpen] = useState(false);
 
   const isActive = (path: string) => location.pathname === path;
@@ -71,6 +72,16 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
                 >
                   <FiUsers size={16} /> Usuarios
                 </Link>
+                
+                {/* NUEVA RUTA: RUTAS */}
+                <Link 
+                  to="/admin/rutas" 
+                  onClick={() => setIsOpen(false)} 
+                  className={`flex items-center gap-2 w-full text-left rounded-lg px-3 py-2 text-sm ${isActive("/admin/rutas") ? "text-blue-400 bg-blue-500/10 font-medium" : "text-slate-500 hover:text-white hover:bg-white/5 transition-colors"}`}
+                >
+                  <FiMap size={16} /> Rutas
+                </Link>
+
               </div>
             </div>
           </div>
