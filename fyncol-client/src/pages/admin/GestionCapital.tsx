@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { FiPlus, FiMinus, FiAlertCircle } from "react-icons/fi";
+import { FiPlus, FiMinus, FiAlertCircle, FiLoader } from "react-icons/fi";
 
 interface RouteData {
   id: number;
@@ -17,17 +17,18 @@ export default function GestionCapital() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   
-  // Estado para el modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [transactionType, setTransactionType] = useState<"invest" | "withdraw">("invest");
   const [selectedRoute, setSelectedRoute] = useState<RouteData | null>(null);
   
-  // Estado del formulario
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Verificación de rol en el frontend
+  // --- LÓGICA DE URL ALINEADA A PRODUCCIÓN ---
+  const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  const API_URL = BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`;
+  
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const isAdmin = user.role === "ADMIN";
 
@@ -41,23 +42,15 @@ export default function GestionCapital() {
   }, [isAdmin]);
 
   const fetchRoutes = async () => {
-    const URL = "http://localhost:3000/api/capital";
-    console.log("DEBUG: Iniciando petición a:", URL);
-
+    console.log("DEBUG: Intentando fetch a:", `${API_URL}/capital`);
     try {
       const token = localStorage.getItem("token");
-      console.log("DEBUG: Token en localStorage:", token ? "Existe" : "NO EXISTE");
-
-      const res = await fetch(URL, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+      const res = await fetch(`${API_URL}/capital`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-
-      console.log("DEBUG: Status de respuesta:", res.status);
-
+      
+      console.log("DEBUG: Status Respuesta:", res.status);
       const data = await res.json();
-      console.log("DEBUG: Datos recibidos:", data);
       
       if (data.success) {
         setRoutes(data.data);
@@ -65,19 +58,11 @@ export default function GestionCapital() {
         setError(data.message || "Error al obtener las rutas");
       }
     } catch (err: any) {
-      // Este bloque captura el ERR_CONNECTION_REFUSED
-      console.error("DEBUG: Error capturado:", err);
-      setError(`Error de red: ${err.message}. Verifica que el servidor esté encendido en el puerto 3000.`);
+      console.error("DEBUG: Error de conexión:", err);
+      setError(`Error de conexión: ${err.message}. Revisa la consola.`);
     } finally {
       setLoading(false);
     }
-  };
-  const openModal = (route: RouteData, type: "invest" | "withdraw") => {
-    setSelectedRoute(route);
-    setTransactionType(type);
-    setAmount("");
-    setDescription("");
-    setIsModalOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -85,11 +70,12 @@ export default function GestionCapital() {
     if (!selectedRoute || !amount || isNaN(Number(amount))) return;
 
     setIsSubmitting(true);
+    const endpoint = transactionType === "invest" ? "/capital/invest" : "/capital/withdraw";
+    console.log("DEBUG: Enviando POST a:", `${API_URL}${endpoint}`);
+
     try {
       const token = localStorage.getItem("token");
-      const endpoint = transactionType === "invest" ? "/api/capital/invest" : "/api/capital/withdraw";
-      
-      const res = await fetch(`http://localhost:3000${endpoint}`, {
+      const res = await fetch(`${API_URL}${endpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -103,18 +89,25 @@ export default function GestionCapital() {
       });
 
       const data = await res.json();
-
       if (data.success) {
         setIsModalOpen(false);
-        fetchRoutes(); // Recargar datos actualizados
+        fetchRoutes();
       } else {
-        alert(data.message || "Error al procesar la transacción");
+        alert(data.message || "Error en la transacción");
       }
     } catch (err) {
-      alert("Error de conexión al procesar la transacción");
+      alert("Error de red al procesar la transacción");
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const openModal = (route: RouteData, type: "invest" | "withdraw") => {
+    setSelectedRoute(route);
+    setTransactionType(type);
+    setAmount("");
+    setDescription("");
+    setIsModalOpen(true);
   };
 
   if (!isAdmin) {
@@ -137,9 +130,11 @@ export default function GestionCapital() {
       </div>
 
       {loading ? (
-        <div className="text-white">Cargando datos...</div>
+        <div className="flex items-center gap-2 text-blue-400">
+            <FiLoader className="animate-spin" /> Cargando datos...
+        </div>
       ) : error ? (
-        <div className="text-red-400 bg-red-500/10 p-4 rounded-lg">{error}</div>
+        <div className="text-red-400 bg-red-500/10 p-4 rounded-lg border border-red-500/20">{error}</div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#0A0A0F]">
           <table className="w-full text-left text-sm text-slate-400">
@@ -159,7 +154,7 @@ export default function GestionCapital() {
                   <td className="px-6 py-4">{route.city}, {route.country}</td>
                   <td className="px-6 py-4">
                     {route.assignedTo ? (
-                      <span className="rounded-full bg-blue-500/10 px-2.5 py-1 text-xs text-blue-400">
+                      <span className="rounded-full bg-blue-500/10 px-2.5 py-1 text-xs text-blue-400 border border-blue-500/20">
                         {route.assignedTo.name}
                       </span>
                     ) : (
@@ -167,37 +162,30 @@ export default function GestionCapital() {
                     )}
                   </td>
                   <td className="px-6 py-4 text-right font-mono text-white">
-                    {Number(route.availableCapital).toLocaleString('es-CO')} <span className="text-slate-500 text-xs">{route.currency}</span>
+                    {Number(route.availableCapital || 0).toLocaleString('es-CO')} <span className="text-slate-500 text-xs">{route.currency}</span>
                   </td>
                   <td className="px-6 py-4 flex justify-center gap-2">
                     <button 
                       onClick={() => openModal(route, "invest")}
-                      className="flex items-center gap-1 rounded bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-400 hover:bg-green-500/20 transition-colors"
+                      className="flex items-center gap-1 rounded bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-400 hover:bg-green-500/20 transition-colors border border-green-500/20"
                     >
                       <FiPlus size={14} /> Invertir
                     </button>
                     <button 
                       onClick={() => openModal(route, "withdraw")}
-                      className="flex items-center gap-1 rounded bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
+                      className="flex items-center gap-1 rounded bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors border border-red-500/20"
                     >
                       <FiMinus size={14} /> Retirar
                     </button>
                   </td>
                 </tr>
               ))}
-              {routes.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
-                    No hay rutas creadas en el sistema.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* Modal de Inversión/Retiro */}
+      {/* MODAL (Mismo código de antes) */}
       {isModalOpen && selectedRoute && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0A0A0F] p-6 shadow-2xl">
@@ -210,59 +198,35 @@ export default function GestionCapital() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">
-                  Monto a {transactionType === "invest" ? "invertir" : "retirar"} ({selectedRoute.currency})
-                </label>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Monto ({selectedRoute.currency})</label>
                 <input
                   type="number"
                   step="0.01"
-                  min="0.01"
                   required
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder="Ej: 150000"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-white focus:border-blue-500 focus:outline-none"
                 />
-                {transactionType === "withdraw" && (
-                  <p className="text-xs text-slate-500 mt-1">
-                    Disponible máximo: {Number(selectedRoute.availableCapital).toLocaleString('es-CO')}
-                  </p>
-                )}
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">
-                  Descripción / Motivo (Opcional)
-                </label>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Descripción</label>
                 <input
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder={transactionType === "invest" ? "Ej: Inyección de capital enero" : "Ej: Retiro de utilidades"}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-white focus:border-blue-500 focus:outline-none"
                 />
               </div>
 
               <div className="flex justify-end gap-3 mt-8">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="rounded-lg px-4 py-2 text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white transition-colors"
-                >
-                  Cancelar
-                </button>
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm text-slate-400 hover:text-white">Cancelar</button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className={`rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors ${
-                    isSubmitting ? "opacity-50 cursor-not-allowed" : ""
-                  } ${
-                    transactionType === "invest" 
-                      ? "bg-blue-600 hover:bg-blue-700" 
-                      : "bg-red-600 hover:bg-red-700"
-                  }`}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold text-white ${transactionType === "invest" ? "bg-blue-600" : "bg-red-600"}`}
                 >
-                  {isSubmitting ? "Procesando..." : "Confirmar Operación"}
+                  {isSubmitting ? "Procesando..." : "Confirmar"}
                 </button>
               </div>
             </form>
