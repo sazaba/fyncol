@@ -54,3 +54,14 @@ export const reasignarRuta = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Error al reasignar la ruta' });
   }
 };
+export const eliminarRuta = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.route.delete({
+      where: { id: Number(id) }
+    });
+    res.json({ success: true, message: "Ruta eliminada correctamente" });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al eliminar la ruta' });
+  }
+};
