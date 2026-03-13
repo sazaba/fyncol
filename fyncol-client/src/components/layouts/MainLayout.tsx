@@ -15,18 +15,21 @@ export default function MainLayout() {
   }, [sidebarOpen]);
 
   return (
-    <div className="w-full bg-[#020408] text-white font-inter md:h-screen md:overflow-hidden selection:bg-blue-500/30">
+    // Se quitó bg-[#020408], text-white y font-inter (ya se heredan del body global)
+    <div className="w-full md:h-screen md:overflow-hidden selection:bg-blue-500/30">
       <div className="flex w-full md:h-full">
         <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
 
         <main className="flex-1 flex flex-col relative min-w-0">
+          
           {/* Header móvil */}
           <header className="md:hidden flex h-16 border-b border-white/5 bg-[#05050A] items-center justify-between px-4 shrink-0">
             <div className="flex items-center gap-3">
               <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm shadow-[0_0_12px_rgba(37,99,235,0.4)]">
                 A
               </div>
-              <span className="text-sm font-medium font-sora">Hola, Admin</span>
+              {/* Cambiamos span a h3 y quitamos font-sora para heredar tu CSS global */}
+              <h3 className="text-sm font-medium">Hola, Admin</h3>
             </div>
 
             <button
@@ -38,8 +41,8 @@ export default function MainLayout() {
             </button>
           </header>
 
-          {/* Aplicamos la clase scrollbar de index.css en lugar de custom-scrollbar */}
-          <div className="bg-[#020408] md:flex-1 md:overflow-y-auto scrollbar">
+          {/* Se quitó bg-[#020408] del contenedor Outlet, ya es transparente y deja ver el fondo global */}
+          <div className="md:flex-1 md:overflow-y-auto scrollbar">
             <Outlet />
           </div>
 
