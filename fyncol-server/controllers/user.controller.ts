@@ -46,7 +46,7 @@ export const createUser = async (req: Request, res: Response) => {
         address, 
         phone, 
         role,
-        imageUrl: imageUrl || null // Opcional por ahora
+        imageUrl: imageUrl || null 
       },
       select: { 
         id: true, 
@@ -81,7 +81,7 @@ export const getUsers = async (req: Request, res: Response) => {
         address: true,
         role: true,
         isActive: true,
-        imageUrl: true, // Importante para mostrar la foto en la tabla
+        imageUrl: true, 
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' }
@@ -137,7 +137,18 @@ export const deleteUser = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    // Aplicamos Soft Delete cambiando isActive a false
+    // VALIDACIÓN CRÍTICA: Impedir borrar si tiene ruta asignada
+    const hasRoute = await prisma.route.findFirst({
+      where: { assignedToId: Number(id) }
+    });
+
+    if (hasRoute) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `No se puede desactivar: El usuario administra la Ruta ${hasRoute.id}. Reasígnala primero.` 
+      });
+    }
+
     const deactivatedUser = await prisma.user.update({
       where: { id: Number(id) },
       data: { isActive: false },
@@ -166,6 +177,20 @@ export const toggleActiveUser = async (req: Request, res: Response) => {
       });
     }
 
+    // VALIDACIÓN CRÍTICA: Impedir desactivar por toggle si tiene ruta asignada
+    if (isActive === false) {
+      const hasRoute = await prisma.route.findFirst({
+        where: { assignedToId: Number(id) }
+      });
+
+      if (hasRoute) {
+        return res.status(400).json({ 
+          success: false, 
+          message: `No se puede desactivar: El usuario administra la Ruta ${hasRoute.id}. Reasígnala primero.` 
+        });
+      }
+    }
+
     const updated = await prisma.user.update({
       where: { id: Number(id) },
       data: { isActive },
@@ -189,6 +214,18 @@ export const toggleActiveUser = async (req: Request, res: Response) => {
 export const hardDeleteUser = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+
+    // VALIDACIÓN CRÍTICA: Impedir borrar definitivamente si tiene ruta asignada
+    const hasRoute = await prisma.route.findFirst({
+      where: { assignedToId: Number(id) }
+    });
+
+    if (hasRoute) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `No se puede eliminar definitivamente: El usuario administra la Ruta ${hasRoute.id}. Reasígnala primero.` 
+      });
+    }
 
     const deleted = await prisma.user.delete({
       where: { id: Number(id) },
