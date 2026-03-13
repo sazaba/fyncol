@@ -17,6 +17,7 @@ import {
   FiUser,
   FiX,
   FiLock,
+  FiLoader // <-- Nuevo icono para el loading
 } from "react-icons/fi";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
@@ -35,7 +36,8 @@ type PremiumAlertState = {
 
 export default function UsersPage() {
   const [showModal, setShowModal] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // Para cuando se guarda el form
+  const [isFetching, setIsFetching] = useState(true); // <-- NUEVO: Para la carga inicial
   const [users, setUsers] = useState<any[]>([]);
   const [busyId, setBusyId] = useState<number | string | null>(null);
 
@@ -103,6 +105,7 @@ export default function UsersPage() {
 
   // === READ ===
   const fetchUsers = async () => {
+    setIsFetching(true); // Indicamos que empezamos a cargar
     try {
       const token = getTokenOrFail();
       if (!token) return;
@@ -128,15 +131,18 @@ export default function UsersPage() {
       console.error("Error al obtener usuarios:", error);
       openAlert({
         variant: "danger",
-        title: "No se pudo cargar",
-        message: "Hubo un problema trayendo los usuarios. Revisa conexión o token.",
+        title: "Problema de conexión",
+        message: "No se pudo cargar la lista. Verifica que el servidor backend esté corriendo.",
         confirmText: "Entendido",
         cancelText: "",
         onConfirm: () => closeAlert(),
       });
+    } finally {
+      setIsFetching(false); // Terminamos de cargar, haya éxito o error
     }
   };
 
+  // ESTE ES EL USEEFFECT QUE CARGA AL INICIO
   useEffect(() => {
     fetchUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -230,7 +236,13 @@ export default function UsersPage() {
           const data = await res.json().catch(() => ({}));
 
           if (res.ok && data?.success) {
-            fetchUsers();
+            // 🔥 Actualización Optimista: Modificamos el estado local inmediatamente
+            setUsers((prevUsers) =>
+              prevUsers.map((u) =>
+                u.id === id ? { ...u, isActive: nextState } : u
+              )
+            );
+
             openAlert({
               variant: "success",
               title: nextState ? "Usuario activado" : "Usuario desactivado",
@@ -288,7 +300,9 @@ export default function UsersPage() {
           const data = await res.json().catch(() => ({}));
 
           if (res.ok && data?.success) {
-            fetchUsers();
+            // 🔥 Actualización Optimista: Quitamos el usuario del estado local inmediatamente
+            setUsers((prevUsers) => prevUsers.filter((u) => u.id !== id));
+
             openAlert({
               variant: "success",
               title: "Usuario eliminado",
@@ -303,7 +317,7 @@ export default function UsersPage() {
               title: "No se pudo eliminar",
               message:
                 data?.message ||
-                `Error del servidor (${res.status}). Verifica DELETE /api/users/:id/hard.`,
+                `Error del servidor (${res.status}).`,
               confirmText: "Entendido",
               cancelText: "",
               onConfirm: () => closeAlert(),
@@ -395,96 +409,101 @@ export default function UsersPage() {
 
       {/* ✅ MOBILE LIST (sin overflow interno) */}
       <div className="md:hidden space-y-3 pb-10">
-        {users.map((user) => {
-          const active = !!user.isActive;
-          const isBusy = busyId === user.id;
-
-          return (
-            <div
-              key={user.id}
-              className={`rounded-3xl border border-white/10 bg-[#0B1020]/40 backdrop-blur-sm p-4 shadow-xl ${
-                !active ? "opacity-70" : ""
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className="h-11 w-11 rounded-full bg-gradient-to-br from-blue-500/20 to-cyan-500/20 text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-500/10 overflow-hidden">
-                  {user.imageUrl ? (
-                    <img src={user.imageUrl} className="h-full w-full object-cover" />
-                  ) : (
-                    user.name?.charAt(0)
-                  )}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <p className="text-white font-semibold truncate">{user.name}</p>
-                  <p className="text-slate-400 text-xs truncate">{user.email}</p>
-                </div>
-
-                <span
-                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase border ${
-                    active
-                      ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
-                      : "bg-slate-500/10 text-slate-300 border-white/10"
-                  }`}
-                >
-                  {active ? "Activo" : "Inactivo"}
-                </span>
-              </div>
-
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
-                  <p className="text-slate-400 text-[10px] uppercase tracking-widest">Documento</p>
-                  <p className="text-white font-medium truncate">{user.document || "-"}</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
-                  <p className="text-slate-400 text-[10px] uppercase tracking-widest">Rol</p>
-                  <p className="text-white font-medium truncate">{user.role || "-"}</p>
-                </div>
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-                <button
-                  disabled={isBusy}
-                  onClick={() => openEditModal(user)}
-                  className="px-3 py-2 rounded-2xl border border-white/10 text-slate-200 hover:bg-white/5 disabled:opacity-40"
-                >
-                  Editar
-                </button>
-
-                {active ? (
-                  <button
-                    disabled={isBusy}
-                    onClick={() => handleToggleActive(user.id, user.name, false)}
-                    className="px-3 py-2 rounded-2xl border border-amber-500/20 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15 disabled:opacity-40"
-                  >
-                    Desactivar
-                  </button>
-                ) : (
-                  <button
-                    disabled={isBusy}
-                    onClick={() => handleToggleActive(user.id, user.name, true)}
-                    className="px-3 py-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15 disabled:opacity-40"
-                  >
-                    Activar
-                  </button>
-                )}
-
-                <button
-                  disabled={isBusy}
-                  onClick={() => handleHardDelete(user.id, user.name)}
-                  className="px-3 py-2 rounded-2xl border border-red-500/20 bg-red-500/10 text-red-200 hover:bg-red-500/15 disabled:opacity-40"
-                >
-                  Borrar
-                </button>
-              </div>
-            </div>
-          );
-        })}
-
-        {users.length === 0 && (
+        {isFetching ? (
+          <div className="flex flex-col items-center justify-center p-10 text-slate-400">
+            <FiLoader className="animate-spin mb-3" size={32} />
+            <p>Cargando usuarios...</p>
+          </div>
+        ) : users.length === 0 ? (
           <div className="rounded-3xl border border-white/10 bg-[#0B1020]/40 p-6 text-center text-slate-400">
             No hay usuarios aún.
           </div>
+        ) : (
+          users.map((user) => {
+            const active = !!user.isActive;
+            const isBusy = busyId === user.id;
+
+            return (
+              <div
+                key={user.id}
+                className={`rounded-3xl border border-white/10 bg-[#0B1020]/40 backdrop-blur-sm p-4 shadow-xl ${
+                  !active ? "opacity-70" : ""
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="h-11 w-11 rounded-full bg-gradient-to-br from-blue-500/20 to-cyan-500/20 text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-500/10 overflow-hidden">
+                    {user.imageUrl ? (
+                      <img src={user.imageUrl} className="h-full w-full object-cover" />
+                    ) : (
+                      user.name?.charAt(0)
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-semibold truncate">{user.name}</p>
+                    <p className="text-slate-400 text-xs truncate">{user.email}</p>
+                  </div>
+
+                  <span
+                    className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase border ${
+                      active
+                        ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
+                        : "bg-slate-500/10 text-slate-300 border-white/10"
+                    }`}
+                  >
+                    {active ? "Activo" : "Inactivo"}
+                  </span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+                    <p className="text-slate-400 text-[10px] uppercase tracking-widest">Documento</p>
+                    <p className="text-white font-medium truncate">{user.document || "-"}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+                    <p className="text-slate-400 text-[10px] uppercase tracking-widest">Rol</p>
+                    <p className="text-white font-medium truncate">{user.role || "-"}</p>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    disabled={isBusy}
+                    onClick={() => openEditModal(user)}
+                    className="px-3 py-2 rounded-2xl border border-white/10 text-slate-200 hover:bg-white/5 disabled:opacity-40"
+                  >
+                    Editar
+                  </button>
+
+                  {active ? (
+                    <button
+                      disabled={isBusy}
+                      onClick={() => handleToggleActive(user.id, user.name, false)}
+                      className="px-3 py-2 rounded-2xl border border-amber-500/20 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15 disabled:opacity-40"
+                    >
+                      Desactivar
+                    </button>
+                  ) : (
+                    <button
+                      disabled={isBusy}
+                      onClick={() => handleToggleActive(user.id, user.name, true)}
+                      className="px-3 py-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15 disabled:opacity-40"
+                    >
+                      Activar
+                    </button>
+                  )}
+
+                  <button
+                    disabled={isBusy}
+                    onClick={() => handleHardDelete(user.id, user.name)}
+                    className="px-3 py-2 rounded-2xl border border-red-500/20 bg-red-500/10 text-red-200 hover:bg-red-500/15 disabled:opacity-40"
+                  >
+                    Borrar
+                  </button>
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -503,104 +522,113 @@ export default function UsersPage() {
             </thead>
 
             <tbody className="divide-y divide-white/5">
-              {users.map((user) => {
-                const isBusy = busyId === user.id;
-                const active = !!user.isActive;
-
-                return (
-                  <tr
-                    key={user.id}
-                    className={`hover:bg-white/[0.02] transition-colors group ${!active ? "opacity-60" : ""}`}
-                  >
-                    <td className="px-6 py-4 font-medium text-white flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500/20 to-cyan-500/20 text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-500/10 overflow-hidden">
-                        {user.imageUrl ? (
-                          <img src={user.imageUrl} className="rounded-full h-full w-full object-cover" />
-                        ) : (
-                          user.name?.charAt(0)
-                        )}
-                      </div>
-                      <div className="flex flex-col">
-                        <span>{user.name}</span>
-                        <span className="text-[10px] text-slate-500 uppercase">{user.email}</span>
-                      </div>
-                    </td>
-
-                    <td className="px-6 py-4 text-slate-400">{user.document}</td>
-
-                    <td className="px-6 py-4">
-                      <span className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase border bg-blue-500/10 text-blue-400 border-blue-500/20">
-                        {user.role}
-                      </span>
-                    </td>
-
-                    <td className="px-6 py-4 text-center">
-                      <span
-                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase border ${
-                          active
-                            ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
-                            : "bg-slate-500/10 text-slate-300 border-white/10"
-                        }`}
-                      >
-                        {active ? "Activo" : "Inactivo"}
-                      </span>
-                    </td>
-
-                    <td className="px-6 py-4 text-center">
-                      <div className="flex items-center justify-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                        <button
-                          disabled={isBusy}
-                          onClick={() => openEditModal(user)}
-                          className="p-2 text-slate-400 hover:text-blue-400 transition-colors disabled:opacity-40"
-                          aria-label="Editar"
-                          title="Editar"
-                        >
-                          <FiEdit2 size={16} />
-                        </button>
-
-                        {active ? (
-                          <button
-                            disabled={isBusy}
-                            onClick={() => handleToggleActive(user.id, user.name, false)}
-                            className="p-2 text-slate-400 hover:text-amber-300 transition-colors disabled:opacity-40"
-                            aria-label="Desactivar"
-                            title="Desactivar"
-                          >
-                            <FiToggleLeft size={16} />
-                          </button>
-                        ) : (
-                          <button
-                            disabled={isBusy}
-                            onClick={() => handleToggleActive(user.id, user.name, true)}
-                            className="p-2 text-slate-400 hover:text-emerald-300 transition-colors disabled:opacity-40"
-                            aria-label="Activar"
-                            title="Activar"
-                          >
-                            <FiToggleRight size={16} />
-                          </button>
-                        )}
-
-                        <button
-                          disabled={isBusy}
-                          onClick={() => handleHardDelete(user.id, user.name)}
-                          className="p-2 text-slate-400 hover:text-red-400 transition-colors disabled:opacity-40"
-                          aria-label="Eliminar definitivamente"
-                          title="Eliminar definitivamente"
-                        >
-                          <FiTrash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-
-              {users.length === 0 && (
+              {isFetching ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center">
+                      <FiLoader className="animate-spin mb-2 text-blue-500" size={24} />
+                      Cargando usuarios...
+                    </div>
+                  </td>
+                </tr>
+              ) : users.length === 0 ? (
                 <tr>
                   <td className="px-6 py-10 text-center text-slate-500" colSpan={5}>
                     No hay usuarios aún.
                   </td>
                 </tr>
+              ) : (
+                users.map((user) => {
+                  const isBusy = busyId === user.id;
+                  const active = !!user.isActive;
+
+                  return (
+                    <tr
+                      key={user.id}
+                      className={`hover:bg-white/[0.02] transition-colors group ${!active ? "opacity-60" : ""}`}
+                    >
+                      <td className="px-6 py-4 font-medium text-white flex items-center gap-4">
+                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500/20 to-cyan-500/20 text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-500/10 overflow-hidden">
+                          {user.imageUrl ? (
+                            <img src={user.imageUrl} className="rounded-full h-full w-full object-cover" />
+                          ) : (
+                            user.name?.charAt(0)
+                          )}
+                        </div>
+                        <div className="flex flex-col">
+                          <span>{user.name}</span>
+                          <span className="text-[10px] text-slate-500 uppercase">{user.email}</span>
+                        </div>
+                      </td>
+
+                      <td className="px-6 py-4 text-slate-400">{user.document}</td>
+
+                      <td className="px-6 py-4">
+                        <span className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase border bg-blue-500/10 text-blue-400 border-blue-500/20">
+                          {user.role}
+                        </span>
+                      </td>
+
+                      <td className="px-6 py-4 text-center">
+                        <span
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase border ${
+                            active
+                              ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
+                              : "bg-slate-500/10 text-slate-300 border-white/10"
+                          }`}
+                        >
+                          {active ? "Activo" : "Inactivo"}
+                        </span>
+                      </td>
+
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex items-center justify-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                          <button
+                            disabled={isBusy}
+                            onClick={() => openEditModal(user)}
+                            className="p-2 text-slate-400 hover:text-blue-400 transition-colors disabled:opacity-40"
+                            aria-label="Editar"
+                            title="Editar"
+                          >
+                            <FiEdit2 size={16} />
+                          </button>
+
+                          {active ? (
+                            <button
+                              disabled={isBusy}
+                              onClick={() => handleToggleActive(user.id, user.name, false)}
+                              className="p-2 text-slate-400 hover:text-amber-300 transition-colors disabled:opacity-40"
+                              aria-label="Desactivar"
+                              title="Desactivar"
+                            >
+                              <FiToggleLeft size={16} />
+                            </button>
+                          ) : (
+                            <button
+                              disabled={isBusy}
+                              onClick={() => handleToggleActive(user.id, user.name, true)}
+                              className="p-2 text-slate-400 hover:text-emerald-300 transition-colors disabled:opacity-40"
+                              aria-label="Activar"
+                              title="Activar"
+                            >
+                              <FiToggleRight size={16} />
+                            </button>
+                          )}
+
+                          <button
+                            disabled={isBusy}
+                            onClick={() => handleHardDelete(user.id, user.name)}
+                            className="p-2 text-slate-400 hover:text-red-400 transition-colors disabled:opacity-40"
+                            aria-label="Eliminar definitivamente"
+                            title="Eliminar definitivamente"
+                          >
+                            <FiTrash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
