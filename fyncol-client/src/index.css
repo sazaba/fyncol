@@ -20,6 +20,11 @@ html, body {
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-family: 'Inter', sans-serif; /* Aplica Inter a todo el texto por defecto */
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Sora', sans-serif;
 }
 
 /* --- FIX PARA AUTOCOMPLETADO (Chrome, Safari, Edge) --- */
