@@ -12,7 +12,7 @@ import {
   FiMap,
   FiDollarSign,
   FiSearch,
-  FiTrash2,
+  // FiTrash2,
 } from "react-icons/fi";
 
 // --- Interfaces ---
@@ -189,31 +189,31 @@ export default function Rutas() {
     }
   };
 
-  const confirmDelete = (route: Route) => {
-    openAlert({
-      variant: "danger",
-      title: "Eliminar Ruta",
-      message: `¿Estás seguro de eliminar permanentemente la Ruta ${route.id} en ${route.city}?`,
-      confirmText: "Sí, Eliminar",
-      onConfirm: () => handleDelete(route.id)
-    });
-  };
+  // const confirmDelete = (route: Route) => {
+  //   openAlert({
+  //     variant: "danger",
+  //     title: "Eliminar Ruta",
+  //     message: `¿Estás seguro de eliminar permanentemente la Ruta ${route.id} en ${route.city}?`,
+  //     confirmText: "Sí, Eliminar",
+  //     onConfirm: () => handleDelete(route.id)
+  //   });
+  // };
 
-  const handleDelete = async (id: number) => {
-    closeAlert();
-    setBusyId(id);
-    try {
-      const res = await fetch(`${API_URL}/rutas/${id}`, { method: 'DELETE', headers });
-      if (res.ok) {
-        setRoutes(routes.filter(r => r.id !== id));
-        openAlert({ variant: "success", title: "Eliminado", message: "La ruta ha sido removida del sistema." });
-      }
-    } catch {
-      openAlert({ variant: "danger", title: "Error", message: "No se pudo eliminar la ruta." });
-    } finally {
-      setBusyId(null);
-    }
-  };
+  // const handleDelete = async (id: number) => {
+  //   closeAlert();
+  //   setBusyId(id);
+  //   try {
+  //     const res = await fetch(`${API_URL}/rutas/${id}`, { method: 'DELETE', headers });
+  //     if (res.ok) {
+  //       setRoutes(routes.filter(r => r.id !== id));
+  //       openAlert({ variant: "success", title: "Eliminado", message: "La ruta ha sido removida del sistema." });
+  //     }
+  //   } catch {
+  //     openAlert({ variant: "danger", title: "Error", message: "No se pudo eliminar la ruta." });
+  //   } finally {
+  //     setBusyId(null);
+  //   }
+  // };
 
   return (
     <div className="max-w-6xl mx-auto px-4 md:px-8 pt-8 md:pt-10 pb-20">
@@ -298,13 +298,13 @@ export default function Rutas() {
                     />
                   </div>
 
-                  <button 
+                  {/* <button 
                     onClick={() => confirmDelete(ruta)}
                     className="p-3.5 rounded-2xl bg-red-500/10 text-red-500 hover:bg-red-600 hover:text-white transition-all opacity-0 group-hover:opacity-100 shadow-lg"
                     title="Eliminar Ruta"
                   >
                     <FiTrash2 size={18} />
-                  </button>
+                  </button> */}
                 </div>
               ))}
             </div>
