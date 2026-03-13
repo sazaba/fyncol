@@ -29,8 +29,10 @@ export default function Rutas() {
   const [currency, setCurrency] = useState('');
   const [assignedToId, setAssignedToId] = useState('');
 
-  // Variables para la API
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+  // LÓGICA DE URL INFALIBLE (Corrige el 404 automáticamente)
+  const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  const API_URL = BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`;
+
   const token = localStorage.getItem('token');
 
   const headers = {
@@ -53,6 +55,7 @@ export default function Rutas() {
         const routesRes = await fetch(`${API_URL}/rutas`, { headers });
         if (routesRes.ok) {
           const routesData = await routesRes.json();
+          // Manejamos si el backend devuelve el array directo o dentro de una propiedad
           setRoutes(routesData.data || routesData || []);
         }
 
@@ -61,24 +64,18 @@ export default function Rutas() {
         if (usersRes.ok) {
           const usersData = await usersRes.json();
           
-          // --- MODO DIAGNÓSTICO: Mira la consola (F12) para ver esto ---
-          console.log("1. Data cruda que llega del backend:", usersData);
+          // DIAGNÓSTICO EN CONSOLA
+          console.log("Data cruda de usuarios:", usersData);
           
-          // Extraemos el array desde la propiedad 'users'
+          // Tu backend devuelve { success: true, users: [...] }
           const usersArray = Array.isArray(usersData) ? usersData : (usersData.users || []);
-          console.log("2. Array de usuarios extraído:", usersArray);
           
-          // Filtramos estrictamente según tu esquema de Prisma
+          // Filtramos estrictamente según tu esquema de Prisma (Mayúsculas)
           const operativos = usersArray.filter((u: User) => 
             u.role === 'COBRADOR' || u.role === 'SUPERVISOR'
           );
           
-          console.log("3. Usuarios operativos (Cobradores/Supervisores) filtrados:", operativos);
-          // -------------------------------------------------------------
-
-          // Si hay operativos, mostramos esos. Si por alguna razón el array de operativos 
-          // está vacío pero SÍ hay usuarios en general, mostramos todos por precaución.
-          setCollaborators(operativos.length > 0 ? operativos : usersArray);
+          setCollaborators(operativos);
         } else {
            console.error("Error del servidor al obtener usuarios:", usersRes.statusText);
         }
@@ -103,7 +100,6 @@ export default function Rutas() {
     } else {
       setCurrency('');
     }
-    // Reiniciar selecciones dependientes
     setSelectedState('');
     setSelectedCity('');
   };
@@ -117,7 +113,6 @@ export default function Rutas() {
   // Crear nueva ruta
   const handleCreateRoute = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     const countryName = Country.getCountryByCode(selectedCountry)?.name || '';
 
     try {
@@ -126,7 +121,7 @@ export default function Rutas() {
         headers,
         body: JSON.stringify({
           country: countryName,
-          city: selectedCity, // Se guarda la ciudad final
+          city: selectedCity,
           currency,
           assignedToId: assignedToId ? Number(assignedToId) : null
         })
@@ -134,6 +129,7 @@ export default function Rutas() {
 
       if (response.ok) {
         const result = await response.json();
+        // Agregamos la nueva ruta al estado local (considerando posible propiedad .data)
         const newRoute = result.data || result;
         setRoutes([...routes, newRoute]);
         
@@ -196,7 +192,7 @@ export default function Rutas() {
                   value={selectedCountry}
                   onChange={handleCountryChange}
                   required
-                  className="w-full bg-dark-900 border border-dark-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all appearance-none"
+                  className="w-full bg-dark-900 border border-dark-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-blue-500 appearance-none"
                 >
                   <option value="">Seleccione un país...</option>
                   {countries.map(c => (
@@ -212,7 +208,7 @@ export default function Rutas() {
                   onChange={handleStateChange}
                   required
                   disabled={!selectedCountry}
-                  className="w-full bg-dark-900 border border-dark-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed appearance-none"
+                  className="w-full bg-dark-900 border border-dark-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-blue-500 disabled:opacity-40 appearance-none"
                 >
                   <option value="">Seleccione un estado...</option>
                   {states?.map((state, index) => (
@@ -228,7 +224,7 @@ export default function Rutas() {
                   onChange={(e) => setSelectedCity(e.target.value)}
                   required
                   disabled={!selectedState}
-                  className="w-full bg-dark-900 border border-dark-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed appearance-none"
+                  className="w-full bg-dark-900 border border-dark-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-blue-500 disabled:opacity-40 appearance-none"
                 >
                   <option value="">Seleccione una ciudad...</option>
                   {cities?.map((city, index) => (
@@ -243,7 +239,6 @@ export default function Rutas() {
                   type="text" 
                   value={currency} 
                   readOnly 
-                  placeholder="Autocompletado"
                   className="w-full bg-dark-900/50 border border-dark-700 rounded-lg p-2.5 text-sm text-blue-400 font-bold cursor-not-allowed focus:outline-none"
                 />
               </div>
@@ -253,7 +248,7 @@ export default function Rutas() {
                 <select 
                   value={assignedToId}
                   onChange={(e) => setAssignedToId(e.target.value)}
-                  className="w-full bg-dark-900 border border-dark-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all appearance-none"
+                  className="w-full bg-dark-900 border border-dark-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-blue-500 appearance-none"
                 >
                   <option value="">Sin asignar por ahora</option>
                   {collaborators.map(c => (
@@ -264,7 +259,7 @@ export default function Rutas() {
 
               <button 
                 type="submit"
-                className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-all shadow-[0_0_15px_rgba(37,99,235,0.15)] hover:shadow-[0_0_25px_rgba(37,99,235,0.3)] active:scale-[0.98]"
+                className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-all active:scale-[0.98]"
               >
                 Crear y Guardar Ruta
               </button>
@@ -280,7 +275,7 @@ export default function Rutas() {
                 <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
               </div>
             ) : routes.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-48 text-gray-500 border-2 border-dashed border-dark-700 rounded-xl bg-dark-900/50">
+              <div className="flex flex-col items-center justify-center h-48 text-gray-500 border-2 border-dashed border-dark-700 rounded-xl bg-dark-900/50 text-center p-4">
                 <p>No hay rutas operativas registradas.</p>
               </div>
             ) : (
@@ -311,7 +306,7 @@ export default function Rutas() {
                       <select 
                         value={ruta.assignedTo?.id || ''}
                         onChange={(e) => handleReassign(ruta.id, e.target.value)}
-                        className="w-full bg-dark-800 border border-dark-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors appearance-none group-hover:border-dark-700"
+                        className="w-full bg-dark-800 border border-dark-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors appearance-none"
                       >
                         <option value="">Ninguno (Libre)</option>
                         {collaborators.map(c => (
