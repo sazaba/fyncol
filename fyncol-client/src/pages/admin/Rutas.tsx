@@ -61,7 +61,7 @@ type ReplacementState = {
   newUserId: number;
   oldRouteId: number;
   replacementUserId: string;
-  isDirectSwap: boolean; // Nuevo estado para saber si estamos haciendo swap 1 a 1
+  isDirectSwap: boolean;
 };
 
 export default function Rutas() {
@@ -83,7 +83,6 @@ export default function Rutas() {
     isOpen: false, targetRouteId: 0, newUserId: 0, oldRouteId: 0, replacementUserId: '', isDirectSwap: false
   });
 
-  // Estado para el modal de Creación (Alineado con UsersPage)
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [newUserForm, setNewUserForm] = useState({ 
@@ -207,7 +206,7 @@ export default function Rutas() {
           });
           return;
         }
-        throw new Error(result.error || "Error");
+        throw new Error(result.error || "Error interno al reasignar");
       }
 
       if (result.updatedRoutes) {
@@ -227,9 +226,7 @@ export default function Rutas() {
     }
   };
 
-  // Lógica para el botón "Intercambiar Conductores"
   const handleDirectSwap = () => {
-    // Buscamos quién es el conductor actual de la ruta destino (la que queremos invadir)
     const targetRoute = routes.find(r => r.id === replacementModal.targetRouteId);
     
     if (!targetRoute || !targetRoute.assignedTo) {
@@ -237,7 +234,6 @@ export default function Rutas() {
         return;
     }
 
-    // El reemplazo será el conductor actual de la ruta que estamos invadiendo
     setReplacementModal(prev => ({
         ...prev,
         isDirectSwap: true,
@@ -262,17 +258,12 @@ export default function Rutas() {
 
       const newUser = result.user || result;
       
-      // TRUCO PARA EVITAR EL BUG: Actualizamos el estado, y forzamos la selección con un pequeño delay
-      // para permitir que React re-renderice la lista de colaboradores primero.
       setCollaborators(prev => [...prev, newUser]);
-      
-      setTimeout(() => {
-          setReplacementModal(prev => ({ 
-              ...prev, 
-              replacementUserId: newUser.id.toString(),
-              isDirectSwap: false 
-          }));
-      }, 100);
+      setReplacementModal(prev => ({ 
+          ...prev, 
+          replacementUserId: newUser.id.toString(),
+          isDirectSwap: false 
+      }));
       
       setNewUserForm({ name: '', document: '', email: '', address: '', phone: '', password: '', role: 'COBRADOR' });
       setUserModalOpen(false);
@@ -373,7 +364,6 @@ export default function Rutas() {
             
             <div className="mb-6 relative z-[70] space-y-4">
               
-              {/* COMPONENTES DEPENDIENDO DEL MODO DE SWAP */}
               {!replacementModal.isDirectSwap ? (
                   <>
                     <SearchableSelect 
@@ -411,7 +401,7 @@ export default function Rutas() {
                   <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 text-center">
                       <p className="text-blue-400 text-sm font-medium">
                           Se realizará un intercambio directo. 
-                          El conductor actual de la ruta destino pasará a la Ruta {replacementModal.oldRouteId}.
+                          El conductor actual pasará a la Ruta {replacementModal.oldRouteId}.
                       </p>
                       <button 
                           onClick={() => setReplacementModal(prev => ({...prev, isDirectSwap: false, replacementUserId: ''}))}

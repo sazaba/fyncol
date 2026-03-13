@@ -7,21 +7,17 @@ export const crearRuta = async (req: Request, res: Response): Promise<void> => {
   try {
     const { country, city, currency, assignedToId } = req.body;
     
-    // Si se intenta asignar un cobrador al crear, verificamos si ya está ocupado
     if (assignedToId) {
       const rutaExistente = await prisma.route.findFirst({
         where: { assignedToId: Number(assignedToId) }
       });
 
-      // Si el cobrador ya está en otra ruta, usamos una transacción para liberarlo primero
       if (rutaExistente) {
         const [, nuevaRuta] = await prisma.$transaction([
-          // Paso 1: Liberar al cobrador de su ruta anterior
           prisma.route.update({
             where: { id: rutaExistente.id },
             data: { assignedToId: null }
           }),
-          // Paso 2: Crear la nueva ruta con el cobrador
           prisma.route.create({
             data: {
               country,
@@ -38,7 +34,6 @@ export const crearRuta = async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-    // Flujo normal si el cobrador estaba libre o si no se asignó cobrador
     const nuevaRuta = await prisma.route.create({
       data: {
         country,
@@ -86,7 +81,7 @@ export const reasignarRuta = async (req: Request, res: Response): Promise<void> 
       });
 
       if (oldRoute) {
-        // 2. Si está en otra ruta, exigimos un reemplazo para esa ruta vieja
+        // 2. Exigir un reemplazo
         if (!replacementId) {
           res.status(400).json({ 
             code: 'REQUIRES_REPLACEMENT',
@@ -96,17 +91,27 @@ export const reasignarRuta = async (req: Request, res: Response): Promise<void> 
           return;
         }
 
-        // 3. Verificar que el reemplazo propuesto esté realmente libre
+        // 3. Verificar que el reemplazo propuesto esté libre (Ignorando la ruta destino para permitir Swap)
         const replacementInUse = await prisma.route.findFirst({
-          where: { assignedToId: replacementId }
+          where: { 
+            assignedToId: replacementId,
+            id: { not: targetRouteId } 
+          }
         });
 
         if (replacementInUse) {
-          res.status(400).json({ error: 'El cobrador de reemplazo seleccionado también está ocupado.' });
+          res.status(400).json({ error: 'El cobrador de reemplazo seleccionado también está ocupado en otra ruta diferente.' });
           return;
         }
 
-        // 4. Ejecutar el intercambio (Swap) en una sola transacción segura
+        // 4. Ejecutar el intercambio (Swap) en dos pasos seguros
+        // PASO A: Soltar ambas rutas temporalmente para evitar colisión de Unique Key en MySQL
+        await prisma.$transaction([
+          prisma.route.update({ where: { id: targetRouteId }, data: { assignedToId: null } }),
+          prisma.route.update({ where: { id: oldRoute.id }, data: { assignedToId: null } })
+        ]);
+
+        // PASO B: Cruzar los usuarios
         const [updatedTarget, updatedOld] = await prisma.$transaction([
           prisma.route.update({
             where: { id: targetRouteId },
@@ -120,13 +125,12 @@ export const reasignarRuta = async (req: Request, res: Response): Promise<void> 
           })
         ]);
 
-        // Devolvemos ambas rutas para que el frontend las actualice
         res.json({ updatedRoutes: [updatedTarget, updatedOld] });
         return;
       }
     }
 
-    // 5. Flujo normal: el cobrador estaba libre, o simplemente estamos vaciando la ruta (assignedToId = null)
+    // 5. Flujo normal: el cobrador estaba libre, o estamos vaciando la ruta
     const rutaActualizada = await prisma.route.update({
       where: { id: targetRouteId },
       data: { assignedToId: assignedToId },
@@ -135,11 +139,10 @@ export const reasignarRuta = async (req: Request, res: Response): Promise<void> 
 
     res.json({ updatedRoutes: [rutaActualizada] });
   } catch (error) {
+    console.error("Error al reasignar:", error);
     res.status(500).json({ error: 'Error interno al reasignar la ruta' });
   }
 };
-
-
 
 export const eliminarRuta = async (req: Request, res: Response) => {
   try {
