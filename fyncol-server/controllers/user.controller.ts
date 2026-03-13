@@ -10,7 +10,14 @@ const prisma = new PrismaClient();
 // ==========================================
 export const createUser = async (req: Request, res: Response) => {
   try {
-    const { name, document, address, phone, role, email, imageUrl } = req.body;
+    const { name, document, address, phone, role, email, imageUrl, password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "La contraseña es obligatoria." 
+      });
+    }
 
     // Validar si el correo o documento ya existen
     const existingUser = await prisma.user.findFirst({
@@ -26,9 +33,9 @@ export const createUser = async (req: Request, res: Response) => {
       });
     }
 
-    // Encriptar el documento para usarlo como contraseña inicial
+    // Encriptar la contraseña recibida
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(document, salt);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
     const newUser = await prisma.user.create({
       data: { 
@@ -93,11 +100,19 @@ export const getUsers = async (req: Request, res: Response) => {
 export const updateUser = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, document, address, phone, role, email, isActive, imageUrl } = req.body;
+    const { name, document, address, phone, role, email, isActive, imageUrl, password } = req.body;
+
+    const dataToUpdate: any = { name, document, address, phone, role, email, isActive, imageUrl };
+
+    // Si envían una contraseña nueva, la encriptamos y la agregamos a la actualización
+    if (password && password.trim() !== "") {
+      const salt = await bcrypt.genSalt(10);
+      dataToUpdate.password = await bcrypt.hash(password, salt);
+    }
 
     const updatedUser = await prisma.user.update({
       where: { id: Number(id) },
-      data: { name, document, address, phone, role, email, isActive, imageUrl },
+      data: dataToUpdate,
       select: { 
         id: true, 
         name: true, 
