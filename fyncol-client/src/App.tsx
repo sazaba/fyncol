@@ -7,6 +7,7 @@ import MainLayout from "@/components/layouts/MainLayout";
 import Dashboard from "./pages/dashboard/Dashboard";
 import UsersPage from "./pages/admin/UsersPage";
 import Rutas from "./pages/admin/Rutas"; 
+import GestionCapital from "./pages/admin/GestionCapital";
 export default function App() {
   return (
     <BrowserRouter>
@@ -21,11 +22,8 @@ export default function App() {
           <Route element={<MainLayout />}>
              <Route path="/dashboard" element={<Dashboard />} />
              <Route path="/admin/usuarios" element={<UsersPage />} />
-             
-             {/* Nueva ruta activa */}
              <Route path="/admin/rutas" element={<Rutas />} />
-             
-             {/* Futuras rutas: /prestamos, etc. */}
+          <Route path="/admin/capital" element={<GestionCapital />} />
           </Route>
         </Route>
       </Routes>

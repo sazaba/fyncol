@@ -278,7 +278,7 @@ export default function Rutas() {
   return (
     <div className="max-w-6xl mx-auto px-4 md:px-8 pt-8 md:pt-10 pb-20 relative">
       <div className="mb-10">
-        <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight font-display">Gestión de Rutas</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight font-display">Rutas</h1>
         <p className="text-sm text-slate-400 mt-1 font-sans">Administra los territorios y asigna cobradores operativos.</p>
       </div>
 

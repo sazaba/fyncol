@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png"; 
-import { FiHome, FiSettings, FiUsers, FiLogOut, FiChevronDown, FiX, FiGlobe, FiMap } from "react-icons/fi";
+import { FiHome, FiSettings, FiUsers, FiLogOut, FiChevronDown, FiX, FiGlobe, FiMap, FiDollarSign } from "react-icons/fi";
 
 export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (val: boolean) => void }) {
   const location = useLocation();
@@ -80,6 +80,15 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
                   className={`flex items-center gap-2 w-full text-left rounded-lg px-3 py-2 text-sm ${isActive("/admin/rutas") ? "text-blue-400 bg-blue-500/10 font-medium" : "text-slate-500 hover:text-white hover:bg-white/5 transition-colors"}`}
                 >
                   <FiMap size={16} /> Rutas
+                </Link>
+
+                {/* NUEVA RUTA: GESTIÓN DE CAPITAL */}
+                <Link 
+                  to="/admin/capital" 
+                  onClick={() => setIsOpen(false)} 
+                  className={`flex items-center gap-2 w-full text-left rounded-lg px-3 py-2 text-sm ${isActive("/admin/capital") ? "text-blue-400 bg-blue-500/10 font-medium" : "text-slate-500 hover:text-white hover:bg-white/5 transition-colors"}`}
+                >
+                  <FiDollarSign size={16} /> Gestión Capital
                 </Link>
 
               </div>

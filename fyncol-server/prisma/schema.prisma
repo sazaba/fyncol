@@ -35,17 +35,38 @@ model Route {
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
-
-  // Relación con el Colaborador asignado
-  // Se añade @unique para bloquear a nivel de base de datos asignaciones múltiples
+  
   assignedToId Int?     @unique @map("assigned_to_id")
   assignedTo   User?    @relation(fields: [assignedToId], references: [id])
 
+  // NUEVOS CAMPOS:
+  availableCapital Decimal @default(0) @map("available_capital") // Dinero disponible
+  transactions     CapitalTransaction[] // Historial de movimientos
+
   @@map("routes")
+}
+
+// NUEVO MODELO: Historial de transacciones de capital
+model CapitalTransaction {
+  id          Int      @id @default(autoincrement())
+  routeId     Int      @map("route_id")
+  route       Route    @relation(fields: [routeId], references: [id])
+  type        TransactionType
+  amount      Decimal  // Monto de la inversión o el retiro
+  description String?  @db.VarChar(255) // Ej: "Inversión inicial" o "Retiro de utilidades"
+  createdAt   DateTime @default(now()) @map("created_at")
+  createdBy   Int      @map("created_by") // ID del ADMIN que hizo la operación
+
+  @@map("capital_transactions")
 }
 
 enum Role {
   ADMIN
   SUPERVISOR
   COBRADOR
+}
+
+enum TransactionType {
+  INVERSION
+  RETIRO
 }
