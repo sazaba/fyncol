@@ -17,7 +17,7 @@ import {
   FiUser,
   FiX,
   FiLock,
-  FiLoader // <-- Nuevo icono para el loading
+  FiLoader
 } from "react-icons/fi";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
@@ -36,8 +36,8 @@ type PremiumAlertState = {
 
 export default function UsersPage() {
   const [showModal, setShowModal] = useState(false);
-  const [loading, setLoading] = useState(false); // Para cuando se guarda el form
-  const [isFetching, setIsFetching] = useState(true); // <-- NUEVO: Para la carga inicial
+  const [loading, setLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(true);
   const [users, setUsers] = useState<any[]>([]);
   const [busyId, setBusyId] = useState<number | string | null>(null);
 
@@ -105,7 +105,7 @@ export default function UsersPage() {
 
   // === READ ===
   const fetchUsers = async () => {
-    setIsFetching(true); // Indicamos que empezamos a cargar
+    setIsFetching(true);
     try {
       const token = getTokenOrFail();
       if (!token) return;
@@ -138,11 +138,10 @@ export default function UsersPage() {
         onConfirm: () => closeAlert(),
       });
     } finally {
-      setIsFetching(false); // Terminamos de cargar, haya éxito o error
+      setIsFetching(false);
     }
   };
 
-  // ESTE ES EL USEEFFECT QUE CARGA AL INICIO
   useEffect(() => {
     fetchUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -236,7 +235,6 @@ export default function UsersPage() {
           const data = await res.json().catch(() => ({}));
 
           if (res.ok && data?.success) {
-            // 🔥 Actualización Optimista: Modificamos el estado local inmediatamente
             setUsers((prevUsers) =>
               prevUsers.map((u) =>
                 u.id === id ? { ...u, isActive: nextState } : u
@@ -300,7 +298,6 @@ export default function UsersPage() {
           const data = await res.json().catch(() => ({}));
 
           if (res.ok && data?.success) {
-            // 🔥 Actualización Optimista: Quitamos el usuario del estado local inmediatamente
             setUsers((prevUsers) => prevUsers.filter((u) => u.id !== id));
 
             openAlert({
@@ -368,12 +365,10 @@ export default function UsersPage() {
     setSelectedRole("COBRADOR");
   };
 
-  // ✅ IMPORTANTE: solo bloquea body cuando modal/alerta está abierto
   useEffect(() => {
     document.body.style.overflow = showModal || alertState.open ? "hidden" : "auto";
   }, [showModal, alertState.open]);
 
-  // ESC
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -387,12 +382,13 @@ export default function UsersPage() {
   }, [showModal, alertState.open]);
 
   return (
-    // ✅ CLAVE: en móvil NO ponemos height/overflow
-    <div className="max-w-6xl mx-auto px-4 md:px-8 pt-8 md:pt-10 font-inter md:h-[calc(100dvh-90px)] md:overflow-y-auto md:[&::-webkit-scrollbar]:hidden md:[-ms-overflow-style:none] md:[scrollbar-width:none]">
+    // Se removió "font-inter" de aquí
+    <div className="max-w-6xl mx-auto px-4 md:px-8 pt-8 md:pt-10 md:h-[calc(100dvh-90px)] md:overflow-y-auto md:[&::-webkit-scrollbar]:hidden md:[-ms-overflow-style:none] md:[scrollbar-width:none]">
       {/* HEADER */}
       <div className="flex justify-between items-center mb-6 md:mb-8">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white font-sora tracking-tight">
+          {/* Se removió "font-sora" de aquí */}
+          <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
             Gestión de Usuarios
           </h1>
           <p className="text-sm text-slate-400 mt-1">Administra los accesos y roles del equipo.</p>
@@ -407,7 +403,7 @@ export default function UsersPage() {
         </button>
       </div>
 
-      {/* ✅ MOBILE LIST (sin overflow interno) */}
+      {/* ✅ MOBILE LIST */}
       <div className="md:hidden space-y-3 pb-10">
         {isFetching ? (
           <div className="flex flex-col items-center justify-center p-10 text-slate-400">
@@ -646,7 +642,8 @@ export default function UsersPage() {
           <div className="relative w-full h-[100dvh] md:h-auto md:w-[min(920px,92vw)] md:max-h-[85dvh] bg-[#05050A] md:bg-[#05050A]/80 md:backdrop-blur-3xl md:border border-white/10 rounded-none md:rounded-[36px] flex flex-col overflow-hidden shadow-2xl animate-[slideUp_0.3s_ease-out]">
             <div className="flex justify-between items-start px-6 md:px-10 pt-8 md:pt-9 pb-4 shrink-0 border-b border-white/[0.05]">
               <div>
-                <h2 className="text-2xl font-bold text-white font-sora">
+                {/* Se removió "font-sora" de aquí */}
+                <h2 className="text-2xl font-bold text-white">
                   {editingId ? "Editar Usuario" : "Nuevo Usuario"}
                 </h2>
                 <p className="text-sm text-slate-400 mt-1 hidden md:block">
@@ -775,7 +772,8 @@ export default function UsersPage() {
               </div>
 
               <div className="flex-1">
-                <h3 className="text-white font-sora font-bold text-lg">{alertState.title}</h3>
+                {/* Se removió "font-sora" de aquí */}
+                <h3 className="text-white font-bold text-lg">{alertState.title}</h3>
                 <p className="text-slate-300 text-sm mt-1 leading-relaxed">{alertState.message}</p>
               </div>
 

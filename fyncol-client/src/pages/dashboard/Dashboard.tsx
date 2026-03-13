@@ -37,11 +37,12 @@ export default function Dashboard() {
   }, [navigate]);
 
   return (
-    // Se añadió pt-8 en móvil y pt-10 en desktop para separarlo del techo
-    <div className="max-w-7xl mx-auto space-y-8 p-4 pt-8 md:p-8 md:pt-10 font-inter">
+    // Se quitó la clase "font-inter" de aquí, ya lo hereda del body
+    <div className="max-w-7xl mx-auto space-y-8 p-4 pt-8 md:p-8 md:pt-10">
       
       <div>
-        <h1 className="text-2xl md:text-3xl font-bold text-white font-sora">Hola, {userName} 👋</h1>
+        {/* Se quitó "font-sora" del h1, ya lo hereda */}
+        <h1 className="text-2xl md:text-3xl font-bold text-white">Hola, {userName} 👋</h1>
         <p className="text-slate-400 mt-1">Aquí tienes el resumen de tu operación hoy.</p>
       </div>
 
@@ -55,7 +56,8 @@ export default function Dashboard() {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 rounded-2xl border border-white/5 bg-[#0B1020]/40 p-5 md:p-6 backdrop-blur-sm">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="font-semibold text-white font-sora">Comportamiento de Recaudos</h3>
+            {/* Se quitó "font-sora" del h3 */}
+            <h3 className="font-semibold text-white">Comportamiento de Recaudos</h3>
             <select className="bg-white/5 border border-white/10 rounded-lg text-xs text-slate-400 px-2 py-1 outline-none">
               <option>Últimos 6 meses</option>
             </select>
@@ -72,7 +74,8 @@ export default function Dashboard() {
         </div>
 
         <div className="rounded-2xl border border-white/5 bg-[#0B1020]/40 p-5 md:p-6 backdrop-blur-sm">
-          <h3 className="font-semibold text-white mb-4 font-sora">Actividad Reciente</h3>
+          {/* Se quitó "font-sora" del h3 */}
+          <h3 className="font-semibold text-white mb-4">Actividad Reciente</h3>
           <div className="space-y-4">
             <ActivityItem title="Pago Recibido" desc="Juan Pérez abonó $50.000" time="Hace 10 min" type="payment" />
             <ActivityItem title="Nuevo Cliente" desc="Registro de María Gómez" time="Hace 1h" type="user" />
@@ -93,7 +96,8 @@ function StatCard({ title, value, change, positive, negative, icon }: any) {
       <div className="flex justify-between items-start">
         <div>
            <p className="text-[10px] md:text-xs font-medium text-slate-400 uppercase tracking-wider">{title}</p>
-           <h3 className="mt-1.5 text-xl md:text-2xl font-bold text-white font-sora">{value}</h3>
+           {/* Se quitó "font-sora" del h3 */}
+           <h3 className="mt-1.5 text-xl md:text-2xl font-bold text-white">{value}</h3>
         </div>
         <span className="text-xl md:text-2xl text-slate-500 group-hover:text-white transition-colors">{icon}</span>
       </div>

@@ -52,9 +52,10 @@ export default function Login() {
   };
 
   return (
-    <div className="relative flex h-[100dvh] w-full items-center justify-center overflow-hidden bg-[#020408] px-4 selection:bg-blue-500/30 font-inter">
+    // Se quitó "font-inter" de aquí
+    <div className="relative flex h-[100dvh] w-full items-center justify-center overflow-hidden bg-[#020408] px-4 selection:bg-blue-500/30">
       
-      {/* Background Gradients: Se quitaron transform-gpu y will-change para evitar el glitch del cuadro negro en Safari */}
+      {/* Background Gradients */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute top-1/2 right-[-10%] h-[500px] w-[500px] -translate-y-1/2 rounded-full bg-blue-600/20 blur-[120px]" />
         <div className="absolute bottom-[-10%] left-[-10%] h-[500px] w-[500px] rounded-full bg-cyan-600/10 blur-[120px]" />
@@ -70,7 +71,8 @@ export default function Login() {
             alt="Fyncol" 
             className="mb-6 h-10 w-auto object-contain drop-shadow-[0_0_15px_rgba(59,130,246,0.5)] brightness-110" 
           />
-          <h1 className="text-2xl font-bold tracking-tight text-white font-sora">
+          {/* Se quitó "font-sora" de aquí */}
+          <h1 className="text-2xl font-bold tracking-tight text-white">
             Bienvenido de nuevo
           </h1>
           <p className="mt-2 text-sm text-slate-400">
@@ -109,7 +111,7 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Password Input (Se limpiaron las clases inválidas de autofill) */}
+          {/* Password Input */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-slate-500">
