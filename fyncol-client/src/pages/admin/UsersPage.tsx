@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   FiAlertTriangle,
-  FiCamera,
   FiCheck,
   FiChevronDown,
   FiCreditCard,
@@ -17,6 +16,7 @@ import {
   FiTrash2,
   FiUser,
   FiX,
+  FiLock,
 } from "react-icons/fi";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
@@ -48,6 +48,7 @@ export default function UsersPage() {
     email: "",
     address: "",
     phone: "",
+    password: "",
   });
 
   const roles = [
@@ -333,6 +334,7 @@ export default function UsersPage() {
       email: user.email || "",
       address: user.address || "",
       phone: user.phone || "",
+      password: "",
     });
     setSelectedRole(user.role || "COBRADOR");
     setShowModal(true);
@@ -340,7 +342,7 @@ export default function UsersPage() {
 
   const openCreateModal = () => {
     setEditingId(null);
-    setFormData({ name: "", document: "", email: "", address: "", phone: "" });
+    setFormData({ name: "", document: "", email: "", address: "", phone: "", password: "" });
     setSelectedRole("COBRADOR");
     setShowModal(true);
   };
@@ -348,7 +350,7 @@ export default function UsersPage() {
   const closeModal = () => {
     setShowModal(false);
     setEditingId(null);
-    setFormData({ name: "", document: "", email: "", address: "", phone: "" });
+    setFormData({ name: "", document: "", email: "", address: "", phone: "", password: "" });
     setSelectedRole("COBRADOR");
   };
 
@@ -630,83 +632,78 @@ export default function UsersPage() {
             </div>
 
             <div className="flex-1 px-6 md:px-10 py-8 md:py-9 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              {/* FORMULARIO SIMPLIFICADO SIN FOTO */}
               <form
                 id="userForm"
                 onSubmit={handleSaveUser}
-                className="space-y-6 md:space-y-0 md:grid md:grid-cols-12 md:gap-8"
+                className="space-y-6"
               >
-                <div className="md:col-span-4">
-                  <div className="flex md:flex-col items-center md:items-start gap-4 md:gap-6">
-                    <div className="h-28 w-28 rounded-full bg-[#0B1020]/80 border border-white/10 flex flex-col items-center justify-center text-slate-400 shadow-inner">
-                      <FiCamera size={28} className="mb-2" />
-                      <span className="text-[10px] font-bold uppercase opacity-80">Foto</span>
-                    </div>
-
-                    <div className="text-left">
-                      <p className="text-white font-semibold">Foto de perfil</p>
-                      <p className="text-slate-400 text-sm mt-1 leading-relaxed">
-                        (Opcional) Luego la conectamos a Cloudinary.
-                      </p>
-                    </div>
-                  </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <InputGroup
+                    label="Nombre Completo"
+                    placeholder="Juan Pérez"
+                    icon={FiUser}
+                    value={formData.name}
+                    onChange={(e: any) => setFormData({ ...formData, name: e.target.value })}
+                    required
+                  />
+                  <InputGroup
+                    label="Cédula (CC)"
+                    placeholder="123456"
+                    type="number"
+                    icon={FiCreditCard}
+                    value={formData.document}
+                    onChange={(e: any) => setFormData({ ...formData, document: e.target.value })}
+                    required
+                  />
                 </div>
 
-                <div className="md:col-span-8 space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <InputGroup
-                      label="Nombre Completo"
-                      placeholder="Juan Pérez"
-                      icon={FiUser}
-                      value={formData.name}
-                      onChange={(e: any) => setFormData({ ...formData, name: e.target.value })}
-                      required
-                    />
-                    <InputGroup
-                      label="Cédula (CC)"
-                      placeholder="123456"
-                      type="number"
-                      icon={FiCreditCard}
-                      value={formData.document}
-                      onChange={(e: any) => setFormData({ ...formData, document: e.target.value })}
-                      required
-                    />
-                  </div>
-
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <InputGroup
                     label="Correo Electrónico"
-                    placeholder="correo@empresa.com"
+                    placeholder="correo@ejemplo.com"
                     type="email"
                     icon={FiMail}
                     value={formData.email}
                     onChange={(e: any) => setFormData({ ...formData, email: e.target.value })}
                     required
                   />
-
+                  
                   <InputGroup
-                    label="Dirección"
-                    placeholder="Calle 123"
-                    icon={FiMapPin}
-                    value={formData.address}
-                    onChange={(e: any) => setFormData({ ...formData, address: e.target.value })}
+                    label={editingId ? "Nueva Contraseña (Opcional)" : "Contraseña"}
+                    placeholder="********"
+                    type="password"
+                    icon={FiLock}
+                    value={formData.password}
+                    onChange={(e: any) => setFormData({ ...formData, password: e.target.value })}
+                    required={!editingId}
                   />
+                </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <InputGroup
-                      label="Teléfono"
-                      placeholder="300..."
-                      type="tel"
-                      icon={FiPhone}
-                      value={formData.phone}
-                      onChange={(e: any) => setFormData({ ...formData, phone: e.target.value })}
-                    />
-                    <CustomSelect
-                      label="Rol de Acceso"
-                      icon={FiShield}
-                      options={roles}
-                      value={selectedRole}
-                      onChange={setSelectedRole}
-                    />
-                  </div>
+                <InputGroup
+                  label="Dirección"
+                  placeholder="Calle 123"
+                  icon={FiMapPin}
+                  value={formData.address}
+                  onChange={(e: any) => setFormData({ ...formData, address: e.target.value })}
+                />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <InputGroup
+                    label="Teléfono"
+                    placeholder="300..."
+                    type="tel"
+                    icon={FiPhone}
+                    value={formData.phone}
+                    onChange={(e: any) => setFormData({ ...formData, phone: e.target.value })}
+                  />
+                  <CustomSelect
+                    label="Rol de Acceso"
+                    icon={FiShield}
+                    options={roles}
+                    value={selectedRole}
+                    onChange={setSelectedRole}
+                  />
                 </div>
               </form>
             </div>
