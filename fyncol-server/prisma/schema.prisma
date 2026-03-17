@@ -21,32 +21,34 @@ model User {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   imageUrl  String?  @db.VarChar(255)
 
-  // Relación corregida (1:1): Un usuario solo puede tener MÁXIMO una ruta asignada a la vez.
+  // Relación (1:1): Un usuario solo puede tener MÁXIMO una ruta asignada a la vez.
   route     Route?
 
   @@map("users")
 }
 
 model Route {
-  id           Int      @id @default(autoincrement())
-  country      String   @db.VarChar(100)
-  city         String   @db.VarChar(100)
-  currency     String   @db.VarChar(10)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+  id               Int      @id @default(autoincrement())
+  country          String   @db.VarChar(100)
+  city             String   @db.VarChar(100)
+  currency         String   @db.VarChar(10)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
   
-  assignedToId Int?     @unique @map("assigned_to_id")
-  assignedTo   User?    @relation(fields: [assignedToId], references: [id])
+  assignedToId     Int?     @unique @map("assigned_to_id")
+  assignedTo       User?    @relation(fields: [assignedToId], references: [id])
 
-  // NUEVOS CAMPOS:
-  availableCapital Decimal @default(0) @map("available_capital") // Dinero disponible
+  // Campos de capital y movimientos
+  availableCapital Decimal  @default(0) @map("available_capital") // Dinero disponible
   transactions     CapitalTransaction[] // Historial de movimientos
+
+  // Relación con los clientes de esta ruta
+  clients          Client[]
 
   @@map("routes")
 }
 
-// NUEVO MODELO: Historial de transacciones de capital
 model CapitalTransaction {
   id          Int      @id @default(autoincrement())
   routeId     Int      @map("route_id")
@@ -58,6 +60,41 @@ model CapitalTransaction {
   createdBy   Int      @map("created_by") // ID del ADMIN que hizo la operación
 
   @@map("capital_transactions")
+}
+
+model Client {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(255)
+  address     String   @db.VarChar(255)
+  latitude    Float?   // Para guardar la latitud del GPS
+  longitude   Float?   // Para guardar la longitud del GPS
+  documentUrl String?  @db.VarChar(255) // URL de la foto de la cédula
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  // Relación con la ruta (Un cliente pertenece a una ruta)
+  routeId     Int      @map("route_id")
+  route       Route    @relation(fields: [routeId], references: [id])
+
+  // Relación con sus préstamos
+  loans       Loan[]
+
+  @@map("clients")
+}
+
+model Loan {
+  id             Int      @id @default(autoincrement())
+  amount         Decimal  // Monto prestado
+  installments   Int      // Cantidad de cuotas
+  interestRate   Decimal  // Porcentaje de interés (ej. 20 para 20%)
+  projectedTotal Decimal  // Métrica proyectada: Lo que se va a recoger al final
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relación con el cliente
+  clientId       Int      @map("client_id")
+  client         Client   @relation(fields: [clientId], references: [id])
+
+  @@map("loans")
 }
 
 enum Role {

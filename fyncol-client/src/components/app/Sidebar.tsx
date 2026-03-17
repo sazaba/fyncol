@@ -2,20 +2,24 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png"; 
-import { FiHome, FiSettings, FiUsers, FiLogOut, FiChevronDown, FiX, FiGlobe, FiMap, FiDollarSign } from "react-icons/fi";
+import { 
+  FiHome, FiSettings, FiUsers, FiLogOut, FiChevronDown, FiX, 
+  FiGlobe, FiMap, FiDollarSign, FiBriefcase, FiUserPlus 
+} from "react-icons/fi";
 
 export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (val: boolean) => void }) {
   const location = useLocation();
   const navigate = useNavigate();
-  // Puedes inicializar esto en true o false según prefieras
+  
+  // Estados para los menús desplegables
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isCarteraOpen, setIsCarteraOpen] = useState(false);
 
   const isActive = (path: string) => location.pathname === path;
 
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    // Cambiado: Ahora redirige al inicio (Landing Page) al cerrar sesión
     navigate("/");
   };
 
@@ -38,7 +42,6 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
             <img src={logo} alt="Logo" className="h-8 w-auto object-contain" />
           </Link>
           
-          {/* Botón de cerrar solo visible en móvil */}
           <button onClick={() => setIsOpen(false)} className="md:hidden text-slate-400 hover:text-white p-2 transition-colors">
             <FiX size={24} />
           </button>
@@ -46,10 +49,39 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
 
         {/* Navegación */}
         <nav className="flex-1 space-y-1 p-4 overflow-y-auto custom-scrollbar">
+          
+          {/* SECCIÓN: OPERACIÓN */}
           <p className="px-4 text-[10px] font-bold tracking-widest text-slate-500 mb-2 mt-2 uppercase">Operación</p>
           
           <NavItem label="Dashboard" path="/dashboard" icon={<FiHome size={20} />} active={isActive("/dashboard")} onClick={() => setIsOpen(false)} />
           
+          {/* NUEVO MENÚ DESPLEGABLE: CARTERA */}
+          <div className="pt-2">
+            <button
+              onClick={() => setIsCarteraOpen(!isCarteraOpen)}
+              className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-slate-400 hover:bg-white/5 hover:text-white transition-all focus:outline-none"
+            >
+              <div className="flex items-center gap-3">
+                <FiBriefcase size={20} className={isCarteraOpen ? "text-white" : ""} />
+                <span className={`text-sm font-medium ${isCarteraOpen ? "text-white" : ""}`}>Cartera</span>
+              </div>
+              <FiChevronDown className={`transition-transform duration-300 ${isCarteraOpen ? "rotate-180 text-white" : ""}`} />
+            </button>
+
+            <div className={`overflow-hidden transition-all duration-300 ${isCarteraOpen ? "max-h-40 opacity-100" : "max-h-0 opacity-0"}`}>
+              <div className="mt-1 ml-4 border-l border-white/10 pl-2 space-y-1">
+                <Link 
+                  to="/cartera/nuevo-credito" 
+                  onClick={() => setIsOpen(false)} 
+                  className={`flex items-center gap-2 w-full text-left rounded-lg px-3 py-2 text-sm ${isActive("/cartera/nuevo-credito") ? "text-blue-400 bg-blue-500/10 font-medium" : "text-slate-500 hover:text-white hover:bg-white/5 transition-colors"}`}
+                >
+                  <FiUserPlus size={16} /> Nuevo Crédito
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* SECCIÓN: EMPRESA */}
           <div className="pt-4">
             <p className="px-4 text-[10px] font-bold tracking-widest text-slate-500 mb-2 uppercase">Empresa</p>
             <button
@@ -72,8 +104,6 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
                 >
                   <FiUsers size={16} /> Usuarios
                 </Link>
-                
-                {/* NUEVA RUTA: RUTAS */}
                 <Link 
                   to="/admin/rutas" 
                   onClick={() => setIsOpen(false)} 
@@ -81,8 +111,6 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
                 >
                   <FiMap size={16} /> Rutas
                 </Link>
-
-                {/* NUEVA RUTA: GESTIÓN DE CAPITAL */}
                 <Link 
                   to="/admin/capital" 
                   onClick={() => setIsOpen(false)} 
@@ -90,7 +118,6 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
                 >
                   <FiDollarSign size={16} /> Gestión Capital
                 </Link>
-
               </div>
             </div>
           </div>
@@ -98,8 +125,6 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
 
         {/* Footer Sidebar */}
         <div className="p-4 border-t border-white/5 space-y-2">
-          
-          {/* Nuevo botón: Volver al Inicio */}
           <Link 
             to="/" 
             className="flex w-full items-center rounded-xl px-3 py-2.5 text-slate-400 hover:bg-white/5 hover:text-white transition-all group"
@@ -108,7 +133,6 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
             <span className="ml-3 text-sm font-medium">Sitio Web</span>
           </Link>
 
-          {/* Botón Cerrar Sesión (Ahora redirige a / ) */}
           <button 
             onClick={handleLogout}
             className="flex w-full items-center rounded-xl px-3 py-2.5 text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all group focus:outline-none"
