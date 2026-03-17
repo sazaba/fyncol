@@ -24,16 +24,20 @@ export default function NuevoCredito() {
   const [location, setLocation] = useState<LocationData>({ latitude: null, longitude: null });
   const [file, setFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const [rutasDisponibles, setRutasDisponibles] = useState<any[]>([]);
   const [isLoadingRutas, setIsLoadingRutas] = useState(true);
+  const [errorFetchRutas, setErrorFetchRutas] = useState<string | null>(null); // NUEVO ESTADO PARA ERRORES
 
-  // Cargar rutas disponibles al montar el componente (con Token)
+  // Cargar rutas disponibles al montar el componente
   useEffect(() => {
     const fetchRutas = async () => {
       try {
         const token = localStorage.getItem("token");
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
         
+        console.log("Buscando rutas en:", apiUrl); // Esto te ayudará a ver en la consola si está usando la URL correcta
+
         const res = await fetch(`${apiUrl}/rutas`, {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -42,7 +46,6 @@ export default function NuevoCredito() {
 
         if (res.ok) {
           const data = await res.json();
-          // Validar la estructura de la respuesta
           const rutas = Array.isArray(data) ? data : data.data || []; 
           setRutasDisponibles(rutas);
           
@@ -50,9 +53,13 @@ export default function NuevoCredito() {
             setFormData(prev => ({ ...prev, routeId: rutas[0].id.toString() }));
           }
         } else {
+          // Si el backend responde con error (ej. 401 No autorizado)
+          setErrorFetchRutas(`Error del servidor: código ${res.status}`);
           console.error("Error al obtener rutas, status:", res.status);
         }
       } catch (error) {
+        // Si la petición no llega al servidor (ej. localhost en producción)
+        setErrorFetchRutas("Error de conexión. Verifica VITE_API_URL");
         console.error("Error en la petición de rutas:", error);
       } finally {
         setIsLoadingRutas(false);
@@ -106,7 +113,7 @@ export default function NuevoCredito() {
     return json.secure_url;
   };
 
-  // Envío del formulario (con Token)
+  // Envío del formulario
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -186,7 +193,7 @@ export default function NuevoCredito() {
 
           <div className="space-y-4">
             
-            {/* Selector de Ruta con validación de estados */}
+            {/* Selector de Ruta con manejo de Errores Visuales */}
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Asignar a Ruta</label>
               <select 
@@ -194,11 +201,13 @@ export default function NuevoCredito() {
                 name="routeId" 
                 value={formData.routeId}
                 onChange={handleChange}
-                disabled={isLoadingRutas || rutasDisponibles.length === 0}
-                className="w-full bg-[#05050A] border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isLoadingRutas || rutasDisponibles.length === 0 || errorFetchRutas !== null}
+                className={`w-full bg-[#05050A] border rounded-xl px-4 py-2.5 text-white focus:outline-none transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${errorFetchRutas ? 'border-red-500/50 text-red-400' : 'border-white/10 focus:border-blue-500'}`}
               >
                 {isLoadingRutas ? (
                   <option value="">Cargando rutas disponibles...</option>
+                ) : errorFetchRutas ? (
+                  <option value="">⚠️ {errorFetchRutas}</option>
                 ) : rutasDisponibles.length === 0 ? (
                   <option value="">No hay rutas creadas en el sistema</option>
                 ) : (
@@ -280,7 +289,7 @@ export default function NuevoCredito() {
           </div>
 
           <div className="pt-6 mt-6 border-t border-white/5">
-            <button type="submit" disabled={isSubmitting || rutasDisponibles.length === 0} className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl py-3.5 px-4 font-semibold transition-colors shadow-lg shadow-blue-500/20">
+            <button type="submit" disabled={isSubmitting || rutasDisponibles.length === 0 || errorFetchRutas !== null} className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl py-3.5 px-4 font-semibold transition-colors shadow-lg shadow-blue-500/20">
               <FiSave size={18} />
               {isSubmitting ? "Registrando Operación..." : "Guardar Cliente y Crédito"}
             </button>
