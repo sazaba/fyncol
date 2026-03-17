@@ -25,25 +25,37 @@ export default function NuevoCredito() {
   const [file, setFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rutasDisponibles, setRutasDisponibles] = useState<any[]>([]);
+  const [isLoadingRutas, setIsLoadingRutas] = useState(true);
 
-  // Cargar rutas disponibles al montar el componente
+  // Cargar rutas disponibles al montar el componente (con Token)
   useEffect(() => {
     const fetchRutas = async () => {
       try {
+        const token = localStorage.getItem("token");
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-        const res = await fetch(`${apiUrl}/rutas`);
+        
+        const res = await fetch(`${apiUrl}/rutas`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
         if (res.ok) {
           const data = await res.json();
-          // Ajusta "data" o "data.data" según la estructura de respuesta de tu backend
-          const rutas = data.data || data; 
+          // Validar la estructura de la respuesta
+          const rutas = Array.isArray(data) ? data : data.data || []; 
           setRutasDisponibles(rutas);
           
           if (rutas.length > 0) {
             setFormData(prev => ({ ...prev, routeId: rutas[0].id.toString() }));
           }
+        } else {
+          console.error("Error al obtener rutas, status:", res.status);
         }
       } catch (error) {
-        console.error("Error al cargar rutas:", error);
+        console.error("Error en la petición de rutas:", error);
+      } finally {
+        setIsLoadingRutas(false);
       }
     };
     fetchRutas();
@@ -81,7 +93,6 @@ export default function NuevoCredito() {
   const uploadToCloudinary = async (imageFile: File): Promise<string> => {
     const data = new FormData();
     data.append("file", imageFile);
-    
     data.append("upload_preset", "fyncol_cedulas"); 
     
     const response = await fetch(`https://api.cloudinary.com/v1_1/dr2fkqgfz/image/upload`, {
@@ -95,14 +106,14 @@ export default function NuevoCredito() {
     return json.secure_url;
   };
 
-  // Envío del formulario
+  // Envío del formulario (con Token)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
       if (!formData.routeId) {
-        throw new Error("Por favor, selecciona una ruta.");
+        throw new Error("Por favor, selecciona una ruta válida.");
       }
 
       let documentUrl = null;
@@ -117,23 +128,31 @@ export default function NuevoCredito() {
         documentUrl
       };
 
+      const token = localStorage.getItem("token");
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
       
       const response = await fetch(`${apiUrl}/clients/create`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Error al registrar");
+        throw new Error(errorData.error || "Error al registrar la operación");
       }
 
       alert("Cliente y préstamo registrados correctamente");
       
-      // Limpiar el formulario después de un registro exitoso
-      setFormData({ name: '', address: '', routeId: rutasDisponibles[0]?.id.toString() || '', amount: '', installments: '', interestRate: '' });
+      // Limpiar el formulario
+      setFormData({ 
+        name: '', address: '', 
+        routeId: rutasDisponibles.length > 0 ? rutasDisponibles[0].id.toString() : '', 
+        amount: '', installments: '', interestRate: '' 
+      });
       setLocation({ latitude: null, longitude: null });
       setFile(null);
       
@@ -167,7 +186,7 @@ export default function NuevoCredito() {
 
           <div className="space-y-4">
             
-            {/* NUEVO: Selector de Ruta */}
+            {/* Selector de Ruta con validación de estados */}
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Asignar a Ruta</label>
               <select 
@@ -175,25 +194,31 @@ export default function NuevoCredito() {
                 name="routeId" 
                 value={formData.routeId}
                 onChange={handleChange}
-                className="w-full bg-[#05050A] border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-all cursor-pointer"
+                disabled={isLoadingRutas || rutasDisponibles.length === 0}
+                className="w-full bg-[#05050A] border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {rutasDisponibles.length === 0 && <option value="">Cargando rutas...</option>}
-                {rutasDisponibles.map(ruta => (
-                  <option key={ruta.id} value={ruta.id}>
-                    {ruta.city} - {ruta.country} (Capital: ${Number(ruta.availableCapital).toLocaleString('es-CO')})
-                  </option>
-                ))}
+                {isLoadingRutas ? (
+                  <option value="">Cargando rutas disponibles...</option>
+                ) : rutasDisponibles.length === 0 ? (
+                  <option value="">No hay rutas creadas en el sistema</option>
+                ) : (
+                  rutasDisponibles.map(ruta => (
+                    <option key={ruta.id} value={ruta.id}>
+                      {ruta.city} - {ruta.country} (Capital: ${Number(ruta.availableCapital || 0).toLocaleString('es-CO')})
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Nombre Completo</label>
-              <input required name="name" value={formData.name} onChange={handleChange} className="w-full bg-transparent border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" placeholder="Ej: Juan Pérez" />
+              <input required name="name" value={formData.name} onChange={handleChange} className="w-full bg-transparent border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" placeholder="Ej: Cliente de Prueba" />
             </div>
 
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Dirección</label>
-              <input required name="address" value={formData.address} onChange={handleChange} className="w-full bg-transparent border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" placeholder="Ej: Calle 10 #20-30" />
+              <input required name="address" value={formData.address} onChange={handleChange} className="w-full bg-transparent border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" placeholder="Ej: Calle Principal 123" />
             </div>
 
             <div className="pt-2">
@@ -255,7 +280,7 @@ export default function NuevoCredito() {
           </div>
 
           <div className="pt-6 mt-6 border-t border-white/5">
-            <button type="submit" disabled={isSubmitting} className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl py-3.5 px-4 font-semibold transition-colors shadow-lg shadow-blue-500/20">
+            <button type="submit" disabled={isSubmitting || rutasDisponibles.length === 0} className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl py-3.5 px-4 font-semibold transition-colors shadow-lg shadow-blue-500/20">
               <FiSave size={18} />
               {isSubmitting ? "Registrando Operación..." : "Guardar Cliente y Crédito"}
             </button>
