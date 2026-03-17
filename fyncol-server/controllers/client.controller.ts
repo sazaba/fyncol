@@ -13,22 +13,37 @@ export const createClientAndLoan = async (req: any, res: any) => {
       routeId,
       amount,
       installments,
-      interestRate
+      interestRate,
+      periodicity // NUEVO: Recibimos la periodicidad
     } = req.body;
 
-    // 1. Validaciones básicas
-    if (!name || !address || !routeId || !amount || !installments || !interestRate) {
+    if (!name || !address || !routeId || !amount || !installments || !interestRate || !periodicity) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
 
-    // 2. Calcular la métrica proyectada (Ej: 1000 + 20% = 1200)
+    // --- LÓGICA MATEMÁTICA DEL PRÉSTAMO ---
     const amountNum = parseFloat(amount);
     const interestNum = parseFloat(interestRate);
-    const projectedTotal = amountNum + (amountNum * (interestNum / 100));
+    const installmentsNum = parseInt(installments);
 
-    // 3. Transacción de Prisma: Todo se ejecuta o nada se guarda
+    // 1. Definir cuántos días representa cada cuota
+    let daysPerInstallment = 1; // DIARIO por defecto
+    if (periodicity === 'QUINCENAL') daysPerInstallment = 15;
+    if (periodicity === 'MENSUAL') daysPerInstallment = 30;
+
+    // 2. Calcular el interés exacto por día (Interés mensual / 30 * Monto)
+    const interestPerDay = (interestNum / 100 / 30) * amountNum;
+    
+    // 3. Calcular los días totales que durará el préstamo
+    const totalDays = installmentsNum * daysPerInstallment;
+    
+    // 4. Calcular el Total Proyectado a Recoger
+    const totalInterest = interestPerDay * totalDays;
+    const projectedTotal = amountNum + totalInterest;
+
+
+    // --- TRANSACCIÓN PRISMA ---
     const result = await prisma.$transaction(async (tx) => {
-      // Verificar el capital de la ruta
       const route = await tx.route.findUnique({ where: { id: parseInt(routeId) } });
       
       if (!route) {
@@ -38,7 +53,6 @@ export const createClientAndLoan = async (req: any, res: any) => {
         throw new Error("Capital insuficiente en esta ruta para realizar el préstamo");
       }
 
-      // Crear Cliente y su Préstamo anidado
       const newClient = await tx.client.create({
         data: {
           name,
@@ -50,16 +64,16 @@ export const createClientAndLoan = async (req: any, res: any) => {
           loans: {
             create: {
               amount: amountNum,
-              installments: parseInt(installments),
+              installments: installmentsNum,
               interestRate: interestNum,
+              periodicity: periodicity, // Guardamos la periodicidad
               projectedTotal: projectedTotal,
             }
           }
         },
-        include: { loans: true } // Devuelve los datos del préstamo creado
+        include: { loans: true } 
       });
 
-      // Descontar el capital prestado del disponible en la ruta
       await tx.route.update({
         where: { id: parseInt(routeId) },
         data: { availableCapital: { decrement: amountNum } }

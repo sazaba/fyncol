@@ -8,6 +8,7 @@ interface ClientFormData {
   amount: string;
   installments: string;
   interestRate: string;
+  periodicity: string; // NUEVO CAMPO
 }
 
 interface LocationData {
@@ -18,19 +19,17 @@ interface LocationData {
 export default function NuevoCredito() {
   const [formData, setFormData] = useState<ClientFormData>({
     name: '', address: '', routeId: '',
-    amount: '', installments: '', interestRate: ''
+    amount: '', installments: '', interestRate: '', periodicity: 'DIARIO' // DIARIO por defecto
   });
   
   const [location, setLocation] = useState<LocationData>({ latitude: null, longitude: null });
   const [file, setFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Estados para manejar la ruta única asignada
   const [rutaAsignada, setRutaAsignada] = useState<any | null>(null);
   const [isLoadingRuta, setIsLoadingRuta] = useState(true);
   const [errorFetchRuta, setErrorFetchRuta] = useState<string | null>(null);
 
-  // Buscar la ruta asignada al cobrador actual al montar el componente
   useEffect(() => {
     const fetchMiRuta = async () => {
       try {
@@ -57,7 +56,6 @@ export default function NuevoCredito() {
           const data = await res.json();
           const rutas = Array.isArray(data) ? data : data.data || []; 
           
-          // Buscar exactamente la ruta donde el "assignedToId" coincide con el ID del cobrador logueado
           const miRutaEncontrada = rutas.find((r: any) => r.assignedTo?.id === currentUser.id);
           
           if (miRutaEncontrada) {
@@ -80,14 +78,30 @@ export default function NuevoCredito() {
     fetchMiRuta();
   }, []);
 
-  // Cálculo de la métrica proyectada en tiempo real
+  // LÓGICA DE CÁLCULO MATEMÁTICO EN TIEMPO REAL
   const projectedTotal = useMemo(() => {
     const amountNum = parseFloat(formData.amount) || 0;
     const interestNum = parseFloat(formData.interestRate) || 0;
-    return amountNum + (amountNum * (interestNum / 100));
-  }, [formData.amount, formData.interestRate]);
+    const installmentsNum = parseInt(formData.installments) || 0;
 
-  // Captura de ubicación GPS
+    // Determinamos los días por cuota según la periodicidad
+    let daysPerInstallment = 1; // DIARIO
+    if (formData.periodicity === 'QUINCENAL') daysPerInstallment = 15;
+    if (formData.periodicity === 'MENSUAL') daysPerInstallment = 30;
+
+    // (Interés mensual / 30) * Monto a prestar = Interés cobrado por día
+    const interestPerDay = (interestNum / 100 / 30) * amountNum;
+    
+    // Días totales del préstamo
+    const totalDays = installmentsNum * daysPerInstallment;
+    
+    // Interés total generado
+    const totalInterest = interestPerDay * totalDays;
+
+    // Total proyectado a recoger (Capital + Interés)
+    return amountNum + totalInterest;
+  }, [formData.amount, formData.interestRate, formData.installments, formData.periodicity]);
+
   const handleGetLocation = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -108,7 +122,6 @@ export default function NuevoCredito() {
     }
   };
 
-  // Subida a Cloudinary
   const uploadToCloudinary = async (imageFile: File): Promise<string> => {
     const data = new FormData();
     data.append("file", imageFile);
@@ -125,7 +138,6 @@ export default function NuevoCredito() {
     return json.secure_url;
   };
 
-  // Envío del formulario
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -169,7 +181,7 @@ export default function NuevoCredito() {
       setFormData({ 
         name: '', address: '', 
         routeId: rutaAsignada?.id.toString() || '', 
-        amount: '', installments: '', interestRate: '' 
+        amount: '', installments: '', interestRate: '', periodicity: 'DIARIO'
       });
       setLocation({ latitude: null, longitude: null });
       setFile(null);
@@ -182,21 +194,19 @@ export default function NuevoCredito() {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   return (
     <div className="p-6 md:p-8 space-y-6 font-inter">
       
-      {/* HEADER: Título y Pestañas de Estadísticas */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6 mb-8">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Nuevo Crédito</h1>
           <p className="text-sm text-slate-400 mt-1">Registra un nuevo cliente y asígnale su crédito inicial.</p>
         </div>
 
-        {/* Pestañas de Información de Ruta */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full xl:w-auto">
           {isLoadingRuta ? (
             <div className="col-span-3 text-slate-500 text-sm p-4 bg-[#0B0B12] rounded-xl border border-white/5">Cargando métricas de tu ruta...</div>
@@ -204,7 +214,6 @@ export default function NuevoCredito() {
             <div className="col-span-3 text-red-400 text-sm p-4 bg-red-500/10 rounded-xl border border-red-500/30">⚠️ {errorFetchRuta}</div>
           ) : rutaAsignada && (
             <>
-              {/* Pestaña 1: Ruta Operativa Asignada */}
               <div className="bg-[#0B0B12] border border-white/5 rounded-xl p-4 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-slate-400 mb-1">
                   <FiMap size={14} />
@@ -215,7 +224,6 @@ export default function NuevoCredito() {
                 </p>
               </div>
 
-              {/* Pestaña 2: Capital Disponible */}
               <div className="bg-[#0B0B12] border border-white/5 rounded-xl p-4 flex flex-col justify-center border-b-2 border-b-green-500/50">
                 <div className="flex items-center gap-2 text-slate-400 mb-1">
                   <FiDollarSign size={14} className="text-green-400" />
@@ -226,7 +234,6 @@ export default function NuevoCredito() {
                 </p>
               </div>
 
-              {/* Pestaña 3: Total Cartera */}
               <div className="bg-[#0B0B12] border border-white/5 rounded-xl p-4 flex flex-col justify-center border-b-2 border-b-blue-500/50">
                 <div className="flex items-center gap-2 text-slate-400 mb-1">
                   <FiBriefcase size={14} className="text-blue-400" />
@@ -291,6 +298,7 @@ export default function NuevoCredito() {
           </div>
 
           <div className="space-y-4 flex-1">
+            
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Monto a Prestar</label>
               <div className="relative">
@@ -299,23 +307,42 @@ export default function NuevoCredito() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            {/* NUEVA ESTRUCTURA: 3 Columnas para Cuotas, Interés y Periodicidad */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Cuotas</label>
                 <input required type="number" name="installments" value={formData.installments} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-transparent border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Ej: 30" />
               </div>
+              
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Interés (%)</label>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Interés Mensual</label>
                 <div className="relative">
                   <input required type="number" name="interestRate" value={formData.interestRate} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-transparent border border-white/10 rounded-xl pl-4 pr-8 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Ej: 20" />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500">%</span>
                 </div>
               </div>
+
+              {/* NUEVO CAMPO: Selector de Periodicidad */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Periodicidad</label>
+                <select 
+                  required 
+                  name="periodicity" 
+                  value={formData.periodicity} 
+                  onChange={handleChange} 
+                  disabled={!rutaAsignada} 
+                  className="w-full bg-[#05050A] border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="DIARIO">Diario</option>
+                  <option value="QUINCENAL">Quincenal</option>
+                  <option value="MENSUAL">Mensual</option>
+                </select>
+              </div>
             </div>
             
             <div className="mt-8 bg-gradient-to-br from-blue-900/20 to-transparent border border-blue-500/20 rounded-xl p-5">
               <p className="text-sm text-blue-400 font-medium mb-1">Total Proyectado a Recoger</p>
-              <p className="text-3xl font-bold text-white">${projectedTotal.toLocaleString('es-CO')}</p>
+              <p className="text-3xl font-bold text-white">${projectedTotal.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</p>
             </div>
           </div>
 

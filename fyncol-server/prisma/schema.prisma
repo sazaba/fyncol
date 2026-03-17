@@ -85,12 +85,15 @@ model Loan {
   id             Int      @id @default(autoincrement())
   amount         Decimal  // Monto prestado
   installments   Int      // Cantidad de cuotas
-  interestRate   Decimal  // Porcentaje de interés (ej. 20 para 20%)
-  projectedTotal Decimal  // Métrica proyectada: Lo que se va a recoger al final
+  interestRate   Decimal  // Porcentaje de interés mensual
+  
+  // NUEVO CAMPO:
+  periodicity    String   @default("DIARIO") @db.VarChar(20) 
+  
+  projectedTotal Decimal  // Métrica proyectada
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now()) @map("created_at")
 
-  // Relación con el cliente
   clientId       Int      @map("client_id")
   client         Client   @relation(fields: [clientId], references: [id])
 
