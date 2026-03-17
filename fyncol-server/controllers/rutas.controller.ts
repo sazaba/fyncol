@@ -56,10 +56,36 @@ export const obtenerRutas = async (req: Request, res: Response) => {
       include: {
         assignedTo: {
           select: { id: true, name: true, role: true }
+        },
+        clients: {
+          include: {
+            loans: true
+          }
         }
       }
     });
-    res.json(rutas);
+
+    const rutasConCartera = rutas.map(ruta => {
+      let totalCartera = 0;
+      
+      ruta.clients.forEach(client => {
+        client.loans.forEach(loan => {
+          if(loan.isActive) {
+            totalCartera += Number(loan.amount);
+          }
+        });
+      });
+
+      // Extraemos clients para no saturar la respuesta web
+      const { clients, ...rutaData } = ruta;
+      
+      return {
+        ...rutaData,
+        totalCartera
+      };
+    });
+
+    res.json(rutasConCartera);
   } catch (error) {
     res.status(500).json({ error: 'Error interno al obtener las rutas' });
   }

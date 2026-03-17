@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { FiMapPin, FiUploadCloud, FiSave, FiUser, FiDollarSign } from 'react-icons/fi';
+import { FiMapPin, FiUploadCloud, FiSave, FiUser, FiDollarSign, FiMap, FiBriefcase } from 'react-icons/fi';
 
 interface ClientFormData {
   name: string;
@@ -188,9 +188,57 @@ export default function NuevoCredito() {
 
   return (
     <div className="p-6 md:p-8 space-y-6 font-inter">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Nuevo Crédito</h1>
-        <p className="text-sm text-slate-400 mt-1">Registra un nuevo cliente y asígnale su crédito inicial.</p>
+      
+      {/* HEADER: Título y Pestañas de Estadísticas */}
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6 mb-8">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Nuevo Crédito</h1>
+          <p className="text-sm text-slate-400 mt-1">Registra un nuevo cliente y asígnale su crédito inicial.</p>
+        </div>
+
+        {/* Pestañas de Información de Ruta */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full xl:w-auto">
+          {isLoadingRuta ? (
+            <div className="col-span-3 text-slate-500 text-sm p-4 bg-[#0B0B12] rounded-xl border border-white/5">Cargando métricas de tu ruta...</div>
+          ) : errorFetchRuta ? (
+            <div className="col-span-3 text-red-400 text-sm p-4 bg-red-500/10 rounded-xl border border-red-500/30">⚠️ {errorFetchRuta}</div>
+          ) : rutaAsignada && (
+            <>
+              {/* Pestaña 1: Ruta Operativa Asignada */}
+              <div className="bg-[#0B0B12] border border-white/5 rounded-xl p-4 flex flex-col justify-center">
+                <div className="flex items-center gap-2 text-slate-400 mb-1">
+                  <FiMap size={14} />
+                  <span className="text-[10px] font-bold tracking-widest uppercase">Ruta Operativa Asignada</span>
+                </div>
+                <p className="text-sm font-semibold text-white">
+                  {rutaAsignada.city}, {rutaAsignada.country} (ID: {rutaAsignada.id})
+                </p>
+              </div>
+
+              {/* Pestaña 2: Capital Disponible */}
+              <div className="bg-[#0B0B12] border border-white/5 rounded-xl p-4 flex flex-col justify-center border-b-2 border-b-green-500/50">
+                <div className="flex items-center gap-2 text-slate-400 mb-1">
+                  <FiDollarSign size={14} className="text-green-400" />
+                  <span className="text-[10px] font-bold tracking-widest uppercase text-green-400/80">Capital Disponible</span>
+                </div>
+                <p className="text-lg font-bold text-white">
+                  ${Number(rutaAsignada.availableCapital || 0).toLocaleString('es-CO')}
+                </p>
+              </div>
+
+              {/* Pestaña 3: Total Cartera */}
+              <div className="bg-[#0B0B12] border border-white/5 rounded-xl p-4 flex flex-col justify-center border-b-2 border-b-blue-500/50">
+                <div className="flex items-center gap-2 text-slate-400 mb-1">
+                  <FiBriefcase size={14} className="text-blue-400" />
+                  <span className="text-[10px] font-bold tracking-widest uppercase text-blue-400/80">Total Cartera</span>
+                </div>
+                <p className="text-lg font-bold text-white">
+                  ${Number(rutaAsignada.totalCartera || 0).toLocaleString('es-CO')}
+                </p>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -203,23 +251,6 @@ export default function NuevoCredito() {
           </div>
 
           <div className="space-y-4">
-            
-            {/* Campo de Ruta Asignada (Solo lectura) */}
-            <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Ruta Operativa Asignada</label>
-              <div className={`w-full border rounded-xl px-4 py-3 transition-all ${errorFetchRuta ? 'bg-red-500/10 border-red-500/30' : 'bg-transparent border-white/10'}`}>
-                {isLoadingRuta ? (
-                  <span className="text-slate-500">Buscando tu ruta asignada...</span>
-                ) : errorFetchRuta ? (
-                  <span className="text-red-400 font-medium">⚠️ {errorFetchRuta}</span>
-                ) : rutaAsignada ? (
-                  <span className="text-blue-400 font-semibold">
-                    {rutaAsignada.city} - {rutaAsignada.country} (Capital Disp: ${Number(rutaAsignada.availableCapital || 0).toLocaleString('es-CO')})
-                  </span>
-                ) : null}
-              </div>
-            </div>
-
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Nombre Completo</label>
               <input required name="name" value={formData.name} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-transparent border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Ej: Cliente de Prueba" />

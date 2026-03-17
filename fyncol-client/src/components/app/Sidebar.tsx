@@ -37,8 +37,9 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
     navigate("/");
   };
 
-  // Condición: Solo renderizar cartera si es COBRADOR
+  // Condiciones de renderizado según el rol
   const showCartera = userRole === 'COBRADOR';
+  const showAdministracion = userRole === 'ADMIN' || userRole === 'SUPERVISOR';
 
   return (
     <>
@@ -72,48 +73,50 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
           
           <NavItem label="Dashboard" path="/dashboard" icon={<FiHome size={20} />} active={isActive("/dashboard")} onClick={() => setIsOpen(false)} />
           
-          {/* SECCIÓN: EMPRESA (Movida arriba) */}
-          <div className="pt-2">
-            <p className="px-4 text-[10px] font-bold tracking-widest text-slate-500 mb-2 uppercase">Empresa</p>
-            <button
-              onClick={() => setIsAdminOpen(!isAdminOpen)}
-              className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-slate-400 hover:bg-white/5 hover:text-white transition-all focus:outline-none"
-            >
-              <div className="flex items-center gap-3">
-                <FiSettings size={20} className={isAdminOpen ? "text-white" : ""} />
-                <span className={`text-sm font-medium ${isAdminOpen ? "text-white" : ""}`}>Administración</span>
-              </div>
-              <FiChevronDown className={`transition-transform duration-300 ${isAdminOpen ? "rotate-180 text-white" : ""}`} />
-            </button>
+          {/* SECCIÓN: EMPRESA (Oculta para cobradores) */}
+          {showAdministracion && (
+            <div className="pt-2">
+              <p className="px-4 text-[10px] font-bold tracking-widest text-slate-500 mb-2 uppercase">Empresa</p>
+              <button
+                onClick={() => setIsAdminOpen(!isAdminOpen)}
+                className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-slate-400 hover:bg-white/5 hover:text-white transition-all focus:outline-none"
+              >
+                <div className="flex items-center gap-3">
+                  <FiSettings size={20} className={isAdminOpen ? "text-white" : ""} />
+                  <span className={`text-sm font-medium ${isAdminOpen ? "text-white" : ""}`}>Administración</span>
+                </div>
+                <FiChevronDown className={`transition-transform duration-300 ${isAdminOpen ? "rotate-180 text-white" : ""}`} />
+              </button>
 
-            <div className={`overflow-hidden transition-all duration-300 ${isAdminOpen ? "max-h-40 opacity-100" : "max-h-0 opacity-0"}`}>
-              <div className="mt-1 ml-4 border-l border-white/10 pl-2 space-y-1">
-                <Link 
-                  to="/admin/usuarios" 
-                  onClick={() => setIsOpen(false)} 
-                  className={`flex items-center gap-2 w-full text-left rounded-lg px-3 py-2 text-sm ${isActive("/admin/usuarios") ? "text-blue-400 bg-blue-500/10 font-medium" : "text-slate-500 hover:text-white hover:bg-white/5 transition-colors"}`}
-                >
-                  <FiUsers size={16} /> Usuarios
-                </Link>
-                <Link 
-                  to="/admin/rutas" 
-                  onClick={() => setIsOpen(false)} 
-                  className={`flex items-center gap-2 w-full text-left rounded-lg px-3 py-2 text-sm ${isActive("/admin/rutas") ? "text-blue-400 bg-blue-500/10 font-medium" : "text-slate-500 hover:text-white hover:bg-white/5 transition-colors"}`}
-                >
-                  <FiMap size={16} /> Rutas
-                </Link>
-                <Link 
-                  to="/admin/capital" 
-                  onClick={() => setIsOpen(false)} 
-                  className={`flex items-center gap-2 w-full text-left rounded-lg px-3 py-2 text-sm ${isActive("/admin/capital") ? "text-blue-400 bg-blue-500/10 font-medium" : "text-slate-500 hover:text-white hover:bg-white/5 transition-colors"}`}
-                >
-                  <FiDollarSign size={16} /> Gestión Capital
-                </Link>
+              <div className={`overflow-hidden transition-all duration-300 ${isAdminOpen ? "max-h-40 opacity-100" : "max-h-0 opacity-0"}`}>
+                <div className="mt-1 ml-4 border-l border-white/10 pl-2 space-y-1">
+                  <Link 
+                    to="/admin/usuarios" 
+                    onClick={() => setIsOpen(false)} 
+                    className={`flex items-center gap-2 w-full text-left rounded-lg px-3 py-2 text-sm ${isActive("/admin/usuarios") ? "text-blue-400 bg-blue-500/10 font-medium" : "text-slate-500 hover:text-white hover:bg-white/5 transition-colors"}`}
+                  >
+                    <FiUsers size={16} /> Usuarios
+                  </Link>
+                  <Link 
+                    to="/admin/rutas" 
+                    onClick={() => setIsOpen(false)} 
+                    className={`flex items-center gap-2 w-full text-left rounded-lg px-3 py-2 text-sm ${isActive("/admin/rutas") ? "text-blue-400 bg-blue-500/10 font-medium" : "text-slate-500 hover:text-white hover:bg-white/5 transition-colors"}`}
+                  >
+                    <FiMap size={16} /> Rutas
+                  </Link>
+                  <Link 
+                    to="/admin/capital" 
+                    onClick={() => setIsOpen(false)} 
+                    className={`flex items-center gap-2 w-full text-left rounded-lg px-3 py-2 text-sm ${isActive("/admin/capital") ? "text-blue-400 bg-blue-500/10 font-medium" : "text-slate-500 hover:text-white hover:bg-white/5 transition-colors"}`}
+                  >
+                    <FiDollarSign size={16} /> Gestión Capital
+                  </Link>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* MENÚ DESPLEGABLE: CARTERA (Condicionado al Rol) */}
+          {/* MENÚ DESPLEGABLE: CARTERA (Solo para cobradores) */}
           {showCartera && (
             <div className="pt-2">
               <button
