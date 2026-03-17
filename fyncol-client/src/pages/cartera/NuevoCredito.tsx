@@ -25,45 +25,59 @@ export default function NuevoCredito() {
   const [file, setFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const [rutasDisponibles, setRutasDisponibles] = useState<any[]>([]);
-  const [isLoadingRutas, setIsLoadingRutas] = useState(true);
-  const [errorFetchRutas, setErrorFetchRutas] = useState<string | null>(null);
+  // Estados para manejar la ruta única asignada
+  const [rutaAsignada, setRutaAsignada] = useState<any | null>(null);
+  const [isLoadingRuta, setIsLoadingRuta] = useState(true);
+  const [errorFetchRuta, setErrorFetchRuta] = useState<string | null>(null);
 
-  // Cargar rutas disponibles al montar el componente
+  // Buscar la ruta asignada al cobrador actual al montar el componente
   useEffect(() => {
-    const fetchRutas = async () => {
+    const fetchMiRuta = async () => {
       try {
         const token = localStorage.getItem("token");
-        // CORRECCIÓN: Dejamos la base URL limpia sin el /api
-        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+        const userStr = localStorage.getItem("user");
         
-        // CORRECCIÓN: Agregamos el /api explícitamente aquí
+        if (!userStr || !token) {
+          setErrorFetchRuta("Sesión no válida. Vuelve a iniciar sesión.");
+          return;
+        }
+
+        const currentUser = JSON.parse(userStr);
+        if (!currentUser.id) {
+          setErrorFetchRuta("Falta el ID del usuario en la sesión. Inicia sesión nuevamente.");
+          return;
+        }
+
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
         const res = await fetch(`${baseUrl}/api/rutas`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          headers: { 'Authorization': `Bearer ${token}` }
         });
 
         if (res.ok) {
           const data = await res.json();
           const rutas = Array.isArray(data) ? data : data.data || []; 
-          setRutasDisponibles(rutas);
           
-          if (rutas.length > 0) {
-            setFormData(prev => ({ ...prev, routeId: rutas[0].id.toString() }));
+          // Buscar exactamente la ruta donde el "assignedToId" coincide con el ID del cobrador logueado
+          const miRutaEncontrada = rutas.find((r: any) => r.assignedTo?.id === currentUser.id);
+          
+          if (miRutaEncontrada) {
+            setRutaAsignada(miRutaEncontrada);
+            setFormData(prev => ({ ...prev, routeId: miRutaEncontrada.id.toString() }));
+          } else {
+            setErrorFetchRuta("No tienes ninguna ruta asignada actualmente. Contacta al administrador.");
           }
         } else {
-          setErrorFetchRutas(`Error del servidor: código ${res.status}`);
+          setErrorFetchRuta(`Error del servidor: código ${res.status}`);
           console.error("Error al obtener rutas, status:", res.status);
         }
       } catch (error) {
-        setErrorFetchRutas("Error de conexión con el servidor.");
+        setErrorFetchRuta("Error de conexión con el servidor.");
         console.error("Error en la petición de rutas:", error);
       } finally {
-        setIsLoadingRutas(false);
+        setIsLoadingRuta(false);
       }
     };
-    fetchRutas();
+    fetchMiRuta();
   }, []);
 
   // Cálculo de la métrica proyectada en tiempo real
@@ -118,7 +132,7 @@ export default function NuevoCredito() {
 
     try {
       if (!formData.routeId) {
-        throw new Error("Por favor, selecciona una ruta válida.");
+        throw new Error("No hay una ruta asignada válida para registrar el crédito.");
       }
 
       let documentUrl = null;
@@ -134,10 +148,8 @@ export default function NuevoCredito() {
       };
 
       const token = localStorage.getItem("token");
-      // CORRECCIÓN: Dejamos la base URL limpia sin el /api
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
       
-      // CORRECCIÓN: Agregamos el /api explícitamente aquí
       const response = await fetch(`${baseUrl}/api/clients/create`, {
         method: 'POST',
         headers: { 
@@ -156,7 +168,7 @@ export default function NuevoCredito() {
       
       setFormData({ 
         name: '', address: '', 
-        routeId: rutasDisponibles.length > 0 ? rutasDisponibles[0].id.toString() : '', 
+        routeId: rutaAsignada?.id.toString() || '', 
         amount: '', installments: '', interestRate: '' 
       });
       setLocation({ latitude: null, longitude: null });
@@ -170,7 +182,7 @@ export default function NuevoCredito() {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
@@ -192,45 +204,34 @@ export default function NuevoCredito() {
 
           <div className="space-y-4">
             
-            {/* Selector de Ruta con manejo de Errores Visuales */}
+            {/* Campo de Ruta Asignada (Solo lectura) */}
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Asignar a Ruta</label>
-              <select 
-                required 
-                name="routeId" 
-                value={formData.routeId}
-                onChange={handleChange}
-                disabled={isLoadingRutas || rutasDisponibles.length === 0 || errorFetchRutas !== null}
-                className={`w-full bg-[#05050A] border rounded-xl px-4 py-2.5 text-white focus:outline-none transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${errorFetchRutas ? 'border-red-500/50 text-red-400' : 'border-white/10 focus:border-blue-500'}`}
-              >
-                {isLoadingRutas ? (
-                  <option value="">Cargando rutas disponibles...</option>
-                ) : errorFetchRutas ? (
-                  <option value="">⚠️ {errorFetchRutas}</option>
-                ) : rutasDisponibles.length === 0 ? (
-                  <option value="">No hay rutas creadas en el sistema</option>
-                ) : (
-                  rutasDisponibles.map(ruta => (
-                    <option key={ruta.id} value={ruta.id}>
-                      {ruta.city} - {ruta.country} (Capital: ${Number(ruta.availableCapital || 0).toLocaleString('es-CO')})
-                    </option>
-                  ))
-                )}
-              </select>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Ruta Operativa Asignada</label>
+              <div className={`w-full border rounded-xl px-4 py-3 transition-all ${errorFetchRuta ? 'bg-red-500/10 border-red-500/30' : 'bg-transparent border-white/10'}`}>
+                {isLoadingRuta ? (
+                  <span className="text-slate-500">Buscando tu ruta asignada...</span>
+                ) : errorFetchRuta ? (
+                  <span className="text-red-400 font-medium">⚠️ {errorFetchRuta}</span>
+                ) : rutaAsignada ? (
+                  <span className="text-blue-400 font-semibold">
+                    {rutaAsignada.city} - {rutaAsignada.country} (Capital Disp: ${Number(rutaAsignada.availableCapital || 0).toLocaleString('es-CO')})
+                  </span>
+                ) : null}
+              </div>
             </div>
 
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Nombre Completo</label>
-              <input required name="name" value={formData.name} onChange={handleChange} className="w-full bg-transparent border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" placeholder="Ej: Cliente de Prueba" />
+              <input required name="name" value={formData.name} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-transparent border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Ej: Cliente de Prueba" />
             </div>
 
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Dirección</label>
-              <input required name="address" value={formData.address} onChange={handleChange} className="w-full bg-transparent border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" placeholder="Ej: Calle Principal 123" />
+              <input required name="address" value={formData.address} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-transparent border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Ej: Calle Principal 123" />
             </div>
 
             <div className="pt-2">
-              <button type="button" onClick={handleGetLocation} className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl border transition-all ${location.latitude ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20'}`}>
+              <button type="button" onClick={handleGetLocation} disabled={!rutaAsignada} className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl border transition-all ${!rutaAsignada ? 'opacity-50 cursor-not-allowed bg-blue-500/5 border-white/5 text-slate-500' : location.latitude ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20'}`}>
                 <FiMapPin size={18} />
                 <span className="font-medium">{location.latitude ? "Ubicación Capturada" : "Capturar Ubicación GPS"}</span>
               </button>
@@ -238,13 +239,13 @@ export default function NuevoCredito() {
 
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Foto de la Cédula</label>
-              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-white/10 rounded-xl hover:border-blue-500/50 hover:bg-blue-500/5 transition-all cursor-pointer">
+              <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-white/10 rounded-xl transition-all ${rutaAsignada ? 'hover:border-blue-500/50 hover:bg-blue-500/5 cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
                   <FiUploadCloud className="w-8 h-8 mb-3 text-slate-400" />
                   <p className="mb-2 text-sm text-slate-400"><span className="font-semibold text-blue-400">Haz clic para subir</span> o arrastra</p>
                   <p className="text-xs text-slate-500">SVG, PNG, JPG (MAX. 5MB)</p>
                 </div>
-                <input type="file" className="hidden" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                <input type="file" className="hidden" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} disabled={!rutaAsignada} />
               </label>
               {file && <p className="text-xs text-green-400 mt-2 text-center">Archivo seleccionado: {file.name}</p>}
             </div>
@@ -263,19 +264,19 @@ export default function NuevoCredito() {
               <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Monto a Prestar</label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">$</span>
-                <input required type="number" name="amount" value={formData.amount} onChange={handleChange} className="w-full bg-transparent border border-white/10 rounded-xl pl-8 pr-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all" placeholder="0.00" />
+                <input required type="number" name="amount" value={formData.amount} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-transparent border border-white/10 rounded-xl pl-8 pr-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed" placeholder="0.00" />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Cuotas</label>
-                <input required type="number" name="installments" value={formData.installments} onChange={handleChange} className="w-full bg-transparent border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all" placeholder="Ej: 30" />
+                <input required type="number" name="installments" value={formData.installments} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-transparent border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Ej: 30" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Interés (%)</label>
                 <div className="relative">
-                  <input required type="number" name="interestRate" value={formData.interestRate} onChange={handleChange} className="w-full bg-transparent border border-white/10 rounded-xl pl-4 pr-8 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all" placeholder="Ej: 20" />
+                  <input required type="number" name="interestRate" value={formData.interestRate} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-transparent border border-white/10 rounded-xl pl-4 pr-8 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Ej: 20" />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500">%</span>
                 </div>
               </div>
@@ -288,7 +289,7 @@ export default function NuevoCredito() {
           </div>
 
           <div className="pt-6 mt-6 border-t border-white/5">
-            <button type="submit" disabled={isSubmitting || rutasDisponibles.length === 0 || errorFetchRutas !== null} className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl py-3.5 px-4 font-semibold transition-colors shadow-lg shadow-blue-500/20">
+            <button type="submit" disabled={isSubmitting || !rutaAsignada} className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl py-3.5 px-4 font-semibold transition-colors shadow-lg shadow-blue-500/20">
               <FiSave size={18} />
               {isSubmitting ? "Registrando Operación..." : "Guardar Cliente y Crédito"}
             </button>

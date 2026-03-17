@@ -1,5 +1,5 @@
 // src/components/app/Sidebar.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png"; 
 import { 
@@ -14,6 +14,20 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
   // Estados para los menús desplegables
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isCarteraOpen, setIsCarteraOpen] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  // Obtener el rol del usuario al cargar el componente
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setUserRole(user.role);
+      } catch (e) {
+        console.error("Error parseando user de localStorage", e);
+      }
+    }
+  }, []);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -22,6 +36,9 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
     localStorage.removeItem("user");
     navigate("/");
   };
+
+  // Condición: Solo renderizar cartera si es COBRADOR
+  const showCartera = userRole === 'COBRADOR';
 
   return (
     <>
@@ -96,31 +113,33 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
             </div>
           </div>
 
-          {/* MENÚ DESPLEGABLE: CARTERA (Movido abajo de Administración) */}
-          <div className="pt-2">
-            <button
-              onClick={() => setIsCarteraOpen(!isCarteraOpen)}
-              className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-slate-400 hover:bg-white/5 hover:text-white transition-all focus:outline-none"
-            >
-              <div className="flex items-center gap-3">
-                <FiBriefcase size={20} className={isCarteraOpen ? "text-white" : ""} />
-                <span className={`text-sm font-medium ${isCarteraOpen ? "text-white" : ""}`}>Cartera</span>
-              </div>
-              <FiChevronDown className={`transition-transform duration-300 ${isCarteraOpen ? "rotate-180 text-white" : ""}`} />
-            </button>
+          {/* MENÚ DESPLEGABLE: CARTERA (Condicionado al Rol) */}
+          {showCartera && (
+            <div className="pt-2">
+              <button
+                onClick={() => setIsCarteraOpen(!isCarteraOpen)}
+                className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-slate-400 hover:bg-white/5 hover:text-white transition-all focus:outline-none"
+              >
+                <div className="flex items-center gap-3">
+                  <FiBriefcase size={20} className={isCarteraOpen ? "text-white" : ""} />
+                  <span className={`text-sm font-medium ${isCarteraOpen ? "text-white" : ""}`}>Cartera</span>
+                </div>
+                <FiChevronDown className={`transition-transform duration-300 ${isCarteraOpen ? "rotate-180 text-white" : ""}`} />
+              </button>
 
-            <div className={`overflow-hidden transition-all duration-300 ${isCarteraOpen ? "max-h-40 opacity-100" : "max-h-0 opacity-0"}`}>
-              <div className="mt-1 ml-4 border-l border-white/10 pl-2 space-y-1">
-                <Link 
-                  to="/cartera/nuevo-credito" 
-                  onClick={() => setIsOpen(false)} 
-                  className={`flex items-center gap-2 w-full text-left rounded-lg px-3 py-2 text-sm ${isActive("/cartera/nuevo-credito") ? "text-blue-400 bg-blue-500/10 font-medium" : "text-slate-500 hover:text-white hover:bg-white/5 transition-colors"}`}
-                >
-                  <FiUserPlus size={16} /> Nuevo Crédito
-                </Link>
+              <div className={`overflow-hidden transition-all duration-300 ${isCarteraOpen ? "max-h-40 opacity-100" : "max-h-0 opacity-0"}`}>
+                <div className="mt-1 ml-4 border-l border-white/10 pl-2 space-y-1">
+                  <Link 
+                    to="/cartera/nuevo-credito" 
+                    onClick={() => setIsOpen(false)} 
+                    className={`flex items-center gap-2 w-full text-left rounded-lg px-3 py-2 text-sm ${isActive("/cartera/nuevo-credito") ? "text-blue-400 bg-blue-500/10 font-medium" : "text-slate-500 hover:text-white hover:bg-white/5 transition-colors"}`}
+                  >
+                    <FiUserPlus size={16} /> Nuevo Crédito
+                  </Link>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </nav>
 
         {/* Footer Sidebar */}
