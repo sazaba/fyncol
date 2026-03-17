@@ -27,18 +27,18 @@ export default function NuevoCredito() {
   
   const [rutasDisponibles, setRutasDisponibles] = useState<any[]>([]);
   const [isLoadingRutas, setIsLoadingRutas] = useState(true);
-  const [errorFetchRutas, setErrorFetchRutas] = useState<string | null>(null); // NUEVO ESTADO PARA ERRORES
+  const [errorFetchRutas, setErrorFetchRutas] = useState<string | null>(null);
 
   // Cargar rutas disponibles al montar el componente
   useEffect(() => {
     const fetchRutas = async () => {
       try {
         const token = localStorage.getItem("token");
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+        // CORRECCIÓN: Dejamos la base URL limpia sin el /api
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
         
-        console.log("Buscando rutas en:", apiUrl); // Esto te ayudará a ver en la consola si está usando la URL correcta
-
-        const res = await fetch(`${apiUrl}/rutas`, {
+        // CORRECCIÓN: Agregamos el /api explícitamente aquí
+        const res = await fetch(`${baseUrl}/api/rutas`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -53,13 +53,11 @@ export default function NuevoCredito() {
             setFormData(prev => ({ ...prev, routeId: rutas[0].id.toString() }));
           }
         } else {
-          // Si el backend responde con error (ej. 401 No autorizado)
           setErrorFetchRutas(`Error del servidor: código ${res.status}`);
           console.error("Error al obtener rutas, status:", res.status);
         }
       } catch (error) {
-        // Si la petición no llega al servidor (ej. localhost en producción)
-        setErrorFetchRutas("Error de conexión. Verifica VITE_API_URL");
+        setErrorFetchRutas("Error de conexión con el servidor.");
         console.error("Error en la petición de rutas:", error);
       } finally {
         setIsLoadingRutas(false);
@@ -136,9 +134,11 @@ export default function NuevoCredito() {
       };
 
       const token = localStorage.getItem("token");
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+      // CORRECCIÓN: Dejamos la base URL limpia sin el /api
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
       
-      const response = await fetch(`${apiUrl}/clients/create`, {
+      // CORRECCIÓN: Agregamos el /api explícitamente aquí
+      const response = await fetch(`${baseUrl}/api/clients/create`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -154,7 +154,6 @@ export default function NuevoCredito() {
 
       alert("Cliente y préstamo registrados correctamente");
       
-      // Limpiar el formulario
       setFormData({ 
         name: '', address: '', 
         routeId: rutasDisponibles.length > 0 ? rutasDisponibles[0].id.toString() : '', 
