@@ -8,7 +8,7 @@ interface ClientFormData {
   amount: string;
   installments: string;
   interestRate: string;
-  periodicity: string; // NUEVO CAMPO
+  periodicity: string;
 }
 
 interface LocationData {
@@ -78,11 +78,15 @@ export default function NuevoCredito() {
     fetchMiRuta();
   }, []);
 
-  // LÓGICA DE CÁLCULO MATEMÁTICO EN TIEMPO REAL
-  const projectedTotal = useMemo(() => {
+  // LÓGICA DE CÁLCULO MATEMÁTICO EN TIEMPO REAL ACTUALIZADA
+  const creditMetrics = useMemo(() => {
     const amountNum = parseFloat(formData.amount) || 0;
     const interestNum = parseFloat(formData.interestRate) || 0;
     const installmentsNum = parseInt(formData.installments) || 0;
+
+    if (amountNum === 0 || installmentsNum === 0) {
+      return { total: 0, installmentValue: 0 };
+    }
 
     // Determinamos los días por cuota según la periodicidad
     let daysPerInstallment = 1; // DIARIO
@@ -99,7 +103,12 @@ export default function NuevoCredito() {
     const totalInterest = interestPerDay * totalDays;
 
     // Total proyectado a recoger (Capital + Interés)
-    return amountNum + totalInterest;
+    const total = amountNum + totalInterest;
+    
+    // Valor a pagar por cada cuota
+    const installmentValue = total / installmentsNum;
+
+    return { total, installmentValue };
   }, [formData.amount, formData.interestRate, formData.installments, formData.periodicity]);
 
   const handleGetLocation = () => {
@@ -322,7 +331,6 @@ export default function NuevoCredito() {
                 </div>
               </div>
 
-              {/* NUEVO CAMPO: Selector de Periodicidad */}
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Periodicidad</label>
                 <select 
@@ -340,9 +348,23 @@ export default function NuevoCredito() {
               </div>
             </div>
             
-            <div className="mt-8 bg-gradient-to-br from-blue-900/20 to-transparent border border-blue-500/20 rounded-xl p-5">
-              <p className="text-sm text-blue-400 font-medium mb-1">Total Proyectado a Recoger</p>
-              <p className="text-3xl font-bold text-white">${projectedTotal.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</p>
+            {/* NUEVO DISEÑO: Métrica de Cuota a pagar */}
+            <div className="mt-8 bg-gradient-to-br from-blue-900/20 to-transparent border border-blue-500/20 rounded-xl p-5 flex flex-col gap-4">
+              
+              <div>
+                <p className="text-sm text-blue-400 font-medium mb-1">Total Proyectado a Recoger</p>
+                <p className="text-3xl font-bold text-white">${creditMetrics.total.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</p>
+              </div>
+
+              <div className="pt-4 border-t border-blue-500/20">
+                <p className="text-xs text-blue-300/80 font-medium uppercase tracking-wider mb-1">
+                  Valor a pagar por cuota ({formData.periodicity.toLowerCase()})
+                </p>
+                <p className="text-xl font-bold text-green-400">
+                  ${creditMetrics.installmentValue.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+
             </div>
           </div>
 
