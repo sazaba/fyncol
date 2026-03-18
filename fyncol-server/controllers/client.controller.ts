@@ -234,16 +234,15 @@ export const registrarPago = async (req: any, res: any) => {
     res.status(400).json({ error: error.message || "Error al procesar el pago" });
   }
 };
-// En tu archivo client.controller.ts
+// Actualizar el estado de una cuota específica (Amortización Dinámica)
 export const updateInstallmentStatus = async (req: any, res: any) => {
   try {
     const { id } = req.params;
     const { status, paidAmount } = req.body;
     const amountNum = parseFloat(paidAmount) || 0;
 
-    // Usamos $transaction para asegurar que si falla el capital, no se guarde la cuota (y viceversa)
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Obtener la cuota y su relación completa
+      // 1. Obtener la cuota y la info de su préstamo
       const installment = await tx.installment.findUnique({
         where: { id: parseInt(id) },
         include: { loan: { include: { client: true } } }
@@ -261,8 +260,16 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
         }
       });
 
-      // 3. Sumar el capital recuperado a la ruta (aplica para PAID y PARTIAL)
-      if (amountNum > 0) {
+      // 3. ¡SOLUCIÓN!: Registrar el movimiento en la tabla "payments"
+      if (amountNum > 0 && (status === 'PAID' || status === 'PARTIAL')) {
+        await tx.payment.create({
+          data: {
+            amount: amountNum,
+            loanId: installment.loanId // Se vincula al préstamo correspondiente
+          }
+        });
+
+        // 4. Devolver el capital a la ruta del cobrador
         await tx.route.update({
           where: { id: installment.loan.client.routeId },
           data: { availableCapital: { increment: amountNum } }
@@ -275,6 +282,6 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
     res.json({ success: true, installment: result });
   } catch (error: any) {
     console.error("Error al actualizar cuota:", error);
-    res.status(400).json({ error: error.message || "Error al procesar el pago." });
+    res.status(400).json({ error: "Error al actualizar la cuota y registrar el pago." });
   }
 };
