@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { 
   FiDollarSign, FiMapPin, FiSearch, 
-  FiAlertTriangle, FiX, FiLoader, FiNavigation, FiCalendar, FiFilter, FiSlash 
+  FiAlertTriangle, FiX, FiLoader, FiNavigation, FiCalendar, FiFilter, FiSlash,
+  FiSun, FiMoon // <-- Nuevos íconos agregados
 } from 'react-icons/fi';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -35,6 +36,9 @@ export default function CarteraActiva() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState<'TODOS' | 'HOY' | 'PENDIENTES'>('HOY');
+  
+  // Nuevo estado para el tema del mapa
+  const [mapTheme, setMapTheme] = useState<'light' | 'dark'>('light');
   
   const [selectedClient, setSelectedClient] = useState<any>(null); 
   const [isUpdating, setIsUpdating] = useState(false);
@@ -121,10 +125,33 @@ export default function CarteraActiva() {
         )}
       </header>
 
-      {/* MAPA: Proporción dinámica */}
-      <div className="w-full aspect-square md:aspect-[21/9] lg:h-[400px] rounded-3xl overflow-hidden border border-white/10 shadow-2xl relative z-0 mb-6 bg-slate-900">
+      {/* MAPA: Proporción dinámica con Botón de Tema */}
+      <div className="w-full aspect-square md:aspect-[21/9] lg:h-[400px] rounded-3xl overflow-hidden border border-white/10 shadow-2xl relative z-0 mb-6 bg-[#0B0B12]">
+        
+        {/* Botón flotante para alternar tema del mapa */}
+        <button
+          onClick={() => setMapTheme(prev => prev === 'light' ? 'dark' : 'light')}
+          className="absolute top-4 right-4 z-[400] p-3 bg-[#0B0B12]/80 backdrop-blur-md text-white rounded-2xl shadow-2xl border border-white/10 hover:scale-105 transition-all active:scale-95"
+          title="Alternar estilo de mapa"
+        >
+          {mapTheme === 'light' ? (
+            <FiMoon size={22} className="text-blue-400" />
+          ) : (
+            <FiSun size={22} className="text-yellow-400" />
+          )}
+        </button>
+
         <MapContainer center={[6.2442, -75.5812]} zoom={13} style={{ height: '100%', width: '100%', zIndex: 1 }} zoomControl={false}>
-          <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+          {/* Se usa "key" para forzar el re-renderizado de los tiles cuando cambia el tema */}
+          <TileLayer 
+            key={mapTheme}
+            url={
+              mapTheme === 'light' 
+                ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            } 
+            attribution='&copy; <a href="https://carto.com/">CartoDB</a>'
+          />
           {filteredData.map(client => {
             const todayStr = new Date().toISOString().split('T')[0];
             const hasPaidToday = client.loans[0]?.installmentDetails?.some((i: any) => i.dueDate.startsWith(todayStr) && i.status === 'PAID');
