@@ -12,7 +12,7 @@ interface ClientFormData {
   installments: string;
   interestRate: string;
   periodicity: string;
-  firstPaymentDate: string; // NUEVO CAMPO
+  firstPaymentDate: string; 
 }
 
 interface LocationData {
@@ -20,7 +20,6 @@ interface LocationData {
   longitude: number | null;
 }
 
-// TIPOS PARA LA ALERTA PREMIUM
 type AlertVariant = "info" | "success" | "danger";
 
 type PremiumAlertState = {
@@ -34,13 +33,12 @@ type PremiumAlertState = {
 };
 
 export default function NuevoCredito() {
-  // Función auxiliar para obtener la fecha de hoy en formato YYYY-MM-DD
   const getTodayFormatted = () => new Date().toISOString().split('T')[0];
 
   const [formData, setFormData] = useState<ClientFormData>({
     name: '', address: '', routeId: '',
     amount: '', installments: '', interestRate: '', 
-    periodicity: 'MENSUAL', // Iniciamos en mensual por defecto como en tu captura
+    periodicity: 'MENSUAL',
     firstPaymentDate: getTodayFormatted() 
   });
   
@@ -52,10 +50,8 @@ export default function NuevoCredito() {
   const [isLoadingRuta, setIsLoadingRuta] = useState(true);
   const [errorFetchRuta, setErrorFetchRuta] = useState<string | null>(null);
 
-  // NUEVO ESTADO: Controla la visibilidad del modal de amortización
   const [showAmortization, setShowAmortization] = useState(false);
 
-  // ESTADO DE LA ALERTA PREMIUM
   const [alertState, setAlertState] = useState<PremiumAlertState>({
     open: false,
     variant: "info",
@@ -83,7 +79,6 @@ export default function NuevoCredito() {
     setAlertState((prev) => ({ ...prev, open: false, onConfirm: null }));
   };
 
-  // Evitar scroll cuando la alerta o la tabla están abiertas
   useEffect(() => {
     document.body.style.overflow = (alertState.open || showAmortization) ? "hidden" : "auto";
   }, [alertState.open, showAmortization]);
@@ -99,7 +94,6 @@ export default function NuevoCredito() {
     return () => window.removeEventListener("keydown", onKey);
   }, [alertState.open, showAmortization]);
 
-  // FUNCIÓN PARA OBTENER LA RUTA
   const fetchMiRuta = async () => {
     setIsLoadingRuta(true);
     setErrorFetchRuta(null);
@@ -145,15 +139,13 @@ export default function NuevoCredito() {
     }
   };
 
-  // Cargar ruta al iniciar
   useEffect(() => {
     fetchMiRuta();
   }, []);
 
-  // AUTO-CALCULAR FECHA DE PRIMER PAGO AL CAMBIAR PERIODICIDAD
   useEffect(() => {
     const today = new Date();
-    let daysToAdd = 1; // Diario
+    let daysToAdd = 1; 
 
     if (formData.periodicity === 'QUINCENAL') daysToAdd = 15;
     if (formData.periodicity === 'MENSUAL') daysToAdd = 30;
@@ -162,7 +154,6 @@ export default function NuevoCredito() {
     setFormData(prev => ({ ...prev, firstPaymentDate: today.toISOString().split('T')[0] }));
   }, [formData.periodicity]);
 
-  // CÁLCULOS MATEMÁTICOS DEL PRÉSTAMO Y TABLA DE AMORTIZACIÓN
   const creditMetrics = useMemo(() => {
     const amountNum = parseFloat(formData.amount) || 0;
     const interestNum = parseFloat(formData.interestRate) || 0;
@@ -176,7 +167,6 @@ export default function NuevoCredito() {
     if (formData.periodicity === 'QUINCENAL') daysPerInstallment = 15;
     if (formData.periodicity === 'MENSUAL') daysPerInstallment = 30;
 
-    // Calcular días hasta el primer pago (Opción B)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -189,17 +179,14 @@ export default function NuevoCredito() {
     
     if (daysUntilFirstPayment <= 0) daysUntilFirstPayment = 1;
 
-    // Días totales del préstamo
     const totalDays = daysUntilFirstPayment + ((installmentsNum - 1) * daysPerInstallment);
 
-    // Cálculos finales
     const interestPerDay = (interestNum / 100 / 30) * amountNum;
     const totalInterest = interestPerDay * totalDays;
 
     const total = amountNum + totalInterest;
     const installmentValue = total / installmentsNum;
 
-    // Generar la tabla de amortización
     const schedule = [];
     let currentBalance = total;
     let currentDate = new Date(firstPayment);
@@ -209,17 +196,15 @@ export default function NuevoCredito() {
         number: i,
         date: currentDate.toLocaleDateString('es-CO', { year: 'numeric', month: 'short', day: '2-digit' }),
         amount: installmentValue,
-        balance: Math.max(0, currentBalance - installmentValue) // Math.max previene saldos negativos por redondeo
+        balance: Math.max(0, currentBalance - installmentValue) 
       });
       
-      // --- CORRECCIÓN APLICADA AQUÍ ---
-      // Sumar el periodo exacto para el próximo pago
       if (formData.periodicity === 'MENSUAL') {
-        currentDate.setMonth(currentDate.getMonth() + 1); // Suma un mes exacto
+        currentDate.setMonth(currentDate.getMonth() + 1); 
       } else if (formData.periodicity === 'QUINCENAL') {
-        currentDate.setDate(currentDate.getDate() + 15); // Suma 15 días
+        currentDate.setDate(currentDate.getDate() + 15); 
       } else {
-        currentDate.setDate(currentDate.getDate() + 1); // Suma 1 día (Diario)
+        currentDate.setDate(currentDate.getDate() + 1); 
       }
       
       currentBalance -= installmentValue;
@@ -391,23 +376,25 @@ export default function NuevoCredito() {
                 </p>
               </div>
 
+              {/* CORRECCIÓN: Math.round agregado aquí */}
               <div className="bg-[#0B0B12] border border-white/5 rounded-xl p-4 flex flex-col justify-center border-b-2 border-b-green-500/50 shadow-[0_4px_20px_-10px_rgba(34,197,94,0.3)]">
                 <div className="flex items-center gap-2 text-slate-400 mb-1">
                   <FiDollarSign size={14} className="text-green-400" />
                   <span className="text-[10px] font-bold tracking-widest uppercase text-green-400/80">Capital Disponible</span>
                 </div>
                 <p className="text-lg font-bold text-white">
-                  ${Number(rutaAsignada.availableCapital || 0).toLocaleString('es-CO')}
+                  ${Math.round(Number(rutaAsignada.availableCapital) || 0).toLocaleString('es-CO')}
                 </p>
               </div>
 
+              {/* CORRECCIÓN: Math.round agregado aquí */}
               <div className="bg-[#0B0B12] border border-white/5 rounded-xl p-4 flex flex-col justify-center border-b-2 border-b-blue-500/50 shadow-[0_4px_20px_-10px_rgba(59,130,246,0.3)]">
                 <div className="flex items-center gap-2 text-slate-400 mb-1">
                   <FiBriefcase size={14} className="text-blue-400" />
                   <span className="text-[10px] font-bold tracking-widest uppercase text-blue-400/80">Total Cartera</span>
                 </div>
                 <p className="text-lg font-bold text-white">
-                  ${Number(rutaAsignada.totalCartera || 0).toLocaleString('es-CO')}
+                  ${Math.round(Number(rutaAsignada.totalCartera) || 0).toLocaleString('es-CO')}
                 </p>
               </div>
             </>
@@ -543,7 +530,7 @@ export default function NuevoCredito() {
 
               <div>
                 <p className="text-[10px] text-blue-400/80 font-bold uppercase tracking-widest mb-1">Total Proyectado a Recoger</p>
-                <p className="text-3xl md:text-4xl font-bold text-white tracking-tight">${creditMetrics.total.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</p>
+                <p className="text-3xl md:text-4xl font-bold text-white tracking-tight">${creditMetrics.total.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
               </div>
 
               <div className="pt-5 border-t border-blue-500/20">
@@ -551,7 +538,7 @@ export default function NuevoCredito() {
                   Valor Cuota ({formData.periodicity.toLowerCase()})
                 </p>
                 <p className="text-2xl font-bold text-emerald-400">
-                  ${creditMetrics.installmentValue.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  ${creditMetrics.installmentValue.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </p>
               </div>
 
