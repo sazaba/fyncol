@@ -211,8 +211,17 @@ export default function NuevoCredito() {
         amount: installmentValue,
         balance: Math.max(0, currentBalance - installmentValue) // Math.max previene saldos negativos por redondeo
       });
-      // Sumar días para el próximo pago
-      currentDate.setDate(currentDate.getDate() + daysPerInstallment);
+      
+      // --- CORRECCIÓN APLICADA AQUÍ ---
+      // Sumar el periodo exacto para el próximo pago
+      if (formData.periodicity === 'MENSUAL') {
+        currentDate.setMonth(currentDate.getMonth() + 1); // Suma un mes exacto
+      } else if (formData.periodicity === 'QUINCENAL') {
+        currentDate.setDate(currentDate.getDate() + 15); // Suma 15 días
+      } else {
+        currentDate.setDate(currentDate.getDate() + 1); // Suma 1 día (Diario)
+      }
+      
       currentBalance -= installmentValue;
     }
 
