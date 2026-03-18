@@ -35,12 +35,15 @@ export const createClientAndLoan = async (req: any, res: any) => {
     if (periodicity === 'QUINCENAL') daysPerInstallment = 15;
     if (periodicity === 'MENSUAL') daysPerInstallment = 30;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
+    // FIX ZONA HORARIA: Extraemos año, mes y día del string "YYYY-MM-DD" que viene del front
     const [year, month, day] = firstPaymentDate.split('-');
-    const firstPayment = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-    firstPayment.setHours(0, 0, 0, 0);
+    
+    // Creamos la fecha forzando la HORA LOCAL al mediodía (12:00 PM) para que,
+    // sin importar el UTC-5, siga cayendo en el mismo día.
+    const firstPayment = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
+
+    const today = new Date();
+    today.setHours(12, 0, 0, 0); // También seteamos hoy al mediodía para calcular bien los días
 
     const diffTime = firstPayment.getTime() - today.getTime();
     let daysUntilFirstPayment = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -60,6 +63,7 @@ export const createClientAndLoan = async (req: any, res: any) => {
     for (let i = 1; i <= installmentsNum; i++) {
       installmentsArray.push({
         installmentNumber: i,
+        // Guardamos la fecha manteniendo las 12:00 PM
         dueDate: new Date(currentDate),
         expectedAmount: installmentValue,
         paidAmount: 0,
@@ -234,7 +238,6 @@ export const registrarPago = async (req: any, res: any) => {
     res.status(400).json({ error: error.message || "Error al procesar el pago" });
   }
 };
-
 export const updateInstallmentStatus = async (req: any, res: any) => {
   try {
     const { id } = req.params;
@@ -250,21 +253,20 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
 
       if (!installment) throw new Error("La cuota no existe.");
 
-      // 2. LOGÍSTICA REAL: Sumar el abono nuevo a lo que ya había pagado antes
+      // 2. Sumar el abono nuevo a lo que ya había pagado antes
       const totalPagadoHistorico = Number(installment.paidAmount || 0);
       const nuevoTotalPagado = totalPagadoHistorico + amountNum;
       const metaCuota = Number(installment.expectedAmount);
 
       // 3. Evaluar el estado final automáticamente
       let nuevoEstado = status; 
-      // Si el cobrador marca "PAID" manual o si la suma de abonos ya cubre la cuota
       if (status === 'PAID' || nuevoTotalPagado >= metaCuota) {
         nuevoEstado = 'PAID';
       } else if (nuevoTotalPagado > 0 && status !== 'OVERDUE') {
         nuevoEstado = 'PARTIAL';
       }
 
-      // 4. Actualizar la cuota con el valor ACUMULADO
+      // 4. Actualizar la cuota
       const updatedInstallment = await tx.installment.update({
         where: { id: parseInt(id) },
         data: {
@@ -274,7 +276,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
         }
       });
 
-      // 5. Registrar el recibo exacto del monto que entregó hoy
+      // 5. Registrar recibo y devolver capital
       if (amountNum > 0 && (nuevoEstado === 'PAID' || nuevoEstado === 'PARTIAL')) {
         await tx.payment.create({
           data: {
@@ -283,10 +285,29 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
           }
         });
 
-        // 6. Devolver el capital a la ruta
         await tx.route.update({
           where: { id: installment.loan.client.routeId },
           data: { availableCapital: { increment: amountNum } }
+        });
+      }
+
+      // ---> NUEVO: 6. CERRAR EL PRÉSTAMO AUTOMÁTICAMENTE <---
+      // Obtenemos todas las cuotas de este préstamo específico
+      const todasLasCuotas = await tx.installment.findMany({
+        where: { loanId: installment.loanId }
+      });
+
+      // Verificamos si absolutamente TODAS están pagadas
+      const prestamoTerminado = todasLasCuotas.every(inst => 
+        // Si es la cuota actual, usamos el nuevo estado, sino, usamos el de la BD
+        inst.id === parseInt(id) ? nuevoEstado === 'PAID' : inst.status === 'PAID'
+      );
+
+      // Si todo está pagado, apagamos el préstamo (isActive = false)
+      if (prestamoTerminado) {
+        await tx.loan.update({
+          where: { id: installment.loanId },
+          data: { isActive: false }
         });
       }
 
