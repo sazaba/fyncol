@@ -98,8 +98,20 @@ model Loan {
 
   clientId         Int      @map("client_id")
   client           Client   @relation(fields: [clientId], references: [id])
+  payments         Payment[]
 
   @@map("loans")
+}
+
+model Payment {
+  id        Int      @id @default(autoincrement())
+  amount    Decimal  // Monto pagado en este abono
+  createdAt DateTime @default(now()) @map("created_at")
+
+  loanId    Int      @map("loan_id")
+  loan      Loan     @relation(fields: [loanId], references: [id])
+
+  @@map("payments")
 }
 
 enum Role {

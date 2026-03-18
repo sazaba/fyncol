@@ -112,3 +112,105 @@ export const createClientAndLoan = async (req: any, res: any) => {
     return res.status(400).json({ error: error.message || "Error interno del servidor" });
   }
 };
+
+export const getCarteraDelCobrador = async (req: any, res: any) => {
+  try {
+    const userId = req.user.id; // Viene del token
+
+    // Buscar la ruta de este cobrador
+    const route = await prisma.route.findFirst({
+      where: { assignedToId: userId }
+    });
+
+    if (!route) {
+      return res.status(404).json({ error: "No tienes una ruta asignada." });
+    }
+
+    // Traer los clientes de ESA ruta que tengan préstamos activos
+    const clients = await prisma.client.findMany({
+      where: { 
+        routeId: route.id,
+        loans: { some: { isActive: true } }
+      },
+      include: {
+        loans: {
+          where: { isActive: true },
+          include: { payments: true } // Traemos el historial de pagos para sumar cuánto han pagado
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({
+      success: true,
+      route,
+      clients
+    });
+
+  } catch (error: any) {
+    console.error("Error al obtener cartera:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+// 2. Registrar un pago en un préstamo
+export const registrarPago = async (req: any, res: any) => {
+  try {
+    const { loanId, amount } = req.body;
+    const amountNum = parseFloat(amount);
+
+    if (!loanId || amountNum <= 0) {
+      return res.status(400).json({ error: "Datos de pago inválidos" });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Obtener el préstamo actual y sus pagos
+      const loan = await tx.loan.findUnique({
+        where: { id: parseInt(loanId) },
+        include: { payments: true, client: true }
+      });
+
+      if (!loan || !loan.isActive) {
+        throw new Error("El préstamo no existe o ya está cancelado.");
+      }
+
+      // Sumar lo que ya ha pagado + este nuevo pago
+      const totalPaidSoFar = loan.payments.reduce((acc, p) => acc + Number(p.amount), 0);
+      const projectedTotal = Number(loan.projectedTotal);
+      const newTotalPaid = totalPaidSoFar + amountNum;
+
+      // 1. Crear el recibo de pago
+      const newPayment = await tx.payment.create({
+        data: {
+          amount: amountNum,
+          loanId: loan.id
+        }
+      });
+
+      // 2. Devolver el dinero al bolsillo (Capital) de la ruta
+      await tx.route.update({
+        where: { id: loan.client.routeId },
+        data: { availableCapital: { increment: amountNum } }
+      });
+
+      // 3. ¿El préstamo ya se pagó completo? Lo cerramos.
+      let isFullyPaid = false;
+      // Usamos un margen de 10 pesos por si hay un micro-descuadre de decimales
+      if (newTotalPaid >= projectedTotal - 10) {
+        await tx.loan.update({
+          where: { id: loan.id },
+          data: { isActive: false }
+        });
+        isFullyPaid = true;
+      }
+
+      return { newPayment, isFullyPaid, newTotalPaid };
+    });
+
+    res.json({ success: true, data: result });
+
+  } catch (error: any) {
+    console.error("Error al registrar pago:", error);
+    res.status(400).json({ error: error.message || "Error al procesar el pago" });
+  }
+};

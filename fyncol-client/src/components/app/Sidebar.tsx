@@ -139,6 +139,13 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
                   >
                     <FiUserPlus size={16} /> Nuevo Crédito
                   </Link>
+                  <Link 
+                    to="/cartera/activa" 
+                    onClick={() => setIsOpen(false)} 
+                    className={`flex items-center gap-2 w-full text-left rounded-lg px-3 py-2 text-sm ${isActive("/cartera/activa") ? "text-blue-400 bg-blue-500/10 font-medium" : "text-slate-500 hover:text-white hover:bg-white/5 transition-colors"}`}
+                  >
+                    <FiDollarSign size={16} /> Recaudos
+                  </Link>
                 </div>
               </div>
             </div>
@@ -168,7 +175,6 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
   );
 }
 
-// Componente NavItem Mejorado Visualmente
 function NavItem({ label, path, icon, active, onClick }: any) {
   return (
     <Link 

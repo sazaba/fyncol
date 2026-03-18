@@ -9,8 +9,9 @@ import UsersPage from "./pages/admin/UsersPage";
 import Rutas from "./pages/admin/Rutas"; 
 import GestionCapital from "./pages/admin/GestionCapital";
 
-// 1. IMPORTAMOS EL NUEVO COMPONENTE
+// COMPONENTES DE CARTERA
 import NuevoCredito from "./pages/cartera/NuevoCredito";
+import CarteraActiva from "./pages/cartera/CarteraActiva";
 
 export default function App() {
   return (
@@ -25,12 +26,15 @@ export default function App() {
           {/* El MainLayout envuelve todo: Sidebar + Contenido */}
           <Route element={<MainLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
+            
+            {/* ADMINISTRACIÓN */}
             <Route path="/admin/usuarios" element={<UsersPage />} />
             <Route path="/admin/rutas" element={<Rutas />} />
             <Route path="/admin/capital" element={<GestionCapital />} />
             
-            {/* 2. REGISTRAMOS LA NUEVA RUTA DE CARTERA */}
+            {/* CARTERA */}
             <Route path="/cartera/nuevo-credito" element={<NuevoCredito />} />
+            <Route path="/cartera/activa" element={<CarteraActiva />} /> 
           </Route>
         </Route>
       </Routes>
