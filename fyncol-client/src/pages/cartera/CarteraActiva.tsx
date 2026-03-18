@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   FiDollarSign, FiMapPin, FiSearch, 
   FiAlertTriangle, FiX, FiLoader, FiNavigation, FiCalendar, FiFilter, FiSlash,
-  FiSun, FiMoon, FiCheckCircle
+  FiSun, FiMoon, FiCheckCircle, FiExternalLink
 } from 'react-icons/fi';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -20,13 +20,14 @@ const redIcon = new L.Icon({
   iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
 });
 
-function RecenterMap({ coords }: { coords: [number, number] }) {
+// Componente utilitario para mover el mapa dinámicamente
+function MapController({ coords, zoom }: { coords: [number, number] | null, zoom?: number }) {
   const map = useMap();
   useEffect(() => {
-    if (coords[0] && coords[1]) {
-      map.flyTo(coords, 14, { animate: true, duration: 1.5 });
+    if (coords && coords[0] !== 0 && coords[1] !== 0) {
+      map.flyTo(coords, zoom || 15, { animate: true, duration: 1.5 });
     }
-  }, [coords, map]);
+  }, [coords, map, zoom]);
   return null;
 }
 
@@ -39,14 +40,15 @@ export default function CarteraActiva() {
   
   const [mapTheme, setMapTheme] = useState<'light' | 'dark'>('light');
   
+  // Estado para centrar el mapa al hacer clic en una tarjeta
+  const [focusCoords, setFocusCoords] = useState<[number, number] | null>(null);
+  
   const [selectedClient, setSelectedClient] = useState<any>(null); 
   const [modalTab, setModalTab] = useState<'PLAN' | 'RECIBOS'>('PLAN');
   
   const [isUpdating, setIsUpdating] = useState(false);
   const [manualPayModal, setManualPayModal] = useState<{open: boolean, inst: any}>({ open: false, inst: null });
   const [manualAmount, setManualAmount] = useState("");
-
-  // NUEVO: Estado para el modal de seguridad "OVERDUE"
   const [confirmOverdue, setConfirmOverdue] = useState<{open: boolean, instId: number | null}>({ open: false, instId: null });
 
   const fetchCartera = async () => {
@@ -71,7 +73,7 @@ export default function CarteraActiva() {
 
   useEffect(() => { fetchCartera(); }, []);
 
-  // FILTRO INTELIGENTE: ARRASTRE DE MORA Y RUTA DE HOY
+  // FILTRO INTELIGENTE
   const filteredData = useMemo(() => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -84,7 +86,6 @@ export default function CarteraActiva() {
       const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase());
       if (!matchesSearch) return false;
 
-      // LA MAGIA: Buscar la primera cuota que NO esté pagada y que sea de HOY o ANTES de hoy.
       const cuotaActiva = loan?.installmentDetails?.find((i: any) => {
         if (!i.dueDate) return false;
         const dbDate = i.dueDate.split('T')[0];
@@ -96,6 +97,20 @@ export default function CarteraActiva() {
       return true;
     });
   }, [clients, searchTerm, filter]);
+
+  // CÁLCULO DE LA LÍNEA DE RUTA (Une a todos los clientes visibles en el mapa)
+  const routePolylineCoords = useMemo(() => {
+    return filteredData
+      .filter(c => c.latitude && c.longitude)
+      .map(c => [c.latitude, c.longitude] as [number, number]);
+  }, [filteredData]);
+
+  // CENTRAR EL MAPA AL CARGAR LA RUTA (Solo la primera vez o si el foco es null)
+  useEffect(() => {
+    if (routePolylineCoords.length > 0 && !focusCoords) {
+      setFocusCoords(routePolylineCoords[0]);
+    }
+  }, [routePolylineCoords]);
 
   const handleUpdateStatus = async (instId: number, status: string, amount: number) => {
     setIsUpdating(true);
@@ -110,11 +125,10 @@ export default function CarteraActiva() {
 
       if (res.ok) {
         setManualPayModal({ open: false, inst: null });
-        setConfirmOverdue({ open: false, instId: null }); // Cierra alerta de seguridad si estaba abierta
+        setConfirmOverdue({ open: false, instId: null }); 
         setManualAmount("");
         await fetchCartera();
         if (selectedClient) {
-          // Si el modal del cliente está abierto, refresca sus datos sin cerrarlo
            const resData = await fetch(`${baseUrl}/api/clients/cartera`, { headers: { 'Authorization': `Bearer ${token}` } });
            const updatedData = await resData.json();
            const refreshedClient = updatedData.clients.find((c: any) => c.id === selectedClient.id);
@@ -131,6 +145,13 @@ export default function CarteraActiva() {
   const openClientModal = (client: any) => {
     setSelectedClient(client);
     setModalTab('PLAN');
+  };
+
+  // FUNCIÓN PARA ABRIR GOOGLE MAPS / WAZE EN EL CELULAR
+  const openNavigationApp = (lat: number, lng: number) => {
+    // Esto funciona en móviles para abrir las apps nativas, y en PC abre Google Maps web.
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+    window.open(url, '_blank');
   };
 
   return (
@@ -173,6 +194,15 @@ export default function CarteraActiva() {
             } 
             attribution='&copy; <a href="https://carto.com/">CartoDB</a>'
           />
+
+          {/* TRAZADO DE RUTA (Solo aparece si hay clientes y no estamos en "TODOS" para no saturar) */}
+          {filter !== 'TODOS' && routePolylineCoords.length > 1 && (
+             <Polyline 
+               positions={routePolylineCoords} 
+               pathOptions={{ color: '#3b82f6', weight: 4, opacity: 0.6, dashArray: '10, 10' }} 
+             />
+          )}
+
           {filteredData.map(client => {
             const today = new Date();
             const yyyy = today.getFullYear();
@@ -185,14 +215,23 @@ export default function CarteraActiva() {
             return client.latitude && (
               <Marker key={client.id} position={[client.latitude, client.longitude]} icon={hasPaidToday ? greenIcon : redIcon}>
                 <Popup className="custom-popup">
-                  <div className="p-2">
-                    <p className="font-bold text-slate-900">{client.name}</p>
+                  <div className="p-2 text-slate-800">
+                    <p className="font-black text-sm mb-1">{client.name}</p>
+                    <p className="text-[10px] text-slate-500 mb-2">{client.address}</p>
+                    <button 
+                      onClick={() => openNavigationApp(client.latitude, client.longitude)}
+                      className="w-full py-1.5 bg-blue-600 text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1"
+                    >
+                      <FiExternalLink /> Navegar hacia allá
+                    </button>
                   </div>
                 </Popup>
               </Marker>
             );
           })}
-          {filteredData[0]?.latitude && <RecenterMap coords={[filteredData[0].latitude, filteredData[0].longitude]} />}
+          
+          {/* Controlador Dinámico del Mapa */}
+          <MapController coords={focusCoords} />
         </MapContainer>
       </div>
 
@@ -239,7 +278,6 @@ export default function CarteraActiva() {
           const dd = String(today.getDate()).padStart(2, '0');
           const todayLocalStr = `${yyyy}-${mm}-${dd}`;
 
-          // Buscamos la cuota que le toca hoy o la que debe del pasado
           const cuotaActiva = loan?.installmentDetails?.find((i: any) => {
             if (!i.dueDate) return false;
             const dbDate = i.dueDate.split('T')[0];
@@ -247,18 +285,47 @@ export default function CarteraActiva() {
           });
 
           return (
-            <div key={client.id} className="bg-[#0B0B12] border border-white/10 rounded-3xl p-5 flex flex-col justify-between hover:border-blue-500/50 transition-all">
+            <div 
+              key={client.id} 
+              // Evento onClick para enfocar en el mapa, ignorando si hace clic en los botones internos
+              onClick={(e) => {
+                if ((e.target as HTMLElement).closest('button')) return;
+                if (client.latitude && client.longitude) {
+                  setFocusCoords([client.latitude, client.longitude]);
+                  // Scroll suave hacia arriba en móvil para ver el mapa
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+              }}
+              className="bg-[#0B0B12] border border-white/10 rounded-3xl p-5 flex flex-col justify-between hover:border-blue-500/50 transition-all cursor-pointer group"
+            >
               <div className="flex justify-between items-start mb-4">
                 <div className="flex gap-3 overflow-hidden">
-                  <div className="h-12 w-12 shrink-0 rounded-2xl bg-blue-600/20 text-blue-500 flex items-center justify-center font-black text-xl">
+                  <div className="h-12 w-12 shrink-0 rounded-2xl bg-blue-600/20 text-blue-500 flex items-center justify-center font-black text-xl group-hover:bg-blue-600 group-hover:text-white transition-all">
                     {client.name.charAt(0)}
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-white font-black text-base md:text-lg truncate">{client.name}</h3>
-                    <p className="text-xs text-slate-500 truncate flex items-center gap-1"><FiMapPin size={10} className="shrink-0"/> {client.address}</p>
+                    <div className="flex items-center gap-2 text-slate-500 text-xs">
+                      <FiMapPin className="shrink-0"/>
+                      <span className="truncate">{client.address}</span>
+                      
+                      {/* Botón rápido de navegación en la tarjeta */}
+                      {client.latitude && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); openNavigationApp(client.latitude, client.longitude); }}
+                          className="shrink-0 p-1.5 bg-blue-500/10 text-blue-400 rounded-md hover:bg-blue-500 hover:text-white transition-all"
+                          title="Abrir GPS"
+                        >
+                          <FiExternalLink size={12} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <button onClick={() => openClientModal(client)} className="shrink-0 p-3 bg-white/5 rounded-xl text-slate-400 hover:bg-blue-600/20 hover:text-blue-400 transition-all">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); openClientModal(client); }} 
+                  className="shrink-0 p-3 bg-white/5 rounded-xl text-slate-400 hover:bg-blue-600/20 hover:text-blue-400 transition-all"
+                >
                   <FiCalendar size={18} />
                 </button>
               </div>
@@ -291,7 +358,8 @@ export default function CarteraActiva() {
                   {(cuotaActiva.status === 'PENDING' || cuotaActiva.status === 'PARTIAL' || cuotaActiva.status === 'OVERDUE') && (
                     <div className="flex gap-2">
                       <button 
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           const faltante = Number(cuotaActiva.expectedAmount) - Number(cuotaActiva.paidAmount || 0);
                           handleUpdateStatus(cuotaActiva.id, 'PAID', faltante);
                         }} 
@@ -302,7 +370,8 @@ export default function CarteraActiva() {
                       </button>
                       
                       <button 
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setManualPayModal({ open: true, inst: cuotaActiva });
                           setManualAmount(""); 
                         }} 
@@ -311,9 +380,11 @@ export default function CarteraActiva() {
                         <FiDollarSign size={16} />
                       </button>
                       
-                      {/* Botón OVERDUE modificado para disparar la alerta de seguridad */}
                       <button 
-                        onClick={() => setConfirmOverdue({ open: true, instId: cuotaActiva.id })} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmOverdue({ open: true, instId: cuotaActiva.id });
+                        }} 
                         className="flex-1 bg-red-500/20 hover:bg-red-500/30 active:scale-95 py-3 rounded-xl text-red-400 flex items-center justify-center transition-all"
                       >
                         <FiSlash size={16} />
@@ -387,7 +458,6 @@ export default function CarteraActiva() {
         <div className="fixed inset-0 z-[9998] flex items-end md:items-center justify-center bg-black/80 backdrop-blur-sm p-2 md:p-4" onClick={() => setSelectedClient(null)}>
           <div className="w-full max-w-lg bg-[#12121A] border border-white/10 rounded-[35px] shadow-2xl flex flex-col h-[85vh] md:h-[650px] overflow-hidden animate-[slideUp_0.2s_ease-out]" onClick={e => e.stopPropagation()}>
             
-            {/* Cabecera */}
             <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#0B0B12]">
               <div>
                 <h3 className="text-xl font-black text-white">{selectedClient.name}</h3>
@@ -398,7 +468,6 @@ export default function CarteraActiva() {
               </button>
             </div>
 
-            {/* Pestañas */}
             <div className="flex border-b border-white/5 bg-[#0B0B12] px-4">
               <button 
                 onClick={() => setModalTab('PLAN')} 
@@ -414,10 +483,8 @@ export default function CarteraActiva() {
               </button>
             </div>
             
-            {/* Contenido */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#05050A]">
               
-              {/* PESTAÑA 1: PLAN (CON COBROS ADELANTADOS) */}
               {modalTab === 'PLAN' && (
                 selectedClient.loans[0]?.installmentDetails?.map((inst: any) => (
                   <div key={inst.id} className={`flex flex-col gap-3 p-4 rounded-2xl border ${inst.status === 'PAID' ? 'bg-emerald-500/5 border-emerald-500/10' : inst.status === 'PARTIAL' ? 'bg-blue-500/5 border-blue-500/10' : 'bg-[#0B0B12] border-white/5'}`}>
@@ -436,7 +503,6 @@ export default function CarteraActiva() {
                       </div>
                     </div>
 
-                    {/* Controles para pagos adelantados */}
                     {inst.status !== 'PAID' && (
                       <div className="flex gap-2 mt-2 pt-3 border-t border-white/5">
                         <button 
@@ -464,7 +530,6 @@ export default function CarteraActiva() {
                 ))
               )}
 
-              {/* PESTAÑA 2: RECIBOS (AUDITORÍA DE PAGOS) */}
               {modalTab === 'RECIBOS' && (
                 selectedClient.loans[0]?.payments?.length > 0 ? (
                   selectedClient.loans[0].payments.map((payment: any) => (
