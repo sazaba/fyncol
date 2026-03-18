@@ -99,6 +99,7 @@ model Loan {
   clientId         Int      @map("client_id")
   client           Client   @relation(fields: [clientId], references: [id])
   payments         Payment[]
+  installmentDetails Installment[]
 
   @@map("loans")
 }
@@ -112,6 +113,22 @@ model Payment {
   loan      Loan     @relation(fields: [loanId], references: [id])
 
   @@map("payments")
+}
+
+model Installment {
+  id                Int      @id @default(autoincrement())
+  installmentNumber Int      @map("installment_number") // Cuota #1, #2, etc.
+  dueDate           DateTime @map("due_date")           // Fecha en la que toca pagar
+  expectedAmount    Decimal  @map("expected_amount")    // Lo que debería pagar
+  paidAmount        Decimal  @default(0) @map("paid_amount") // Lo que realmente pagó
+  
+  status            String   @default("PENDING") @db.VarChar(20) // PENDING, PAID, PARTIAL, OVERDUE
+  paidAt            DateTime? @map("paid_at")           // Cuándo lo pagó realmente
+  
+  loanId            Int      @map("loan_id")
+  loan              Loan     @relation(fields: [loanId], references: [id])
+
+  @@map("installments")
 }
 
 enum Role {

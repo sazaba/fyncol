@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { 
   createClientAndLoan, 
   getCarteraDelCobrador, 
-  registrarPago 
+  registrarPago, updateInstallmentStatus 
 } from '../controllers/client.controller';
 import { verifyToken } from '../middleware/auth.middleware'; 
 
@@ -21,5 +21,7 @@ router.get('/cartera', verifyToken, getCarteraDelCobrador);
 
 // 3. Registrar un abono a un préstamo específico
 router.post('/pago', verifyToken, registrarPago);
+
+router.patch('/installment/:id', verifyToken, updateInstallmentStatus);
 
 export default router;

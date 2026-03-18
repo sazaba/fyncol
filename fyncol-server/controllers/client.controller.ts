@@ -2,100 +2,114 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// Interfaz para asegurar el tipado correcto de las cuotas
+interface InstallmentInput {
+  installmentNumber: number;
+  dueDate: Date;
+  expectedAmount: number;
+  paidAmount: number;
+  status: string;
+}
+
+/**
+ * 1. CREAR CLIENTE Y PRÉSTAMO
+ * Crea el cliente, el préstamo inicial y genera automáticamente el plan de pagos (amortización)
+ */
 export const createClientAndLoan = async (req: any, res: any) => {
   try {
     const {
-      name,
-      address,
-      latitude,
-      longitude,
-      documentUrl,
-      routeId,
-      amount,
-      installments,
-      interestRate,
-      periodicity,
-      firstPaymentDate // <--- 1. Recibimos la fecha del primer pago desde el frontend
+      name, address, latitude, longitude, documentUrl, routeId,
+      amount, installments, interestRate, periodicity, firstPaymentDate
     } = req.body;
 
     if (!name || !address || !routeId || !amount || !installments || !interestRate || !periodicity || !firstPaymentDate) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
 
-    // --- LÓGICA MATEMÁTICA DEL PRÉSTAMO (PRORRATEO POR DÍAS EXACTOS) ---
     const amountNum = parseFloat(amount);
     const interestNum = parseFloat(interestRate);
     const installmentsNum = parseInt(installments);
+    const routeIdInt = parseInt(routeId);
 
-    // 1. Definir cuántos días representa cada cuota según la periodicidad
-    let daysPerInstallment = 1; // DIARIO por defecto
+    let daysPerInstallment = 1; 
     if (periodicity === 'QUINCENAL') daysPerInstallment = 15;
     if (periodicity === 'MENSUAL') daysPerInstallment = 30;
 
-    // 2. Calcular los días exactos hasta el primer pago
-    // Igualamos las horas a cero (00:00:00) para calcular solo los días calendario
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    // Parseamos el string "YYYY-MM-DD" asegurando la zona horaria local
     const [year, month, day] = firstPaymentDate.split('-');
     const firstPayment = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     firstPayment.setHours(0, 0, 0, 0);
 
-    // Diferencia en milisegundos a días
     const diffTime = firstPayment.getTime() - today.getTime();
     let daysUntilFirstPayment = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    // Por seguridad, si eligen una fecha pasada o si es hoy mismo, como mínimo cobramos 1 día
     if (daysUntilFirstPayment <= 0) daysUntilFirstPayment = 1;
 
-    // 3. Calcular los días totales reales que durará el préstamo
-    // Fórmula: Días hasta el 1er pago + (El resto de las cuotas * los días que dura cada cuota)
     const totalDays = daysUntilFirstPayment + ((installmentsNum - 1) * daysPerInstallment);
-
-    // 4. Calcular el interés exacto por día (Interés mensual / 30 * Monto)
     const interestPerDay = (interestNum / 100 / 30) * amountNum;
-    
-    // 5. Calcular el Total Proyectado a Recoger
     const totalInterest = interestPerDay * totalDays;
+    
     const projectedTotal = amountNum + totalInterest;
+    const installmentValue = projectedTotal / installmentsNum;
 
-    // --- TRANSACCIÓN PRISMA ---
+    // Generamos el cronograma de cuotas (Installments)
+    const installmentsArray: InstallmentInput[] = [];
+    let currentDate = new Date(firstPayment);
+
+    for (let i = 1; i <= installmentsNum; i++) {
+      installmentsArray.push({
+        installmentNumber: i,
+        dueDate: new Date(currentDate),
+        expectedAmount: installmentValue,
+        paidAmount: 0,
+        status: "PENDING",
+      });
+
+      if (periodicity === 'MENSUAL') {
+        currentDate.setMonth(currentDate.getMonth() + 1);
+      } else if (periodicity === 'QUINCENAL') {
+        currentDate.setDate(currentDate.getDate() + 15);
+      } else {
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    }
+
     const result = await prisma.$transaction(async (tx) => {
-      const route = await tx.route.findUnique({ where: { id: parseInt(routeId) } });
+      const route = await tx.route.findUnique({ where: { id: routeIdInt } });
       
-      if (!route) {
-        throw new Error("La ruta especificada no existe");
-      }
-      if (Number(route.availableCapital) < amountNum) {
-        throw new Error("Capital insuficiente en esta ruta para realizar el préstamo");
-      }
+      if (!route) throw new Error("La ruta especificada no existe");
+      if (Number(route.availableCapital) < amountNum) throw new Error("Capital insuficiente en esta ruta");
 
       const newClient = await tx.client.create({
         data: {
-          name,
-          address,
-          latitude: latitude ? parseFloat(latitude) : null,
+          name, address, latitude: latitude ? parseFloat(latitude) : null,
           longitude: longitude ? parseFloat(longitude) : null,
           documentUrl,
-          routeId: parseInt(routeId),
+          routeId: routeIdInt,
           loans: {
             create: {
               amount: amountNum,
               installments: installmentsNum,
               interestRate: interestNum,
               periodicity: periodicity,
-              firstPaymentDate: firstPayment, // <--- 2. Guardamos la fecha en la BD
+              firstPaymentDate: firstPayment,
               projectedTotal: projectedTotal,
+              installmentDetails: {
+                create: installmentsArray 
+              }
             }
           }
         },
-        include: { loans: true } 
+        include: { 
+          loans: {
+            include: { installmentDetails: true }
+          }
+        } 
       });
 
-      // Descontar el capital prestado del capital disponible en la ruta
       await tx.route.update({
-        where: { id: parseInt(routeId) },
+        where: { id: routeIdInt },
         data: { availableCapital: { decrement: amountNum } }
       });
 
@@ -103,7 +117,7 @@ export const createClientAndLoan = async (req: any, res: any) => {
     });
 
     return res.status(201).json({
-      message: "Cliente y préstamo registrados exitosamente",
+      message: "Cliente, préstamo y cronograma creados exitosamente",
       data: result
     });
 
@@ -113,11 +127,14 @@ export const createClientAndLoan = async (req: any, res: any) => {
   }
 };
 
+/**
+ * 2. OBTENER CARTERA DEL COBRADOR
+ * Trae todos los clientes y préstamos activos de la ruta del usuario logueado
+ */
 export const getCarteraDelCobrador = async (req: any, res: any) => {
   try {
-    const userId = req.user.id; // Viene del token
+    const userId = req.user.id;
 
-    // Buscar la ruta de este cobrador
     const route = await prisma.route.findFirst({
       where: { assignedToId: userId }
     });
@@ -126,7 +143,6 @@ export const getCarteraDelCobrador = async (req: any, res: any) => {
       return res.status(404).json({ error: "No tienes una ruta asignada." });
     }
 
-    // Traer los clientes de ESA ruta que tengan préstamos activos
     const clients = await prisma.client.findMany({
       where: { 
         routeId: route.id,
@@ -135,7 +151,12 @@ export const getCarteraDelCobrador = async (req: any, res: any) => {
       include: {
         loans: {
           where: { isActive: true },
-          include: { payments: true } // Traemos el historial de pagos para sumar cuánto han pagado
+          include: { 
+            payments: true,
+            installmentDetails: {
+                orderBy: { installmentNumber: 'asc' }
+            }
+          }
         }
       },
       orderBy: { createdAt: 'desc' }
@@ -153,7 +174,10 @@ export const getCarteraDelCobrador = async (req: any, res: any) => {
   }
 };
 
-// 2. Registrar un pago en un préstamo
+/**
+ * 3. REGISTRAR PAGO (ABONO)
+ * Registra el dinero recibido, lo suma al capital de la ruta y cierra el crédito si ya se pagó todo
+ */
 export const registrarPago = async (req: any, res: any) => {
   try {
     const { loanId, amount } = req.body;
@@ -164,7 +188,6 @@ export const registrarPago = async (req: any, res: any) => {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // Obtener el préstamo actual y sus pagos
       const loan = await tx.loan.findUnique({
         where: { id: parseInt(loanId) },
         include: { payments: true, client: true }
@@ -174,12 +197,10 @@ export const registrarPago = async (req: any, res: any) => {
         throw new Error("El préstamo no existe o ya está cancelado.");
       }
 
-      // Sumar lo que ya ha pagado + este nuevo pago
       const totalPaidSoFar = loan.payments.reduce((acc, p) => acc + Number(p.amount), 0);
       const projectedTotal = Number(loan.projectedTotal);
       const newTotalPaid = totalPaidSoFar + amountNum;
 
-      // 1. Crear el recibo de pago
       const newPayment = await tx.payment.create({
         data: {
           amount: amountNum,
@@ -187,16 +208,15 @@ export const registrarPago = async (req: any, res: any) => {
         }
       });
 
-      // 2. Devolver el dinero al bolsillo (Capital) de la ruta
+      // Actualizamos el capital disponible de la ruta
       await tx.route.update({
         where: { id: loan.client.routeId },
         data: { availableCapital: { increment: amountNum } }
       });
 
-      // 3. ¿El préstamo ya se pagó completo? Lo cerramos.
+      // Si el pago total supera o iguala el proyectado, desactivamos el crédito
       let isFullyPaid = false;
-      // Usamos un margen de 10 pesos por si hay un micro-descuadre de decimales
-      if (newTotalPaid >= projectedTotal - 10) {
+      if (newTotalPaid >= projectedTotal - 10) { // Margen de seguridad por decimales
         await tx.loan.update({
           where: { id: loan.id },
           data: { isActive: false }
@@ -212,5 +232,34 @@ export const registrarPago = async (req: any, res: any) => {
   } catch (error: any) {
     console.error("Error al registrar pago:", error);
     res.status(400).json({ error: error.message || "Error al procesar el pago" });
+  }
+};
+// Actualizar el estado de una cuota específica (Amortización Dinámica)
+export const updateInstallmentStatus = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const { status, paidAmount } = req.body;
+
+    const installment = await prisma.installment.update({
+      where: { id: parseInt(id) },
+      data: {
+        status, // PAID, PARTIAL, OVERDUE
+        paidAmount: parseFloat(paidAmount),
+        paidAt: status === 'PAID' ? new Date() : null
+      },
+      include: { loan: { include: { client: true } } }
+    });
+
+    // Si es pago completo, devolvemos el capital a la ruta
+    if (status === 'PAID') {
+      await prisma.route.update({
+        where: { id: installment.loan.client.routeId },
+        data: { availableCapital: { increment: parseFloat(paidAmount) } }
+      });
+    }
+
+    res.json({ success: true, installment });
+  } catch (error) {
+    res.status(400).json({ error: "Error al actualizar cuota" });
   }
 };
