@@ -147,11 +147,14 @@ export default function CarteraActiva() {
     setModalTab('PLAN');
   };
 
+  
   // FUNCIÓN PARA ABRIR GOOGLE MAPS / WAZE EN EL CELULAR
   const openNavigationApp = (lat: number, lng: number) => {
-    // Esto funciona en móviles para abrir las apps nativas, y en PC abre Google Maps web.
+    // Usamos la API universal de direcciones de Google Maps.
+    // El parámetro "dir" y "destination" obligan a la app a trazar la ruta
+    // desde la ubicación actual del celular hacia el cliente.
     const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
-    window.open(url, '_blank');
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   return (
