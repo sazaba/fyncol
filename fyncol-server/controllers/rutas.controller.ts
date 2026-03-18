@@ -59,7 +59,12 @@ export const obtenerRutas = async (req: Request, res: Response) => {
         },
         clients: {
           include: {
-            loans: true
+            loans: {
+              // NUEVO: Incluimos los pagos para poder calcular cuánto han abonado
+              include: {
+                payments: true 
+              }
+            }
           }
         }
       }
@@ -70,8 +75,19 @@ export const obtenerRutas = async (req: Request, res: Response) => {
       
       ruta.clients.forEach(client => {
         client.loans.forEach(loan => {
+          // Solo sumamos el dinero de los préstamos que siguen vivos
           if(loan.isActive) {
-            totalCartera += Number(loan.amount);
+            const metaTotal = Number(loan.projectedTotal || 0);
+            
+            // Calculamos todo lo que este cliente ya ha pagado
+            const totalPagado = loan.payments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
+            
+            // El dinero que realmente falta por recoger en la calle
+            const saldoPendiente = metaTotal - totalPagado;
+
+            if (saldoPendiente > 0) {
+              totalCartera += saldoPendiente;
+            }
           }
         });
       });
@@ -81,12 +97,14 @@ export const obtenerRutas = async (req: Request, res: Response) => {
       
       return {
         ...rutaData,
-        totalCartera
+        // Redondeamos para mantener la limpieza visual sin decimales
+        totalCartera: Math.round(totalCartera) 
       };
     });
 
     res.json(rutasConCartera);
   } catch (error) {
+    console.error("Error al obtener rutas:", error);
     res.status(500).json({ error: 'Error interno al obtener las rutas' });
   }
 };
