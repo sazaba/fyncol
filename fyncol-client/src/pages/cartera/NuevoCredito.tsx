@@ -88,50 +88,54 @@ export default function NuevoCredito() {
   }, [alertState.open]);
 
 
-  // OBTENER RUTA ASIGNADA
-  useEffect(() => {
-    const fetchMiRuta = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const userStr = localStorage.getItem("user");
-        
-        if (!userStr || !token) {
-          setErrorFetchRuta("Sesión no válida. Vuelve a iniciar sesión.");
-          return;
-        }
-
-        const currentUser = JSON.parse(userStr);
-        if (!currentUser.id) {
-          setErrorFetchRuta("Falta el ID del usuario en la sesión. Inicia sesión nuevamente.");
-          return;
-        }
-
-        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-        const res = await fetch(`${baseUrl}/api/rutas`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          const rutas = Array.isArray(data) ? data : data.data || []; 
-          
-          const miRutaEncontrada = rutas.find((r: any) => r.assignedTo?.id === currentUser.id);
-          
-          if (miRutaEncontrada) {
-            setRutaAsignada(miRutaEncontrada);
-            setFormData(prev => ({ ...prev, routeId: miRutaEncontrada.id.toString() }));
-          } else {
-            setErrorFetchRuta("No tienes ninguna ruta asignada actualmente. Contacta al administrador.");
-          }
-        } else {
-          setErrorFetchRuta(`Error del servidor: código ${res.status}`);
-        }
-      } catch (error) {
-        setErrorFetchRuta("Error de conexión con el servidor.");
-      } finally {
-        setIsLoadingRuta(false);
+  // FUNCIÓN PARA OBTENER LA RUTA (Extraída para poder reutilizarla)
+  const fetchMiRuta = async () => {
+    setIsLoadingRuta(true);
+    setErrorFetchRuta(null);
+    try {
+      const token = localStorage.getItem("token");
+      const userStr = localStorage.getItem("user");
+      
+      if (!userStr || !token) {
+        setErrorFetchRuta("Sesión no válida. Vuelve a iniciar sesión.");
+        return;
       }
-    };
+
+      const currentUser = JSON.parse(userStr);
+      if (!currentUser.id) {
+        setErrorFetchRuta("Falta el ID del usuario en la sesión. Inicia sesión nuevamente.");
+        return;
+      }
+
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const res = await fetch(`${baseUrl}/api/rutas`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const rutas = Array.isArray(data) ? data : data.data || []; 
+        
+        const miRutaEncontrada = rutas.find((r: any) => r.assignedTo?.id === currentUser.id);
+        
+        if (miRutaEncontrada) {
+          setRutaAsignada(miRutaEncontrada);
+          setFormData(prev => ({ ...prev, routeId: miRutaEncontrada.id.toString() }));
+        } else {
+          setErrorFetchRuta("No tienes ninguna ruta asignada actualmente. Contacta al administrador.");
+        }
+      } else {
+        setErrorFetchRuta(`Error del servidor: código ${res.status}`);
+      }
+    } catch (error) {
+      setErrorFetchRuta("Error de conexión con el servidor.");
+    } finally {
+      setIsLoadingRuta(false);
+    }
+  };
+
+  // Cargar ruta al iniciar
+  useEffect(() => {
     fetchMiRuta();
   }, []);
 
@@ -259,7 +263,7 @@ export default function NuevoCredito() {
         confirmText: "Listo",
         onConfirm: () => {
           closeAlert();
-          // Limpiar formulario al confirmar
+          // Limpiar formulario
           setFormData({ 
             name: '', address: '', 
             routeId: rutaAsignada?.id.toString() || '', 
@@ -267,6 +271,9 @@ export default function NuevoCredito() {
           });
           setLocation({ latitude: null, longitude: null });
           setFile(null);
+          
+          // ACTUALIZAR RUTA EN TIEMPO REAL
+          fetchMiRuta();
         }
       });
       
@@ -301,7 +308,7 @@ export default function NuevoCredito() {
           {isLoadingRuta ? (
             <div className="col-span-3 flex items-center justify-center gap-3 text-slate-400 text-sm p-4 bg-[#0B0B12] rounded-xl border border-white/5">
               <FiLoader className="animate-spin text-blue-500" />
-              Cargando métricas de tu ruta...
+              Actualizando métricas de tu ruta...
             </div>
           ) : errorFetchRuta ? (
             <div className="col-span-3 text-red-400 text-sm p-4 bg-red-500/10 rounded-xl border border-red-500/30">⚠️ {errorFetchRuta}</div>
@@ -310,7 +317,7 @@ export default function NuevoCredito() {
               <div className="bg-[#0B0B12] border border-white/5 rounded-xl p-4 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-slate-400 mb-1">
                   <FiMap size={14} />
-                  <span className="text-[10px] font-bold tracking-widest uppercase">Ruta Operativa Asignada</span>
+                  <span className="text-[10px] font-bold tracking-widest uppercase">Ruta Operativa</span>
                 </div>
                 <p className="text-sm font-semibold text-white">
                   {rutaAsignada.city}, {rutaAsignada.country} <span className="text-slate-500 text-xs ml-1">(ID: {rutaAsignada.id})</span>
@@ -411,7 +418,7 @@ export default function NuevoCredito() {
               </div>
               
               <div>
-                <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Interés %</label>
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Interés Mensual</label>
                 <div className="relative">
                   <input required type="number" name="interestRate" value={formData.interestRate} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl pl-4 pr-8 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner" placeholder="Ej: 20" />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">%</span>
@@ -467,7 +474,7 @@ export default function NuevoCredito() {
 
       </form>
 
-      {/* ALERTA PREMIUM (Idéntica a UsersPage) */}
+      {/* ALERTA PREMIUM */}
       {alertState.open && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-md px-4">
           <div className="w-full max-w-[520px] rounded-3xl border border-white/10 bg-[#05050A]/90 shadow-2xl overflow-hidden animate-[slideUp_0.18s_ease-out]">
