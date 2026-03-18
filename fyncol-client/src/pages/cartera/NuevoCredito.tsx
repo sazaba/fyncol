@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   FiMapPin, FiUploadCloud, FiSave, FiUser, FiDollarSign, 
-  FiMap, FiBriefcase, FiAlertTriangle, FiX, FiLoader, FiCalendar 
+  FiMap, FiBriefcase, FiAlertTriangle, FiX, FiLoader, FiCalendar, FiList 
 } from 'react-icons/fi';
 
 interface ClientFormData {
@@ -40,8 +40,8 @@ export default function NuevoCredito() {
   const [formData, setFormData] = useState<ClientFormData>({
     name: '', address: '', routeId: '',
     amount: '', installments: '', interestRate: '', 
-    periodicity: 'DIARIO', 
-    firstPaymentDate: getTodayFormatted() // Inicializado
+    periodicity: 'MENSUAL', // Iniciamos en mensual por defecto como en tu captura
+    firstPaymentDate: getTodayFormatted() 
   });
   
   const [location, setLocation] = useState<LocationData>({ latitude: null, longitude: null });
@@ -51,6 +51,9 @@ export default function NuevoCredito() {
   const [rutaAsignada, setRutaAsignada] = useState<any | null>(null);
   const [isLoadingRuta, setIsLoadingRuta] = useState(true);
   const [errorFetchRuta, setErrorFetchRuta] = useState<string | null>(null);
+
+  // NUEVO ESTADO: Controla la visibilidad del modal de amortización
+  const [showAmortization, setShowAmortization] = useState(false);
 
   // ESTADO DE LA ALERTA PREMIUM
   const [alertState, setAlertState] = useState<PremiumAlertState>({
@@ -80,18 +83,21 @@ export default function NuevoCredito() {
     setAlertState((prev) => ({ ...prev, open: false, onConfirm: null }));
   };
 
-  // Evitar scroll cuando la alerta está abierta
+  // Evitar scroll cuando la alerta o la tabla están abiertas
   useEffect(() => {
-    document.body.style.overflow = alertState.open ? "hidden" : "auto";
-  }, [alertState.open]);
+    document.body.style.overflow = (alertState.open || showAmortization) ? "hidden" : "auto";
+  }, [alertState.open, showAmortization]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && alertState.open) closeAlert();
+      if (e.key === "Escape") {
+        if (alertState.open) closeAlert();
+        if (showAmortization) setShowAmortization(false);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [alertState.open]);
+  }, [alertState.open, showAmortization]);
 
   // FUNCIÓN PARA OBTENER LA RUTA
   const fetchMiRuta = async () => {
@@ -156,21 +162,21 @@ export default function NuevoCredito() {
     setFormData(prev => ({ ...prev, firstPaymentDate: today.toISOString().split('T')[0] }));
   }, [formData.periodicity]);
 
-  // CÁLCULOS MATEMÁTICOS DEL PRÉSTAMO (CON DÍAS EXACTOS)
+  // CÁLCULOS MATEMÁTICOS DEL PRÉSTAMO Y TABLA DE AMORTIZACIÓN
   const creditMetrics = useMemo(() => {
     const amountNum = parseFloat(formData.amount) || 0;
     const interestNum = parseFloat(formData.interestRate) || 0;
     const installmentsNum = parseInt(formData.installments) || 0;
 
     if (amountNum === 0 || installmentsNum === 0 || !formData.firstPaymentDate) {
-      return { total: 0, installmentValue: 0 };
+      return { total: 0, installmentValue: 0, schedule: [] };
     }
 
     let daysPerInstallment = 1; 
     if (formData.periodicity === 'QUINCENAL') daysPerInstallment = 15;
     if (formData.periodicity === 'MENSUAL') daysPerInstallment = 30;
 
-    // Calcular días hasta el primer pago
+    // Calcular días hasta el primer pago (Opción B)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -193,7 +199,24 @@ export default function NuevoCredito() {
     const total = amountNum + totalInterest;
     const installmentValue = total / installmentsNum;
 
-    return { total, installmentValue };
+    // Generar la tabla de amortización
+    const schedule = [];
+    let currentBalance = total;
+    let currentDate = new Date(firstPayment);
+
+    for (let i = 1; i <= installmentsNum; i++) {
+      schedule.push({
+        number: i,
+        date: currentDate.toLocaleDateString('es-CO', { year: 'numeric', month: 'short', day: '2-digit' }),
+        amount: installmentValue,
+        balance: Math.max(0, currentBalance - installmentValue) // Math.max previene saldos negativos por redondeo
+      });
+      // Sumar días para el próximo pago
+      currentDate.setDate(currentDate.getDate() + daysPerInstallment);
+      currentBalance -= installmentValue;
+    }
+
+    return { total, installmentValue, schedule };
   }, [formData.amount, formData.interestRate, formData.installments, formData.periodicity, formData.firstPaymentDate]);
 
   const handleGetLocation = () => {
@@ -497,8 +520,18 @@ export default function NuevoCredito() {
               </div>
             </div>
             
-            <div className="mt-8 bg-gradient-to-br from-blue-900/10 to-blue-600/5 border border-blue-500/20 rounded-3xl p-6 flex flex-col gap-5 shadow-[inset_0_0_20px_rgba(37,99,235,0.05)]">
+            {/* CAJA DE RESULTADOS CON EL BOTÓN "VER TABLA" */}
+            <div className="mt-8 bg-gradient-to-br from-blue-900/10 to-blue-600/5 border border-blue-500/20 rounded-3xl p-6 flex flex-col gap-5 shadow-[inset_0_0_20px_rgba(37,99,235,0.05)] relative">
               
+              <button 
+                type="button" 
+                onClick={() => setShowAmortization(true)}
+                disabled={creditMetrics.schedule.length === 0}
+                className="absolute top-5 right-5 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 text-xs font-semibold hover:bg-blue-500/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed border border-blue-500/20"
+              >
+                <FiList size={14} /> <span className="hidden sm:inline">Ver Tabla</span>
+              </button>
+
               <div>
                 <p className="text-[10px] text-blue-400/80 font-bold uppercase tracking-widest mb-1">Total Proyectado a Recoger</p>
                 <p className="text-3xl md:text-4xl font-bold text-white tracking-tight">${creditMetrics.total.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</p>
@@ -529,9 +562,56 @@ export default function NuevoCredito() {
 
       </form>
 
+      {/* MODAL: TABLA DE AMORTIZACIÓN */}
+      {showAmortization && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4 p-4 md:p-8" onClick={(e) => { if (e.target === e.currentTarget) setShowAmortization(false); }}>
+          <div className="w-full max-w-2xl bg-[#05050A] border border-white/10 rounded-[30px] shadow-2xl flex flex-col max-h-[85dvh] animate-[slideUp_0.2s_ease-out]">
+            <div className="flex justify-between items-center p-6 border-b border-white/10 shrink-0">
+              <div>
+                <h3 className="text-xl font-bold text-white">Tabla de Pagos Proyectada</h3>
+                <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">{formData.periodicity} - {formData.installments} CUOTAS</p>
+              </div>
+              <button onClick={() => setShowAmortization(false)} className="text-slate-500 hover:text-white p-2 bg-white/5 rounded-full transition-colors">
+                <FiX size={20} />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-auto p-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <div className="grid grid-cols-4 gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 border-b border-white/5 pb-2">
+                <div>Nº Cuota</div>
+                <div>Fecha</div>
+                <div className="text-right">A Pagar</div>
+                <div className="text-right">Saldo Restante</div>
+              </div>
+              
+              <div className="space-y-2">
+                {creditMetrics.schedule.map((item: any) => (
+                  <div key={item.number} className="grid grid-cols-4 gap-2 text-sm items-center bg-white/[0.02] p-3 rounded-xl hover:bg-white/[0.04] transition-colors border border-transparent hover:border-white/5">
+                    <div className="font-semibold text-slate-300">#{item.number}</div>
+                    <div className="text-blue-300 text-xs md:text-sm">{item.date}</div>
+                    <div className="text-right font-medium text-emerald-400">${item.amount.toLocaleString('es-CO', { maximumFractionDigits: 0 })}</div>
+                    <div className="text-right font-medium text-slate-400">${item.balance.toLocaleString('es-CO', { maximumFractionDigits: 0 })}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-white/10 bg-[#0B0B12] rounded-b-[30px] shrink-0 flex justify-between items-center">
+              <div>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Total a Recoger</p>
+                <p className="text-xl font-bold text-white">${creditMetrics.total.toLocaleString('es-CO', { maximumFractionDigits: 0 })}</p>
+              </div>
+              <button onClick={() => setShowAmortization(false)} className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-semibold transition-all active:scale-95">
+                Cerrar Tabla
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ALERTA PREMIUM */}
       {alertState.open && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-md px-4">
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 backdrop-blur-md px-4">
           <div className="w-full max-w-[520px] rounded-3xl border border-white/10 bg-[#05050A]/90 shadow-2xl overflow-hidden animate-[slideUp_0.18s_ease-out]">
             <div className="p-6 md:p-7 flex items-start gap-4">
               <div
