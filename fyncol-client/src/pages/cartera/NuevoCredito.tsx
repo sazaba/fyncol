@@ -1,5 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { FiMapPin, FiUploadCloud, FiSave, FiUser, FiDollarSign, FiMap, FiBriefcase } from 'react-icons/fi';
+import { 
+  FiMapPin, FiUploadCloud, FiSave, FiUser, FiDollarSign, 
+  FiMap, FiBriefcase, FiAlertTriangle, FiX, FiLoader 
+} from 'react-icons/fi';
 
 interface ClientFormData {
   name: string;
@@ -16,10 +19,23 @@ interface LocationData {
   longitude: number | null;
 }
 
+// TIPOS PARA LA ALERTA PREMIUM
+type AlertVariant = "info" | "success" | "danger";
+
+type PremiumAlertState = {
+  open: boolean;
+  variant: AlertVariant;
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm?: (() => void) | null;
+};
+
 export default function NuevoCredito() {
   const [formData, setFormData] = useState<ClientFormData>({
     name: '', address: '', routeId: '',
-    amount: '', installments: '', interestRate: '', periodicity: 'DIARIO' // DIARIO por defecto
+    amount: '', installments: '', interestRate: '', periodicity: 'DIARIO'
   });
   
   const [location, setLocation] = useState<LocationData>({ latitude: null, longitude: null });
@@ -30,6 +46,49 @@ export default function NuevoCredito() {
   const [isLoadingRuta, setIsLoadingRuta] = useState(true);
   const [errorFetchRuta, setErrorFetchRuta] = useState<string | null>(null);
 
+  // ESTADO DE LA ALERTA PREMIUM
+  const [alertState, setAlertState] = useState<PremiumAlertState>({
+    open: false,
+    variant: "info",
+    title: "",
+    message: "",
+    confirmText: "Confirmar",
+    cancelText: "",
+    onConfirm: null,
+  });
+
+  const openAlert = (payload: Partial<PremiumAlertState>) => {
+    setAlertState((prev) => ({
+      ...prev,
+      open: true,
+      variant: payload.variant ?? prev.variant,
+      title: payload.title ?? prev.title,
+      message: payload.message ?? prev.message,
+      confirmText: payload.confirmText ?? prev.confirmText,
+      cancelText: payload.cancelText ?? prev.cancelText,
+      onConfirm: payload.onConfirm ?? prev.onConfirm,
+    }));
+  };
+
+  const closeAlert = () => {
+    setAlertState((prev) => ({ ...prev, open: false, onConfirm: null }));
+  };
+
+  // Evitar scroll cuando la alerta está abierta
+  useEffect(() => {
+    document.body.style.overflow = alertState.open ? "hidden" : "auto";
+  }, [alertState.open]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && alertState.open) closeAlert();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [alertState.open]);
+
+
+  // OBTENER RUTA ASIGNADA
   useEffect(() => {
     const fetchMiRuta = async () => {
       try {
@@ -66,11 +125,9 @@ export default function NuevoCredito() {
           }
         } else {
           setErrorFetchRuta(`Error del servidor: código ${res.status}`);
-          console.error("Error al obtener rutas, status:", res.status);
         }
       } catch (error) {
         setErrorFetchRuta("Error de conexión con el servidor.");
-        console.error("Error en la petición de rutas:", error);
       } finally {
         setIsLoadingRuta(false);
       }
@@ -78,7 +135,7 @@ export default function NuevoCredito() {
     fetchMiRuta();
   }, []);
 
-  // LÓGICA DE CÁLCULO MATEMÁTICO EN TIEMPO REAL ACTUALIZADA
+  // CÁLCULOS MATEMÁTICOS DEL PRÉSTAMO
   const creditMetrics = useMemo(() => {
     const amountNum = parseFloat(formData.amount) || 0;
     const interestNum = parseFloat(formData.interestRate) || 0;
@@ -88,24 +145,15 @@ export default function NuevoCredito() {
       return { total: 0, installmentValue: 0 };
     }
 
-    // Determinamos los días por cuota según la periodicidad
-    let daysPerInstallment = 1; // DIARIO
+    let daysPerInstallment = 1; 
     if (formData.periodicity === 'QUINCENAL') daysPerInstallment = 15;
     if (formData.periodicity === 'MENSUAL') daysPerInstallment = 30;
 
-    // (Interés mensual / 30) * Monto a prestar = Interés cobrado por día
     const interestPerDay = (interestNum / 100 / 30) * amountNum;
-    
-    // Días totales del préstamo
     const totalDays = installmentsNum * daysPerInstallment;
-    
-    // Interés total generado
     const totalInterest = interestPerDay * totalDays;
 
-    // Total proyectado a recoger (Capital + Interés)
     const total = amountNum + totalInterest;
-    
-    // Valor a pagar por cada cuota
     const installmentValue = total / installmentsNum;
 
     return { total, installmentValue };
@@ -119,15 +167,32 @@ export default function NuevoCredito() {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude
           });
-          alert("Ubicación capturada con éxito"); 
+          openAlert({
+            variant: "success",
+            title: "Ubicación capturada",
+            message: "Las coordenadas GPS se han registrado correctamente.",
+            confirmText: "Entendido",
+            onConfirm: () => closeAlert()
+          });
         },
-        (error) => {
-          console.error("Error GPS:", error);
-          alert("Por favor habilita el GPS en tu dispositivo.");
+        () => {
+          openAlert({
+            variant: "danger",
+            title: "Error GPS",
+            message: "Por favor habilita el GPS o los permisos de ubicación en tu navegador.",
+            confirmText: "Entendido",
+            onConfirm: () => closeAlert()
+          });
         }
       );
     } else {
-      alert("Tu navegador no soporta geolocalización.");
+      openAlert({
+        variant: "info",
+        title: "No Soportado",
+        message: "Tu navegador o dispositivo no soporta geolocalización.",
+        confirmText: "Entendido",
+        onConfirm: () => closeAlert()
+      });
     }
   };
 
@@ -180,24 +245,40 @@ export default function NuevoCredito() {
         body: JSON.stringify(payload)
       });
 
+      const responseData = await response.json().catch(() => null);
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Error al registrar la operación");
+        throw new Error(responseData?.error || "Error del servidor al registrar la operación");
       }
 
-      alert("Cliente y préstamo registrados correctamente");
-      
-      setFormData({ 
-        name: '', address: '', 
-        routeId: rutaAsignada?.id.toString() || '', 
-        amount: '', installments: '', interestRate: '', periodicity: 'DIARIO'
+      // ALERTA DE ÉXITO
+      openAlert({
+        variant: "success",
+        title: "Crédito Registrado",
+        message: "El cliente y su préstamo inicial se guardaron correctamente. El capital ha sido descontado de la ruta.",
+        confirmText: "Listo",
+        onConfirm: () => {
+          closeAlert();
+          // Limpiar formulario al confirmar
+          setFormData({ 
+            name: '', address: '', 
+            routeId: rutaAsignada?.id.toString() || '', 
+            amount: '', installments: '', interestRate: '', periodicity: 'DIARIO'
+          });
+          setLocation({ latitude: null, longitude: null });
+          setFile(null);
+        }
       });
-      setLocation({ latitude: null, longitude: null });
-      setFile(null);
       
     } catch (error: any) {
       console.error(error);
-      alert(error.message);
+      openAlert({
+        variant: "danger",
+        title: "Error al guardar",
+        message: error.message || "Ocurrió un error inesperado.",
+        confirmText: "Revisar",
+        onConfirm: () => closeAlert()
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -208,7 +289,7 @@ export default function NuevoCredito() {
   };
 
   return (
-    <div className="p-6 md:p-8 space-y-6 font-inter">
+    <div className="max-w-6xl mx-auto px-4 md:px-8 pt-8 md:pt-10 md:h-[calc(100dvh-90px)] md:overflow-y-auto md:[&::-webkit-scrollbar]:hidden md:[-ms-overflow-style:none] md:[scrollbar-width:none] pb-10">
       
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6 mb-8">
         <div>
@@ -218,7 +299,10 @@ export default function NuevoCredito() {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full xl:w-auto">
           {isLoadingRuta ? (
-            <div className="col-span-3 text-slate-500 text-sm p-4 bg-[#0B0B12] rounded-xl border border-white/5">Cargando métricas de tu ruta...</div>
+            <div className="col-span-3 flex items-center justify-center gap-3 text-slate-400 text-sm p-4 bg-[#0B0B12] rounded-xl border border-white/5">
+              <FiLoader className="animate-spin text-blue-500" />
+              Cargando métricas de tu ruta...
+            </div>
           ) : errorFetchRuta ? (
             <div className="col-span-3 text-red-400 text-sm p-4 bg-red-500/10 rounded-xl border border-red-500/30">⚠️ {errorFetchRuta}</div>
           ) : rutaAsignada && (
@@ -229,11 +313,11 @@ export default function NuevoCredito() {
                   <span className="text-[10px] font-bold tracking-widest uppercase">Ruta Operativa Asignada</span>
                 </div>
                 <p className="text-sm font-semibold text-white">
-                  {rutaAsignada.city}, {rutaAsignada.country} (ID: {rutaAsignada.id})
+                  {rutaAsignada.city}, {rutaAsignada.country} <span className="text-slate-500 text-xs ml-1">(ID: {rutaAsignada.id})</span>
                 </p>
               </div>
 
-              <div className="bg-[#0B0B12] border border-white/5 rounded-xl p-4 flex flex-col justify-center border-b-2 border-b-green-500/50">
+              <div className="bg-[#0B0B12] border border-white/5 rounded-xl p-4 flex flex-col justify-center border-b-2 border-b-green-500/50 shadow-[0_4px_20px_-10px_rgba(34,197,94,0.3)]">
                 <div className="flex items-center gap-2 text-slate-400 mb-1">
                   <FiDollarSign size={14} className="text-green-400" />
                   <span className="text-[10px] font-bold tracking-widest uppercase text-green-400/80">Capital Disponible</span>
@@ -243,7 +327,7 @@ export default function NuevoCredito() {
                 </p>
               </div>
 
-              <div className="bg-[#0B0B12] border border-white/5 rounded-xl p-4 flex flex-col justify-center border-b-2 border-b-blue-500/50">
+              <div className="bg-[#0B0B12] border border-white/5 rounded-xl p-4 flex flex-col justify-center border-b-2 border-b-blue-500/50 shadow-[0_4px_20px_-10px_rgba(59,130,246,0.3)]">
                 <div className="flex items-center gap-2 text-slate-400 mb-1">
                   <FiBriefcase size={14} className="text-blue-400" />
                   <span className="text-[10px] font-bold tracking-widest uppercase text-blue-400/80">Total Cartera</span>
@@ -260,86 +344,89 @@ export default function NuevoCredito() {
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Columna Izquierda: Datos del Cliente */}
-        <div className="bg-[#0B0B12] border border-white/5 rounded-2xl p-6 space-y-6">
+        <div className="bg-[#0B0B12]/80 backdrop-blur-sm border border-white/5 rounded-3xl p-6 space-y-6 shadow-xl">
           <div className="flex items-center gap-2 border-b border-white/5 pb-3">
-            <FiUser className="text-blue-500" size={20} />
+            <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
+              <FiUser size={16} />
+            </div>
             <h2 className="text-lg font-semibold text-white">Datos del Cliente</h2>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Nombre Completo</label>
-              <input required name="name" value={formData.name} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-transparent border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Ej: Cliente de Prueba" />
+              <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Nombre Completo</label>
+              <input required name="name" value={formData.name} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl px-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner" placeholder="Ej: Juan Pérez" />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Dirección</label>
-              <input required name="address" value={formData.address} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-transparent border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Ej: Calle Principal 123" />
+              <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Dirección</label>
+              <input required name="address" value={formData.address} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl px-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner" placeholder="Ej: Calle Principal 123" />
             </div>
 
             <div className="pt-2">
-              <button type="button" onClick={handleGetLocation} disabled={!rutaAsignada} className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl border transition-all ${!rutaAsignada ? 'opacity-50 cursor-not-allowed bg-blue-500/5 border-white/5 text-slate-500' : location.latitude ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20'}`}>
+              <button type="button" onClick={handleGetLocation} disabled={!rutaAsignada} className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border transition-all ${!rutaAsignada ? 'opacity-50 cursor-not-allowed bg-blue-500/5 border-white/5 text-slate-500' : location.latitude ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20'}`}>
                 <FiMapPin size={18} />
-                <span className="font-medium">{location.latitude ? "Ubicación Capturada" : "Capturar Ubicación GPS"}</span>
+                <span className="font-medium text-sm">{location.latitude ? "Ubicación Capturada" : "Capturar Ubicación GPS"}</span>
               </button>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Foto de la Cédula</label>
-              <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-white/10 rounded-xl transition-all ${rutaAsignada ? 'hover:border-blue-500/50 hover:bg-blue-500/5 cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
+              <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Foto de la Cédula</label>
+              <label className={`flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-white/10 rounded-2xl transition-all bg-[#05050A]/30 ${rutaAsignada ? 'hover:border-blue-500/50 hover:bg-blue-500/5 cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
                   <FiUploadCloud className="w-8 h-8 mb-3 text-slate-400" />
-                  <p className="mb-2 text-sm text-slate-400"><span className="font-semibold text-blue-400">Haz clic para subir</span> o arrastra</p>
-                  <p className="text-xs text-slate-500">SVG, PNG, JPG (MAX. 5MB)</p>
+                  <p className="mb-2 text-sm text-slate-300"><span className="font-semibold text-blue-400">Haz clic para subir</span> o arrastra</p>
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500">SVG, PNG, JPG (MAX. 5MB)</p>
                 </div>
                 <input type="file" className="hidden" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} disabled={!rutaAsignada} />
               </label>
-              {file && <p className="text-xs text-green-400 mt-2 text-center">Archivo seleccionado: {file.name}</p>}
+              {file && <p className="text-xs font-medium text-emerald-400 mt-2 text-center bg-emerald-500/10 py-2 rounded-xl">Archivo: {file.name}</p>}
             </div>
           </div>
         </div>
 
         {/* Columna Derecha: Datos del Crédito */}
-        <div className="bg-[#0B0B12] border border-white/5 rounded-2xl p-6 flex flex-col h-full">
+        <div className="bg-[#0B0B12]/80 backdrop-blur-sm border border-white/5 rounded-3xl p-6 flex flex-col h-full shadow-xl">
           <div className="flex items-center gap-2 border-b border-white/5 pb-3 mb-6">
-            <FiDollarSign className="text-blue-500" size={20} />
+            <div className="h-8 w-8 rounded-lg bg-green-500/10 flex items-center justify-center text-green-400">
+              <FiDollarSign size={16} />
+            </div>
             <h2 className="text-lg font-semibold text-white">Detalles del Préstamo</h2>
           </div>
 
-          <div className="space-y-4 flex-1">
+          <div className="space-y-5 flex-1">
             
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Monto a Prestar</label>
+              <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Monto a Prestar</label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">$</span>
-                <input required type="number" name="amount" value={formData.amount} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-transparent border border-white/10 rounded-xl pl-8 pr-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed" placeholder="0.00" />
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
+                <input required type="number" name="amount" value={formData.amount} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl pl-8 pr-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner" placeholder="0.00" />
               </div>
             </div>
 
-            {/* NUEVA ESTRUCTURA: 3 Columnas para Cuotas, Interés y Periodicidad */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Cuotas</label>
-                <input required type="number" name="installments" value={formData.installments} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-transparent border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Ej: 30" />
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Cuotas</label>
+                <input required type="number" name="installments" value={formData.installments} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl px-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner" placeholder="Ej: 30" />
               </div>
               
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Interés Mensual</label>
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Interés %</label>
                 <div className="relative">
-                  <input required type="number" name="interestRate" value={formData.interestRate} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-transparent border border-white/10 rounded-xl pl-4 pr-8 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Ej: 20" />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500">%</span>
+                  <input required type="number" name="interestRate" value={formData.interestRate} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl pl-4 pr-8 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner" placeholder="Ej: 20" />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">%</span>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Periodicidad</label>
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Periodicidad</label>
                 <select 
                   required 
                   name="periodicity" 
                   value={formData.periodicity} 
                   onChange={handleChange} 
                   disabled={!rutaAsignada} 
-                  className="w-full bg-[#05050A] border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-blue-500 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-inner"
                 >
                   <option value="DIARIO">Diario</option>
                   <option value="QUINCENAL">Quincenal</option>
@@ -348,19 +435,18 @@ export default function NuevoCredito() {
               </div>
             </div>
             
-            {/* NUEVO DISEÑO: Métrica de Cuota a pagar */}
-            <div className="mt-8 bg-gradient-to-br from-blue-900/20 to-transparent border border-blue-500/20 rounded-xl p-5 flex flex-col gap-4">
+            <div className="mt-8 bg-gradient-to-br from-blue-900/10 to-blue-600/5 border border-blue-500/20 rounded-3xl p-6 flex flex-col gap-5 shadow-[inset_0_0_20px_rgba(37,99,235,0.05)]">
               
               <div>
-                <p className="text-sm text-blue-400 font-medium mb-1">Total Proyectado a Recoger</p>
-                <p className="text-3xl font-bold text-white">${creditMetrics.total.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</p>
+                <p className="text-[10px] text-blue-400/80 font-bold uppercase tracking-widest mb-1">Total Proyectado a Recoger</p>
+                <p className="text-3xl md:text-4xl font-bold text-white tracking-tight">${creditMetrics.total.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</p>
               </div>
 
-              <div className="pt-4 border-t border-blue-500/20">
-                <p className="text-xs text-blue-300/80 font-medium uppercase tracking-wider mb-1">
-                  Valor a pagar por cuota ({formData.periodicity.toLowerCase()})
+              <div className="pt-5 border-t border-blue-500/20">
+                <p className="text-[10px] text-emerald-400/80 font-bold uppercase tracking-widest mb-1">
+                  Valor Cuota ({formData.periodicity.toLowerCase()})
                 </p>
-                <p className="text-xl font-bold text-green-400">
+                <p className="text-2xl font-bold text-emerald-400">
                   ${creditMetrics.installmentValue.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                 </p>
               </div>
@@ -369,14 +455,74 @@ export default function NuevoCredito() {
           </div>
 
           <div className="pt-6 mt-6 border-t border-white/5">
-            <button type="submit" disabled={isSubmitting || !rutaAsignada} className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl py-3.5 px-4 font-semibold transition-colors shadow-lg shadow-blue-500/20">
-              <FiSave size={18} />
-              {isSubmitting ? "Registrando Operación..." : "Guardar Cliente y Crédito"}
+            <button type="submit" disabled={isSubmitting || !rutaAsignada} className="group relative w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 text-white rounded-2xl py-4 font-semibold transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_25px_rgba(37,99,235,0.5)]">
+              {isSubmitting ? (
+                <><FiLoader className="animate-spin" size={18} /> Procesando Transacción...</>
+              ) : (
+                <><FiSave size={18} /> Guardar Cliente y Crédito</>
+              )}
             </button>
           </div>
         </div>
 
       </form>
+
+      {/* ALERTA PREMIUM (Idéntica a UsersPage) */}
+      {alertState.open && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-md px-4">
+          <div className="w-full max-w-[520px] rounded-3xl border border-white/10 bg-[#05050A]/90 shadow-2xl overflow-hidden animate-[slideUp_0.18s_ease-out]">
+            <div className="p-6 md:p-7 flex items-start gap-4">
+              <div
+                className={`shrink-0 h-11 w-11 rounded-2xl flex items-center justify-center border ${
+                  alertState.variant === "danger"
+                    ? "bg-red-500/10 border-red-500/20 text-red-300"
+                    : alertState.variant === "success"
+                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                    : "bg-blue-500/10 border-blue-500/20 text-blue-300"
+                }`}
+              >
+                <FiAlertTriangle size={18} />
+              </div>
+
+              <div className="flex-1">
+                <h3 className="text-white font-bold text-lg">{alertState.title}</h3>
+                <p className="text-slate-300 text-sm mt-1 leading-relaxed">{alertState.message}</p>
+              </div>
+
+              <button onClick={closeAlert} className="text-slate-500 hover:text-white p-2 -m-2" aria-label="Cerrar alerta">
+                <FiX size={18} />
+              </button>
+            </div>
+
+            <div className="px-6 md:px-7 pb-6 flex gap-3 justify-end">
+              {alertState.cancelText ? (
+                <button
+                  onClick={closeAlert}
+                  className="px-4 py-2.5 rounded-2xl border border-white/10 text-slate-300 hover:bg-white/5 transition-colors text-sm font-medium"
+                >
+                  {alertState.cancelText}
+                </button>
+              ) : null}
+
+              <button
+                onClick={() => {
+                  if (alertState.onConfirm) alertState.onConfirm();
+                  else closeAlert();
+                }}
+                className={`px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98] ${
+                  alertState.variant === "danger"
+                    ? "bg-red-600 text-white shadow-[0_0_20px_rgba(220,38,38,0.35)]"
+                    : alertState.variant === "success"
+                    ? "bg-emerald-600 text-white shadow-[0_0_20px_rgba(16,185,129,0.30)]"
+                    : "bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.35)]"
+                }`}
+              >
+                {alertState.confirmText || "OK"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
