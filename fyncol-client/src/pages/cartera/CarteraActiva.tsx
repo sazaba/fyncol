@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo} from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   FiDollarSign, FiMapPin, FiSearch, 
   FiAlertTriangle, FiX, FiLoader, FiNavigation, FiCalendar, FiFilter, FiSlash,
@@ -20,7 +20,17 @@ const redIcon = new L.Icon({
   iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
 });
 
-// Componente utilitario para mover el mapa dinámicamente
+// Utilidad para traducir estados
+const traducirEstado = (status: string) => {
+  switch (status) {
+    case 'PAID': return 'PAGADO';
+    case 'PARTIAL': return 'ABONO PARCIAL';
+    case 'OVERDUE': return 'EN MORA';
+    case 'PENDING': return 'PENDIENTE';
+    default: return status;
+  }
+};
+
 function MapController({ coords, zoom }: { coords: [number, number] | null, zoom?: number }) {
   const map = useMap();
   useEffect(() => {
@@ -39,14 +49,14 @@ export default function CarteraActiva() {
   const [filter, setFilter] = useState<'TODOS' | 'HOY' | 'PENDIENTES'>('HOY');
   
   const [mapTheme, setMapTheme] = useState<'light' | 'dark'>('light');
-  
-  // Estado para centrar el mapa al hacer clic en una tarjeta
   const [focusCoords, setFocusCoords] = useState<[number, number] | null>(null);
   
   const [selectedClient, setSelectedClient] = useState<any>(null); 
   const [modalTab, setModalTab] = useState<'PLAN' | 'RECIBOS'>('PLAN');
   
-  const [isUpdating, setIsUpdating] = useState(false);
+  // Estado para trackear qué cuota se está procesando y mostrar el loader
+  const [updatingInstId, setUpdatingInstId] = useState<number | null>(null);
+  
   const [manualPayModal, setManualPayModal] = useState<{open: boolean, inst: any}>({ open: false, inst: null });
   const [manualAmount, setManualAmount] = useState("");
   const [confirmOverdue, setConfirmOverdue] = useState<{open: boolean, instId: number | null}>({ open: false, instId: null });
@@ -73,7 +83,6 @@ export default function CarteraActiva() {
 
   useEffect(() => { fetchCartera(); }, []);
 
-  // FILTRO INTELIGENTE
   const filteredData = useMemo(() => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -98,14 +107,12 @@ export default function CarteraActiva() {
     });
   }, [clients, searchTerm, filter]);
 
-  // CÁLCULO DE LA LÍNEA DE RUTA (Une a todos los clientes visibles en el mapa)
   const routePolylineCoords = useMemo(() => {
     return filteredData
       .filter(c => c.latitude && c.longitude)
       .map(c => [c.latitude, c.longitude] as [number, number]);
   }, [filteredData]);
 
-  // CENTRAR EL MAPA AL CARGAR LA RUTA (Solo la primera vez o si el foco es null)
   useEffect(() => {
     if (routePolylineCoords.length > 0 && !focusCoords) {
       setFocusCoords(routePolylineCoords[0]);
@@ -113,7 +120,7 @@ export default function CarteraActiva() {
   }, [routePolylineCoords]);
 
   const handleUpdateStatus = async (instId: number, status: string, amount: number) => {
-    setIsUpdating(true);
+    setUpdatingInstId(instId);
     try {
       const token = localStorage.getItem("token");
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -138,7 +145,7 @@ export default function CarteraActiva() {
     } catch (error) {
       console.error("Error updating status");
     } finally {
-      setIsUpdating(false);
+      setUpdatingInstId(null);
     }
   };
 
@@ -147,12 +154,7 @@ export default function CarteraActiva() {
     setModalTab('PLAN');
   };
 
-  
-  // FUNCIÓN PARA ABRIR GOOGLE MAPS / WAZE EN EL CELULAR
   const openNavigationApp = (lat: number, lng: number) => {
-    // Usamos la API universal de direcciones de Google Maps.
-    // El parámetro "dir" y "destination" obligan a la app a trazar la ruta
-    // desde la ubicación actual del celular hacia el cliente.
     const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   };
@@ -195,10 +197,9 @@ export default function CarteraActiva() {
                 ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
                 : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
             } 
-            attribution='&copy; <a href="https://carto.com/">CartoDB</a>'
+            attribution='© <a href="https://carto.com/">CartoDB</a>'
           />
 
-          {/* TRAZADO DE RUTA (Solo aparece si hay clientes y no estamos en "TODOS" para no saturar) */}
           {filter !== 'TODOS' && routePolylineCoords.length > 1 && (
              <Polyline 
                positions={routePolylineCoords} 
@@ -232,8 +233,6 @@ export default function CarteraActiva() {
               </Marker>
             );
           })}
-          
-          {/* Controlador Dinámico del Mapa */}
           <MapController coords={focusCoords} />
         </MapContainer>
       </div>
@@ -287,15 +286,16 @@ export default function CarteraActiva() {
             return i.status !== 'PAID' && dbDate <= todayLocalStr;
           });
 
+          // VERIFICACIÓN: ¿El préstamo está completamente pagado?
+          const prestamoTerminado = loan?.installmentDetails?.every((i: any) => i.status === 'PAID');
+
           return (
             <div 
               key={client.id} 
-              // Evento onClick para enfocar en el mapa, ignorando si hace clic en los botones internos
               onClick={(e) => {
                 if ((e.target as HTMLElement).closest('button')) return;
                 if (client.latitude && client.longitude) {
                   setFocusCoords([client.latitude, client.longitude]);
-                  // Scroll suave hacia arriba en móvil para ver el mapa
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }
               }}
@@ -311,8 +311,6 @@ export default function CarteraActiva() {
                     <div className="flex items-center gap-2 text-slate-500 text-xs">
                       <FiMapPin className="shrink-0"/>
                       <span className="truncate">{client.address}</span>
-                      
-                      {/* Botón rápido de navegación en la tarjeta */}
                       {client.latitude && (
                         <button 
                           onClick={(e) => { e.stopPropagation(); openNavigationApp(client.latitude, client.longitude); }}
@@ -333,14 +331,19 @@ export default function CarteraActiva() {
                 </button>
               </div>
 
-              {cuotaActiva ? (
+              {prestamoTerminado ? (
+                 <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-center">
+                   <FiCheckCircle className="mx-auto text-emerald-500 mb-2" size={24} />
+                   <p className="text-xs text-emerald-400 font-bold uppercase tracking-widest">Préstamo Finalizado</p>
+                 </div>
+              ) : cuotaActiva ? (
                 <div className={`p-4 rounded-2xl border ${cuotaActiva.status === 'PAID' ? 'bg-emerald-500/10 border-emerald-500/20' : cuotaActiva.status === 'PARTIAL' ? 'bg-blue-500/10 border-blue-500/20' : cuotaActiva.status === 'OVERDUE' ? 'bg-red-500/10 border-red-500/20' : 'bg-[#05050A] border-white/5'}`}>
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-[10px] text-slate-500 uppercase font-black">
                       {cuotaActiva.status === 'OVERDUE' ? 'Cuota Atrasada' : 'Cuota Activa'}
                     </span>
                     <span className={`text-[10px] font-black px-2 py-1 rounded-md ${cuotaActiva.status === 'PAID' ? 'bg-emerald-500/20 text-emerald-400' : cuotaActiva.status === 'PARTIAL' ? 'bg-blue-500/20 text-blue-400' : cuotaActiva.status === 'OVERDUE' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-500'}`}>
-                      {cuotaActiva.status === 'PAID' ? 'PAGADO' : cuotaActiva.status === 'PARTIAL' ? 'ABONO PARCIAL' : cuotaActiva.status === 'OVERDUE' ? 'EN MORA' : 'PENDIENTE'}
+                      {traducirEstado(cuotaActiva.status)}
                     </span>
                   </div>
                   
@@ -366,10 +369,10 @@ export default function CarteraActiva() {
                           const faltante = Number(cuotaActiva.expectedAmount) - Number(cuotaActiva.paidAmount || 0);
                           handleUpdateStatus(cuotaActiva.id, 'PAID', faltante);
                         }} 
-                        disabled={isUpdating} 
-                        className="flex-[2] bg-blue-600 hover:bg-blue-500 active:scale-95 py-3 rounded-xl text-white text-xs font-black transition-all"
+                        disabled={updatingInstId === cuotaActiva.id} 
+                        className="flex-[2] bg-blue-600 hover:bg-blue-500 active:scale-95 py-3 rounded-xl text-white text-xs font-black transition-all flex items-center justify-center gap-2"
                       >
-                        PAGO TOTAL
+                        {updatingInstId === cuotaActiva.id ? <FiLoader className="animate-spin" /> : 'PAGO TOTAL'}
                       </button>
                       
                       <button 
@@ -403,7 +406,7 @@ export default function CarteraActiva() {
         })}
       </div>
 
-      {/* MODAL DE SEGURIDAD: CONFIRMAR MORA (OVERDUE) */}
+      {/* MODAL DE SEGURIDAD: CONFIRMAR MORA */}
       {confirmOverdue.open && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
           <div className="w-full max-w-sm bg-[#12121A] border border-red-500/30 rounded-[35px] p-8 shadow-2xl text-center animate-[scaleIn_0.2s_ease-out]">
@@ -422,39 +425,49 @@ export default function CarteraActiva() {
               </button>
               <button 
                 onClick={() => confirmOverdue.instId && handleUpdateStatus(confirmOverdue.instId, 'OVERDUE', 0)}
-                disabled={isUpdating}
-                className="flex-1 py-4 bg-red-600 text-white rounded-xl font-black text-sm hover:bg-red-500 transition-all disabled:opacity-50"
+                disabled={updatingInstId === confirmOverdue.instId}
+                className="flex-1 py-4 bg-red-600 text-white rounded-xl font-black text-sm hover:bg-red-500 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                Sí, Reportar
+                {updatingInstId === confirmOverdue.instId ? <FiLoader className="animate-spin" /> : 'Sí, Reportar'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL: ABONO MANUAL */}
-      {manualPayModal.open && (
-        <div className="fixed inset-0 z-[9999] flex items-end md:items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm bg-[#12121A] border border-white/10 rounded-[35px] p-6 pb-10 md:pb-6 shadow-2xl animate-[slideUp_0.2s_ease-out]">
-            <h3 className="text-xl font-black text-white mb-4">Monto Recibido</h3>
-            <input 
-              type="number" value={manualAmount} onChange={(e) => setManualAmount(e.target.value)} 
-              className="w-full bg-black/50 border border-white/10 rounded-2xl p-4 text-2xl text-white text-center font-black focus:border-emerald-500 outline-none mb-6" 
-              placeholder="0" autoFocus
-            />
-            <div className="flex gap-3">
-              <button onClick={() => setManualPayModal({ open: false, inst: null })} className="flex-1 py-4 text-slate-400 font-bold text-sm bg-white/5 rounded-xl">Cancelar</button>
-              <button 
-                onClick={() => handleUpdateStatus(manualPayModal.inst.id, 'PARTIAL', parseFloat(manualAmount))}
-                disabled={isUpdating || !manualAmount}
-                className="flex-[2] py-4 bg-emerald-600 text-white rounded-xl font-black text-sm disabled:opacity-50"
-              >
-                REGISTRAR
-              </button>
+      {/* MODAL: ABONO MANUAL (CON LÍMITE) */}
+      {manualPayModal.open && (() => {
+        const inst = manualPayModal.inst;
+        const faltante = Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount || 0));
+        const excedido = parseFloat(manualAmount) > faltante;
+
+        return (
+          <div className="fixed inset-0 z-[9999] flex items-end md:items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <div className="w-full max-w-sm bg-[#12121A] border border-white/10 rounded-[35px] p-6 pb-10 md:pb-6 shadow-2xl animate-[slideUp_0.2s_ease-out]">
+              <div className="flex justify-between items-start mb-4">
+                 <h3 className="text-xl font-black text-white">Monto Recibido</h3>
+                 <span className="text-xs text-blue-400 font-bold bg-blue-500/10 px-2 py-1 rounded">Max: ${faltante.toLocaleString('es-CO')}</span>
+              </div>
+              <input 
+                type="number" value={manualAmount} onChange={(e) => setManualAmount(e.target.value)} 
+                className={`w-full bg-black/50 border ${excedido ? 'border-red-500 focus:border-red-500 text-red-400' : 'border-white/10 focus:border-emerald-500 text-white'} rounded-2xl p-4 text-2xl text-center font-black outline-none mb-2`} 
+                placeholder="0" autoFocus
+              />
+              {excedido && <p className="text-xs text-red-500 text-center mb-4 font-bold">El abono no puede superar el saldo pendiente de esta cuota.</p>}
+              <div className="flex gap-3 mt-4">
+                <button onClick={() => setManualPayModal({ open: false, inst: null })} className="flex-1 py-4 text-slate-400 font-bold text-sm bg-white/5 rounded-xl">Cancelar</button>
+                <button 
+                  onClick={() => handleUpdateStatus(inst.id, 'PARTIAL', parseFloat(manualAmount))}
+                  disabled={updatingInstId === inst.id || !manualAmount || excedido}
+                  className="flex-[2] py-4 bg-emerald-600 text-white rounded-xl font-black text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {updatingInstId === inst.id ? <FiLoader className="animate-spin" /> : 'REGISTRAR'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* MODAL: HISTORIAL DEL CLIENTE (PLAN Y RECIBOS) */}
       {selectedClient && (
@@ -501,7 +514,7 @@ export default function CarteraActiva() {
                            ${Math.round(Number(inst.expectedAmount) || 0).toLocaleString('es-CO')}
                          </p>
                          <p className="text-[10px] text-slate-500 uppercase font-bold mt-1">
-                           {inst.status === 'PARTIAL' ? `Faltan $${Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount)).toLocaleString('es-CO')}` : inst.status}
+                           {inst.status === 'PARTIAL' ? `Faltan $${Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount)).toLocaleString('es-CO')}` : traducirEstado(inst.status)}
                          </p>
                       </div>
                     </div>
@@ -513,10 +526,10 @@ export default function CarteraActiva() {
                             const faltante = Number(inst.expectedAmount) - Number(inst.paidAmount || 0);
                             handleUpdateStatus(inst.id, 'PAID', faltante);
                           }} 
-                          disabled={isUpdating} 
-                          className="flex-[2] bg-blue-600 hover:bg-blue-500 py-2.5 rounded-xl text-white text-[10px] font-black transition-all"
+                          disabled={updatingInstId === inst.id} 
+                          className="flex-[2] bg-blue-600 hover:bg-blue-500 py-2.5 rounded-xl text-white text-[10px] font-black transition-all flex items-center justify-center gap-2"
                         >
-                          LIQUIDAR CUOTA
+                          {updatingInstId === inst.id ? <FiLoader className="animate-spin" /> : 'LIQUIDAR CUOTA'}
                         </button>
                         <button 
                           onClick={() => {
