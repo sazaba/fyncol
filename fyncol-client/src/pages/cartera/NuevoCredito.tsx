@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   FiMapPin, FiUploadCloud, FiSave, FiUser, FiDollarSign, 
-  FiMap, FiBriefcase, FiAlertTriangle, FiX, FiLoader 
+  FiMap, FiBriefcase, FiAlertTriangle, FiX, FiLoader, FiCalendar 
 } from 'react-icons/fi';
 
 interface ClientFormData {
@@ -12,6 +12,7 @@ interface ClientFormData {
   installments: string;
   interestRate: string;
   periodicity: string;
+  firstPaymentDate: string; // NUEVO CAMPO
 }
 
 interface LocationData {
@@ -33,9 +34,14 @@ type PremiumAlertState = {
 };
 
 export default function NuevoCredito() {
+  // Función auxiliar para obtener la fecha de hoy en formato YYYY-MM-DD
+  const getTodayFormatted = () => new Date().toISOString().split('T')[0];
+
   const [formData, setFormData] = useState<ClientFormData>({
     name: '', address: '', routeId: '',
-    amount: '', installments: '', interestRate: '', periodicity: 'DIARIO'
+    amount: '', installments: '', interestRate: '', 
+    periodicity: 'DIARIO', 
+    firstPaymentDate: getTodayFormatted() // Inicializado
   });
   
   const [location, setLocation] = useState<LocationData>({ latitude: null, longitude: null });
@@ -87,8 +93,7 @@ export default function NuevoCredito() {
     return () => window.removeEventListener("keydown", onKey);
   }, [alertState.open]);
 
-
-  // FUNCIÓN PARA OBTENER LA RUTA (Extraída para poder reutilizarla)
+  // FUNCIÓN PARA OBTENER LA RUTA
   const fetchMiRuta = async () => {
     setIsLoadingRuta(true);
     setErrorFetchRuta(null);
@@ -139,13 +144,25 @@ export default function NuevoCredito() {
     fetchMiRuta();
   }, []);
 
-  // CÁLCULOS MATEMÁTICOS DEL PRÉSTAMO
+  // AUTO-CALCULAR FECHA DE PRIMER PAGO AL CAMBIAR PERIODICIDAD
+  useEffect(() => {
+    const today = new Date();
+    let daysToAdd = 1; // Diario
+
+    if (formData.periodicity === 'QUINCENAL') daysToAdd = 15;
+    if (formData.periodicity === 'MENSUAL') daysToAdd = 30;
+
+    today.setDate(today.getDate() + daysToAdd);
+    setFormData(prev => ({ ...prev, firstPaymentDate: today.toISOString().split('T')[0] }));
+  }, [formData.periodicity]);
+
+  // CÁLCULOS MATEMÁTICOS DEL PRÉSTAMO (CON DÍAS EXACTOS)
   const creditMetrics = useMemo(() => {
     const amountNum = parseFloat(formData.amount) || 0;
     const interestNum = parseFloat(formData.interestRate) || 0;
     const installmentsNum = parseInt(formData.installments) || 0;
 
-    if (amountNum === 0 || installmentsNum === 0) {
+    if (amountNum === 0 || installmentsNum === 0 || !formData.firstPaymentDate) {
       return { total: 0, installmentValue: 0 };
     }
 
@@ -153,15 +170,31 @@ export default function NuevoCredito() {
     if (formData.periodicity === 'QUINCENAL') daysPerInstallment = 15;
     if (formData.periodicity === 'MENSUAL') daysPerInstallment = 30;
 
+    // Calcular días hasta el primer pago
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const [year, month, day] = formData.firstPaymentDate.split('-');
+    const firstPayment = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    firstPayment.setHours(0, 0, 0, 0);
+
+    const diffTime = firstPayment.getTime() - today.getTime();
+    let daysUntilFirstPayment = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (daysUntilFirstPayment <= 0) daysUntilFirstPayment = 1;
+
+    // Días totales del préstamo
+    const totalDays = daysUntilFirstPayment + ((installmentsNum - 1) * daysPerInstallment);
+
+    // Cálculos finales
     const interestPerDay = (interestNum / 100 / 30) * amountNum;
-    const totalDays = installmentsNum * daysPerInstallment;
     const totalInterest = interestPerDay * totalDays;
 
     const total = amountNum + totalInterest;
     const installmentValue = total / installmentsNum;
 
     return { total, installmentValue };
-  }, [formData.amount, formData.interestRate, formData.installments, formData.periodicity]);
+  }, [formData.amount, formData.interestRate, formData.installments, formData.periodicity, formData.firstPaymentDate]);
 
   const handleGetLocation = () => {
     if (navigator.geolocation) {
@@ -225,6 +258,10 @@ export default function NuevoCredito() {
         throw new Error("No hay una ruta asignada válida para registrar el crédito.");
       }
 
+      if (!formData.firstPaymentDate) {
+        throw new Error("Debes seleccionar una fecha para el primer pago.");
+      }
+
       let documentUrl = null;
       if (file) {
         documentUrl = await uploadToCloudinary(file);
@@ -255,7 +292,6 @@ export default function NuevoCredito() {
         throw new Error(responseData?.error || "Error del servidor al registrar la operación");
       }
 
-      // ALERTA DE ÉXITO
       openAlert({
         variant: "success",
         title: "Crédito Registrado",
@@ -263,16 +299,15 @@ export default function NuevoCredito() {
         confirmText: "Listo",
         onConfirm: () => {
           closeAlert();
-          // Limpiar formulario
           setFormData({ 
             name: '', address: '', 
             routeId: rutaAsignada?.id.toString() || '', 
-            amount: '', installments: '', interestRate: '', periodicity: 'DIARIO'
+            amount: '', installments: '', interestRate: '', 
+            periodicity: 'DIARIO', firstPaymentDate: getTodayFormatted()
           });
           setLocation({ latitude: null, longitude: null });
           setFile(null);
           
-          // ACTUALIZAR RUTA EN TIEMPO REAL
           fetchMiRuta();
         }
       });
@@ -403,20 +438,22 @@ export default function NuevoCredito() {
 
           <div className="space-y-5 flex-1">
             
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Monto a Prestar</label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
-                <input required type="number" name="amount" value={formData.amount} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl pl-8 pr-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner" placeholder="0.00" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Monto a Prestar</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
+                  <input required type="number" name="amount" value={formData.amount} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl pl-8 pr-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner" placeholder="0.00" />
+                </div>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Cuotas</label>
                 <input required type="number" name="installments" value={formData.installments} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl px-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner" placeholder="Ej: 30" />
               </div>
-              
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Interés Mensual</label>
                 <div className="relative">
@@ -439,6 +476,24 @@ export default function NuevoCredito() {
                   <option value="QUINCENAL">Quincenal</option>
                   <option value="MENSUAL">Mensual</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Primer Pago</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                    <FiCalendar size={14} />
+                  </div>
+                  <input 
+                    required 
+                    type="date"
+                    name="firstPaymentDate" 
+                    value={formData.firstPaymentDate} 
+                    onChange={handleChange} 
+                    disabled={!rutaAsignada} 
+                    className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl pl-9 pr-2 py-3.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-inner [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert"
+                  />
+                </div>
               </div>
             </div>
             

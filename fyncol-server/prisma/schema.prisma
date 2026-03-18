@@ -82,20 +82,22 @@ model Client {
 }
 
 model Loan {
-  id             Int      @id @default(autoincrement())
-  amount         Decimal  // Monto prestado
-  installments   Int      // Cantidad de cuotas
-  interestRate   Decimal  // Porcentaje de interés mensual
+  id               Int      @id @default(autoincrement())
+  amount           Decimal  // Monto prestado
+  installments     Int      // Cantidad de cuotas
+  interestRate     Decimal  // Porcentaje de interés mensual
   
-  // NUEVO CAMPO:
-  periodicity    String   @default("DIARIO") @db.VarChar(20) 
+  periodicity      String   @default("DIARIO") @db.VarChar(20) 
   
-  projectedTotal Decimal  // Métrica proyectada
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now()) @map("created_at")
+  // NUEVO CAMPO: Fecha en la que el cliente hará su primer pago
+  firstPaymentDate DateTime @map("first_payment_date")
+  
+  projectedTotal   Decimal  // Métrica proyectada
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now()) @map("created_at")
 
-  clientId       Int      @map("client_id")
-  client         Client   @relation(fields: [clientId], references: [id])
+  clientId         Int      @map("client_id")
+  client           Client   @relation(fields: [clientId], references: [id])
 
   @@map("loans")
 }
