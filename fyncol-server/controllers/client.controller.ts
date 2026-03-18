@@ -234,7 +234,7 @@ export const registrarPago = async (req: any, res: any) => {
     res.status(400).json({ error: error.message || "Error al procesar el pago" });
   }
 };
-// Actualizar el estado de una cuota específica (Amortización Dinámica)
+
 export const updateInstallmentStatus = async (req: any, res: any) => {
   try {
     const { id } = req.params;
@@ -242,7 +242,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
     const amountNum = parseFloat(paidAmount) || 0;
 
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Obtener la cuota y la info de su préstamo
+      // 1. Obtener la cuota
       const installment = await tx.installment.findUnique({
         where: { id: parseInt(id) },
         include: { loan: { include: { client: true } } }
@@ -250,26 +250,40 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
 
       if (!installment) throw new Error("La cuota no existe.");
 
-      // 2. Actualizar el estado de la cuota
+      // 2. LOGÍSTICA REAL: Sumar el abono nuevo a lo que ya había pagado antes
+      const totalPagadoHistorico = Number(installment.paidAmount || 0);
+      const nuevoTotalPagado = totalPagadoHistorico + amountNum;
+      const metaCuota = Number(installment.expectedAmount);
+
+      // 3. Evaluar el estado final automáticamente
+      let nuevoEstado = status; 
+      // Si el cobrador marca "PAID" manual o si la suma de abonos ya cubre la cuota
+      if (status === 'PAID' || nuevoTotalPagado >= metaCuota) {
+        nuevoEstado = 'PAID';
+      } else if (nuevoTotalPagado > 0 && status !== 'OVERDUE') {
+        nuevoEstado = 'PARTIAL';
+      }
+
+      // 4. Actualizar la cuota con el valor ACUMULADO
       const updatedInstallment = await tx.installment.update({
         where: { id: parseInt(id) },
         data: {
-          status, // PAID, PARTIAL, OVERDUE
-          paidAmount: amountNum,
-          paidAt: status === 'PAID' ? new Date() : null
+          status: nuevoEstado,
+          paidAmount: nuevoTotalPagado,
+          paidAt: nuevoEstado === 'PAID' ? new Date() : null
         }
       });
 
-      // 3. ¡SOLUCIÓN!: Registrar el movimiento en la tabla "payments"
-      if (amountNum > 0 && (status === 'PAID' || status === 'PARTIAL')) {
+      // 5. Registrar el recibo exacto del monto que entregó hoy
+      if (amountNum > 0 && (nuevoEstado === 'PAID' || nuevoEstado === 'PARTIAL')) {
         await tx.payment.create({
           data: {
             amount: amountNum,
-            loanId: installment.loanId // Se vincula al préstamo correspondiente
+            loanId: installment.loanId
           }
         });
 
-        // 4. Devolver el capital a la ruta del cobrador
+        // 6. Devolver el capital a la ruta
         await tx.route.update({
           where: { id: installment.loan.client.routeId },
           data: { availableCapital: { increment: amountNum } }
@@ -282,6 +296,6 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
     res.json({ success: true, installment: result });
   } catch (error: any) {
     console.error("Error al actualizar cuota:", error);
-    res.status(400).json({ error: "Error al actualizar la cuota y registrar el pago." });
+    res.status(400).json({ error: "Error al procesar el abono." });
   }
 };

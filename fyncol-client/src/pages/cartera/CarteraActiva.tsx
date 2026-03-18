@@ -40,11 +40,14 @@ export default function CarteraActiva() {
   const [mapTheme, setMapTheme] = useState<'light' | 'dark'>('light');
   
   const [selectedClient, setSelectedClient] = useState<any>(null); 
-  const [modalTab, setModalTab] = useState<'PLAN' | 'RECIBOS'>('PLAN'); // <-- Estado para las pestañas del modal
+  const [modalTab, setModalTab] = useState<'PLAN' | 'RECIBOS'>('PLAN');
   
   const [isUpdating, setIsUpdating] = useState(false);
   const [manualPayModal, setManualPayModal] = useState<{open: boolean, inst: any}>({ open: false, inst: null });
   const [manualAmount, setManualAmount] = useState("");
+
+  // NUEVO: Estado para el modal de seguridad "OVERDUE"
+  const [confirmOverdue, setConfirmOverdue] = useState<{open: boolean, instId: number | null}>({ open: false, instId: null });
 
   const fetchCartera = async () => {
     setIsLoading(true);
@@ -68,27 +71,28 @@ export default function CarteraActiva() {
 
   useEffect(() => { fetchCartera(); }, []);
 
-  // FILTRO CON CORRECCIÓN DE ZONA HORARIA
+  // FILTRO INTELIGENTE: ARRASTRE DE MORA Y RUTA DE HOY
   const filteredData = useMemo(() => {
     const today = new Date();
     const yyyy = today.getFullYear();
     const mm = String(today.getMonth() + 1).padStart(2, '0');
     const dd = String(today.getDate()).padStart(2, '0');
-    const todayLocalStr = `${yyyy}-${mm}-${dd}`; // Formato exacto YYYY-MM-DD local
+    const todayLocalStr = `${yyyy}-${mm}-${dd}`; 
 
     return clients.filter(client => {
       const loan = client.loans[0];
       const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase());
       if (!matchesSearch) return false;
 
-      const cuotaHoy = loan?.installmentDetails?.find((i: any) => {
+      // LA MAGIA: Buscar la primera cuota que NO esté pagada y que sea de HOY o ANTES de hoy.
+      const cuotaActiva = loan?.installmentDetails?.find((i: any) => {
         if (!i.dueDate) return false;
         const dbDate = i.dueDate.split('T')[0];
-        return dbDate === todayLocalStr;
+        return i.status !== 'PAID' && dbDate <= todayLocalStr;
       });
 
-      if (filter === 'HOY') return !!cuotaHoy;
-      if (filter === 'PENDIENTES') return cuotaHoy?.status === 'PENDING';
+      if (filter === 'HOY') return !!cuotaActiva;
+      if (filter === 'PENDIENTES') return cuotaActiva?.status === 'PENDING' || cuotaActiva?.status === 'PARTIAL' || cuotaActiva?.status === 'OVERDUE';
       return true;
     });
   }, [clients, searchTerm, filter]);
@@ -106,9 +110,16 @@ export default function CarteraActiva() {
 
       if (res.ok) {
         setManualPayModal({ open: false, inst: null });
+        setConfirmOverdue({ open: false, instId: null }); // Cierra alerta de seguridad si estaba abierta
         setManualAmount("");
         await fetchCartera();
-        if (selectedClient) setSelectedClient(null); 
+        if (selectedClient) {
+          // Si el modal del cliente está abierto, refresca sus datos sin cerrarlo
+           const resData = await fetch(`${baseUrl}/api/clients/cartera`, { headers: { 'Authorization': `Bearer ${token}` } });
+           const updatedData = await resData.json();
+           const refreshedClient = updatedData.clients.find((c: any) => c.id === selectedClient.id);
+           setSelectedClient(refreshedClient);
+        }
       }
     } catch (error) {
       console.error("Error updating status");
@@ -119,7 +130,7 @@ export default function CarteraActiva() {
 
   const openClientModal = (client: any) => {
     setSelectedClient(client);
-    setModalTab('PLAN'); // Al abrir un cliente, siempre inicia en la pestaña del Plan
+    setModalTab('PLAN');
   };
 
   return (
@@ -136,7 +147,6 @@ export default function CarteraActiva() {
           <div className="flex w-full md:w-auto gap-3">
             <div className="flex-1 md:flex-none bg-[#0B0B12] border border-white/10 rounded-2xl p-4 shadow-lg">
               <span className="text-[10px] text-emerald-500 uppercase font-black block mb-1">Caja Ruta</span>
-              {/* CORRECCIÓN: REDONDEO DE CAPITAL */}
               <p className="text-lg md:text-xl font-black">${Math.round(Number(routeInfo.availableCapital) || 0).toLocaleString('es-CO')}</p>
             </div>
           </div>
@@ -145,7 +155,6 @@ export default function CarteraActiva() {
 
       {/* MAPA */}
       <div className="w-full aspect-square md:aspect-[21/9] lg:h-[400px] rounded-3xl overflow-hidden border border-white/10 shadow-2xl relative z-0 mb-6 bg-[#0B0B12]">
-        
         <button
           onClick={() => setMapTheme(prev => prev === 'light' ? 'dark' : 'light')}
           className="absolute top-4 right-4 z-[400] p-3 bg-[#0B0B12]/80 backdrop-blur-md text-white rounded-2xl shadow-2xl border border-white/10 hover:scale-105 transition-all active:scale-95"
@@ -199,7 +208,7 @@ export default function CarteraActiva() {
         </div>
 
         <div className="flex bg-[#0B0B12] p-1.5 rounded-2xl border border-white/10 overflow-x-auto [scrollbar-width:none]">
-          {[ { id: 'HOY', label: 'Hoy', icon: <FiNavigation /> }, { id: 'PENDIENTES', label: 'Mora', icon: <FiAlertTriangle /> }, { id: 'TODOS', label: 'Todos', icon: <FiFilter /> } ].map((btn) => (
+          {[ { id: 'HOY', label: 'Ruta Activa', icon: <FiNavigation /> }, { id: 'PENDIENTES', label: 'Mora', icon: <FiAlertTriangle /> }, { id: 'TODOS', label: 'Todos', icon: <FiFilter /> } ].map((btn) => (
             <button
               key={btn.id} onClick={() => setFilter(btn.id as any)}
               className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-black uppercase transition-all ${filter === btn.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}
@@ -230,7 +239,12 @@ export default function CarteraActiva() {
           const dd = String(today.getDate()).padStart(2, '0');
           const todayLocalStr = `${yyyy}-${mm}-${dd}`;
 
-          const cuotaHoy = loan?.installmentDetails?.find((i: any) => i.dueDate.startsWith(todayLocalStr));
+          // Buscamos la cuota que le toca hoy o la que debe del pasado
+          const cuotaActiva = loan?.installmentDetails?.find((i: any) => {
+            if (!i.dueDate) return false;
+            const dbDate = i.dueDate.split('T')[0];
+            return i.status !== 'PAID' && dbDate <= todayLocalStr;
+          });
 
           return (
             <div key={client.id} className="bg-[#0B0B12] border border-white/10 rounded-3xl p-5 flex flex-col justify-between hover:border-blue-500/50 transition-all">
@@ -249,38 +263,100 @@ export default function CarteraActiva() {
                 </button>
               </div>
 
-              {cuotaHoy ? (
-                <div className={`p-4 rounded-2xl border ${cuotaHoy.status === 'PAID' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-[#05050A] border-white/5'}`}>
+              {cuotaActiva ? (
+                <div className={`p-4 rounded-2xl border ${cuotaActiva.status === 'PAID' ? 'bg-emerald-500/10 border-emerald-500/20' : cuotaActiva.status === 'PARTIAL' ? 'bg-blue-500/10 border-blue-500/20' : cuotaActiva.status === 'OVERDUE' ? 'bg-red-500/10 border-red-500/20' : 'bg-[#05050A] border-white/5'}`}>
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-[10px] text-slate-500 uppercase font-black">Cuota de Hoy</span>
-                    <span className={`text-[10px] font-black px-2 py-1 rounded-md ${cuotaHoy.status === 'PAID' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-500'}`}>
-                      {cuotaHoy.status === 'PAID' ? 'PAGADO' : 'PENDIENTE'}
+                    <span className="text-[10px] text-slate-500 uppercase font-black">
+                      {cuotaActiva.status === 'OVERDUE' ? 'Cuota Atrasada' : 'Cuota Activa'}
+                    </span>
+                    <span className={`text-[10px] font-black px-2 py-1 rounded-md ${cuotaActiva.status === 'PAID' ? 'bg-emerald-500/20 text-emerald-400' : cuotaActiva.status === 'PARTIAL' ? 'bg-blue-500/20 text-blue-400' : cuotaActiva.status === 'OVERDUE' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-500'}`}>
+                      {cuotaActiva.status === 'PAID' ? 'PAGADO' : cuotaActiva.status === 'PARTIAL' ? 'ABONO PARCIAL' : cuotaActiva.status === 'OVERDUE' ? 'EN MORA' : 'PENDIENTE'}
                     </span>
                   </div>
-                  {/* CORRECCIÓN: REDONDEO DE CUOTA */}
-                  <p className="text-2xl font-black text-white mb-4">${Math.round(Number(cuotaHoy.expectedAmount) || 0).toLocaleString('es-CO')}</p>
                   
-                  {cuotaHoy.status === 'PENDING' && (
+                  <div className="mb-4">
+                    <p className="text-2xl font-black text-white">
+                      ${Math.round(Number(cuotaActiva.expectedAmount) || 0).toLocaleString('es-CO')}
+                    </p>
+                    {cuotaActiva.status === 'PARTIAL' && (
+                      <p className="text-xs font-bold text-blue-400 mt-1">
+                        Abonado: ${Math.round(Number(cuotaActiva.paidAmount) || 0).toLocaleString('es-CO')} 
+                        <span className="text-slate-500 ml-2 font-normal">
+                          (Faltan: ${Math.round(Number(cuotaActiva.expectedAmount) - Number(cuotaActiva.paidAmount)).toLocaleString('es-CO')})
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                  
+                  {(cuotaActiva.status === 'PENDING' || cuotaActiva.status === 'PARTIAL' || cuotaActiva.status === 'OVERDUE') && (
                     <div className="flex gap-2">
-                      <button onClick={() => handleUpdateStatus(cuotaHoy.id, 'PAID', Number(cuotaHoy.expectedAmount))} disabled={isUpdating} className="flex-[2] bg-blue-600 hover:bg-blue-500 active:scale-95 py-3 rounded-xl text-white text-xs font-black transition-all">
+                      <button 
+                        onClick={() => {
+                          const faltante = Number(cuotaActiva.expectedAmount) - Number(cuotaActiva.paidAmount || 0);
+                          handleUpdateStatus(cuotaActiva.id, 'PAID', faltante);
+                        }} 
+                        disabled={isUpdating} 
+                        className="flex-[2] bg-blue-600 hover:bg-blue-500 active:scale-95 py-3 rounded-xl text-white text-xs font-black transition-all"
+                      >
                         PAGO TOTAL
                       </button>
-                      <button onClick={() => setManualPayModal({ open: true, inst: cuotaHoy })} className="flex-1 bg-white/10 hover:bg-white/20 active:scale-95 py-3 rounded-xl text-white flex items-center justify-center transition-all">
+                      
+                      <button 
+                        onClick={() => {
+                          setManualPayModal({ open: true, inst: cuotaActiva });
+                          setManualAmount(""); 
+                        }} 
+                        className="flex-1 bg-white/10 hover:bg-white/20 active:scale-95 py-3 rounded-xl text-white flex items-center justify-center transition-all"
+                      >
                         <FiDollarSign size={16} />
                       </button>
-                      <button onClick={() => handleUpdateStatus(cuotaHoy.id, 'OVERDUE', 0)} className="flex-1 bg-red-500/20 hover:bg-red-500/30 active:scale-95 py-3 rounded-xl text-red-400 flex items-center justify-center transition-all">
+                      
+                      {/* Botón OVERDUE modificado para disparar la alerta de seguridad */}
+                      <button 
+                        onClick={() => setConfirmOverdue({ open: true, instId: cuotaActiva.id })} 
+                        className="flex-1 bg-red-500/20 hover:bg-red-500/30 active:scale-95 py-3 rounded-xl text-red-400 flex items-center justify-center transition-all"
+                      >
                         <FiSlash size={16} />
                       </button>
                     </div>
                   )}
                 </div>
               ) : (
-                 <div className="p-4 bg-white/5 rounded-2xl text-center"><p className="text-xs text-slate-500 italic">Sin cuota programada hoy</p></div>
+                 <div className="p-4 bg-white/5 rounded-2xl text-center"><p className="text-xs text-slate-500 italic">Cliente al día.</p></div>
               )}
             </div>
           );
         })}
       </div>
+
+      {/* MODAL DE SEGURIDAD: CONFIRMAR MORA (OVERDUE) */}
+      {confirmOverdue.open && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+          <div className="w-full max-w-sm bg-[#12121A] border border-red-500/30 rounded-[35px] p-8 shadow-2xl text-center animate-[scaleIn_0.2s_ease-out]">
+            <div className="h-16 w-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
+              <FiAlertTriangle size={32} />
+            </div>
+            <h3 className="text-xl font-black text-white mb-2">¿Reportar Mora?</h3>
+            <p className="text-sm text-slate-400 mb-8">Esta acción marcará al cliente como moroso y afectará su historial. ¿Estás seguro?</p>
+            
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setConfirmOverdue({ open: false, instId: null })} 
+                className="flex-1 py-4 bg-white/5 text-slate-300 rounded-xl font-bold text-sm hover:bg-white/10 transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={() => confirmOverdue.instId && handleUpdateStatus(confirmOverdue.instId, 'OVERDUE', 0)}
+                disabled={isUpdating}
+                className="flex-1 py-4 bg-red-600 text-white rounded-xl font-black text-sm hover:bg-red-500 transition-all disabled:opacity-50"
+              >
+                Sí, Reportar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL: ABONO MANUAL */}
       {manualPayModal.open && (
@@ -306,12 +382,12 @@ export default function CarteraActiva() {
         </div>
       )}
 
-      {/* MODAL: HISTORIAL DEL CLIENTE (PREMIUM CON PESTAÑAS) */}
+      {/* MODAL: HISTORIAL DEL CLIENTE (PLAN Y RECIBOS) */}
       {selectedClient && (
         <div className="fixed inset-0 z-[9998] flex items-end md:items-center justify-center bg-black/80 backdrop-blur-sm p-2 md:p-4" onClick={() => setSelectedClient(null)}>
           <div className="w-full max-w-lg bg-[#12121A] border border-white/10 rounded-[35px] shadow-2xl flex flex-col h-[85vh] md:h-[650px] overflow-hidden animate-[slideUp_0.2s_ease-out]" onClick={e => e.stopPropagation()}>
             
-            {/* Cabecera del Modal */}
+            {/* Cabecera */}
             <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#0B0B12]">
               <div>
                 <h3 className="text-xl font-black text-white">{selectedClient.name}</h3>
@@ -322,7 +398,7 @@ export default function CarteraActiva() {
               </button>
             </div>
 
-            {/* Pestañas de Navegación */}
+            {/* Pestañas */}
             <div className="flex border-b border-white/5 bg-[#0B0B12] px-4">
               <button 
                 onClick={() => setModalTab('PLAN')} 
@@ -338,28 +414,57 @@ export default function CarteraActiva() {
               </button>
             </div>
             
-            {/* Contenido Dinámico según la pestaña seleccionada */}
+            {/* Contenido */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#05050A]">
               
-              {/* VISTA 1: PLAN DE AMORTIZACIÓN */}
+              {/* PESTAÑA 1: PLAN (CON COBROS ADELANTADOS) */}
               {modalTab === 'PLAN' && (
                 selectedClient.loans[0]?.installmentDetails?.map((inst: any) => (
-                  <div key={inst.id} className="flex items-center justify-between p-4 rounded-2xl bg-[#0B0B12] border border-white/5">
-                    <div>
-                      <p className="text-xs text-slate-500 font-bold mb-1">Cuota #{inst.installmentNumber}</p>
-                      <p className="text-sm text-white">{new Date(inst.dueDate).toLocaleDateString('es-CO')}</p>
+                  <div key={inst.id} className={`flex flex-col gap-3 p-4 rounded-2xl border ${inst.status === 'PAID' ? 'bg-emerald-500/5 border-emerald-500/10' : inst.status === 'PARTIAL' ? 'bg-blue-500/5 border-blue-500/10' : 'bg-[#0B0B12] border-white/5'}`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-slate-500 font-bold mb-1">Cuota #{inst.installmentNumber}</p>
+                        <p className="text-sm text-white">{new Date(inst.dueDate).toLocaleDateString('es-CO')}</p>
+                      </div>
+                      <div className="text-right">
+                         <p className={`font-black ${inst.status === 'PAID' ? 'text-emerald-400' : inst.status === 'OVERDUE' ? 'text-red-400' : 'text-white'}`}>
+                           ${Math.round(Number(inst.expectedAmount) || 0).toLocaleString('es-CO')}
+                         </p>
+                         <p className="text-[10px] text-slate-500 uppercase font-bold mt-1">
+                           {inst.status === 'PARTIAL' ? `Faltan $${Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount)).toLocaleString('es-CO')}` : inst.status}
+                         </p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                       <p className={`font-black ${inst.status === 'PAID' ? 'text-emerald-400' : inst.status === 'OVERDUE' ? 'text-red-400' : 'text-blue-400'}`}>
-                         ${Math.round(Number(inst.expectedAmount) || 0).toLocaleString('es-CO')}
-                       </p>
-                       <p className="text-[10px] text-slate-500 uppercase font-bold mt-1">{inst.status}</p>
-                    </div>
+
+                    {/* Controles para pagos adelantados */}
+                    {inst.status !== 'PAID' && (
+                      <div className="flex gap-2 mt-2 pt-3 border-t border-white/5">
+                        <button 
+                          onClick={() => {
+                            const faltante = Number(inst.expectedAmount) - Number(inst.paidAmount || 0);
+                            handleUpdateStatus(inst.id, 'PAID', faltante);
+                          }} 
+                          disabled={isUpdating} 
+                          className="flex-[2] bg-blue-600 hover:bg-blue-500 py-2.5 rounded-xl text-white text-[10px] font-black transition-all"
+                        >
+                          LIQUIDAR CUOTA
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setManualPayModal({ open: true, inst: inst });
+                            setManualAmount(""); 
+                          }} 
+                          className="flex-1 bg-white/10 hover:bg-white/20 py-2.5 rounded-xl text-white flex items-center justify-center transition-all"
+                        >
+                          <FiDollarSign size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))
               )}
 
-              {/* VISTA 2: AUDITORÍA DE RECIBOS (Tabla 'payments') */}
+              {/* PESTAÑA 2: RECIBOS (AUDITORÍA DE PAGOS) */}
               {modalTab === 'RECIBOS' && (
                 selectedClient.loans[0]?.payments?.length > 0 ? (
                   selectedClient.loans[0].payments.map((payment: any) => (
