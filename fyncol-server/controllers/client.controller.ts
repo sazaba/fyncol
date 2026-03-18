@@ -234,32 +234,47 @@ export const registrarPago = async (req: any, res: any) => {
     res.status(400).json({ error: error.message || "Error al procesar el pago" });
   }
 };
-// Actualizar el estado de una cuota específica (Amortización Dinámica)
+// En tu archivo client.controller.ts
 export const updateInstallmentStatus = async (req: any, res: any) => {
   try {
     const { id } = req.params;
     const { status, paidAmount } = req.body;
+    const amountNum = parseFloat(paidAmount) || 0;
 
-    const installment = await prisma.installment.update({
-      where: { id: parseInt(id) },
-      data: {
-        status, // PAID, PARTIAL, OVERDUE
-        paidAmount: parseFloat(paidAmount),
-        paidAt: status === 'PAID' ? new Date() : null
-      },
-      include: { loan: { include: { client: true } } }
+    // Usamos $transaction para asegurar que si falla el capital, no se guarde la cuota (y viceversa)
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Obtener la cuota y su relación completa
+      const installment = await tx.installment.findUnique({
+        where: { id: parseInt(id) },
+        include: { loan: { include: { client: true } } }
+      });
+
+      if (!installment) throw new Error("La cuota no existe.");
+
+      // 2. Actualizar el estado de la cuota
+      const updatedInstallment = await tx.installment.update({
+        where: { id: parseInt(id) },
+        data: {
+          status, // PAID, PARTIAL, OVERDUE
+          paidAmount: amountNum,
+          paidAt: status === 'PAID' ? new Date() : null
+        }
+      });
+
+      // 3. Sumar el capital recuperado a la ruta (aplica para PAID y PARTIAL)
+      if (amountNum > 0) {
+        await tx.route.update({
+          where: { id: installment.loan.client.routeId },
+          data: { availableCapital: { increment: amountNum } }
+        });
+      }
+
+      return updatedInstallment;
     });
 
-    // Si es pago completo, devolvemos el capital a la ruta
-    if (status === 'PAID') {
-      await prisma.route.update({
-        where: { id: installment.loan.client.routeId },
-        data: { availableCapital: { increment: parseFloat(paidAmount) } }
-      });
-    }
-
-    res.json({ success: true, installment });
-  } catch (error) {
-    res.status(400).json({ error: "Error al actualizar cuota" });
+    res.json({ success: true, installment: result });
+  } catch (error: any) {
+    console.error("Error al actualizar cuota:", error);
+    res.status(400).json({ error: error.message || "Error al procesar el pago." });
   }
 };
