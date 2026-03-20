@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { 
   FiDollarSign, FiMapPin, FiSearch, 
-  FiAlertTriangle, FiX, FiLoader, FiNavigation, FiCalendar, FiFilter, FiSlash,
-  FiSun, FiMoon, FiCheckCircle, FiExternalLink, FiMap,
+  FiAlertTriangle, FiX, FiLoader, FiNavigation,
+  FiSun, FiMoon, FiCheckCircle, FiExternalLink, FiMap, FiCalendar
 } from 'react-icons/fi';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
@@ -159,48 +159,182 @@ export default function CarteraActiva() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 md:px-8 pt-8 md:pt-10 md:h-[calc(100dvh-90px)] md:overflow-y-auto md:[&::-webkit-scrollbar]:hidden md:[-ms-overflow-style:none] md:[scrollbar-width:none] pb-10">
+    <div className="flex flex-col md:flex-row h-[calc(100dvh-64px)] w-full bg-[#0B0B12] overflow-hidden">
       
-      {/* HEADER ALINEADO */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6 mb-8">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Sistema Logístico</h1>
-          <p className="text-sm text-slate-400 mt-1">Gestión de ruta, mapa GPS y cobros en tiempo real.</p>
+      {/* PANEL LATERAL IZQUIERDO: LISTADO DE CLIENTES */}
+      <div className="w-full md:w-[420px] lg:w-[480px] h-[50vh] md:h-full flex flex-col bg-[#05050A] border-r border-white/10 shrink-0 z-10 shadow-2xl">
+        
+        {/* Cabecera del Panel */}
+        <div className="p-5 border-b border-white/5 shrink-0 bg-[#0B0B12]">
+          <h1 className="text-xl font-bold text-white mb-4">Sistema Logístico</h1>
+          
+          {routeInfo && (
+            <div className="flex items-center justify-between bg-white/5 p-3 rounded-xl mb-4 border border-white/5">
+              <div className="flex flex-col">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1"><FiMap size={12}/> Ruta Activa</span>
+                <span className="text-sm font-semibold text-white">{routeInfo.city}</span>
+              </div>
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] text-green-400/80 font-bold uppercase tracking-widest">Capital</span>
+                <span className="text-sm font-bold text-green-400">${Math.round(Number(routeInfo.availableCapital) || 0).toLocaleString('es-CO')}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Buscador */}
+          <div className="relative mb-3">
+            <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input 
+              type="text" placeholder="Buscar cliente..." 
+              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-[#05050A] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all"
+            />
+          </div>
+
+          {/* Filtros */}
+          <div className="flex bg-[#05050A] p-1 rounded-xl border border-white/10">
+            {[ { id: 'HOY', label: 'Ruta' }, { id: 'PENDIENTES', label: 'Mora' }, { id: 'TODOS', label: 'Todos' } ].map((btn) => (
+              <button
+                key={btn.id} onClick={() => setFilter(btn.id as any)}
+                className={`flex-1 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${filter === btn.id ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {routeInfo && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full xl:w-auto">
-            <div className="bg-[#0B0B12] border border-white/5 rounded-xl p-4 flex flex-col justify-center">
-              <div className="flex items-center gap-2 text-slate-400 mb-1">
-                <FiMap size={14} />
-                <span className="text-[10px] font-bold tracking-widest uppercase">Ruta Operativa</span>
-              </div>
-              <p className="text-sm font-semibold text-white">
-                {routeInfo.city}, {routeInfo.country} <span className="text-slate-500 text-xs ml-1">(ID: {routeInfo.id})</span>
-              </p>
+        {/* Lista de Clientes */}
+        <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-track]:bg-transparent">
+          {isLoading ? (
+            <div className="p-10 flex flex-col items-center justify-center gap-3 text-slate-400">
+              <FiLoader className="animate-spin text-blue-500" size={24} />
+              <span className="text-sm">Sincronizando ruta...</span>
             </div>
+          ) : filteredData.length === 0 ? (
+            <div className="p-10 text-center text-slate-500 text-sm">
+              No hay clientes que coincidan con los filtros.
+            </div>
+          ) : (
+            filteredData.map((client, index) => {
+              const loan = client.loans[0];
+              const today = new Date();
+              const todayLocalStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+              
+              const cuotaActiva = loan?.installmentDetails?.find((i: any) => {
+                if (!i.dueDate) return false;
+                const dbDate = i.dueDate.split('T')[0];
+                return i.status !== 'PAID' && dbDate <= todayLocalStr;
+              });
 
-            <div className="bg-[#0B0B12] border border-white/5 rounded-xl p-4 flex flex-col justify-center border-b-2 border-b-green-500/50 shadow-[0_4px_20px_-10px_rgba(34,197,94,0.3)]">
-              <div className="flex items-center gap-2 text-slate-400 mb-1">
-                <FiDollarSign size={14} className="text-green-400" />
-                <span className="text-[10px] font-bold tracking-widest uppercase text-green-400/80">Capital Disponible</span>
-              </div>
-              <p className="text-lg font-bold text-white">
-                ${Math.round(Number(routeInfo.availableCapital) || 0).toLocaleString('es-CO')}
-              </p>
-            </div>
-          </div>
-        )}
+              const prestamoTerminado = loan?.installmentDetails?.every((i: any) => i.status === 'PAID');
+              const hasPaidToday = loan?.installmentDetails?.some((i: any) => i.dueDate.startsWith(todayLocalStr) && i.status === 'PAID');
+
+              return (
+                <div 
+                  key={client.id}
+                  onClick={() => {
+                    if (client.latitude && client.longitude) {
+                      setFocusCoords([client.latitude, client.longitude]);
+                    }
+                  }}
+                  className="flex p-4 border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer group"
+                >
+                  <div className="w-8 shrink-0 text-slate-500 font-bold text-sm pt-0.5">
+                    {String(index + 1).padStart(2, '0')}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start mb-1">
+                      <h3 className="font-semibold text-sm text-white truncate pr-2">{client.name}</h3>
+                      {hasPaidToday || prestamoTerminado ? (
+                         <FiCheckCircle className="text-emerald-500 shrink-0 mt-0.5" size={16} title="Pagado hoy / Terminado" />
+                      ) : cuotaActiva?.status === 'OVERDUE' ? (
+                         <FiAlertTriangle className="text-red-500 shrink-0 mt-0.5" size={16} title="En Mora" />
+                      ) : (
+                         <div className="w-4 h-4 rounded-full border-2 border-slate-600 shrink-0 mt-0.5"></div>
+                      )}
+                    </div>
+                    
+                    <div className="text-xs text-slate-400 flex items-center gap-1 mb-2 truncate">
+                      <FiMapPin className="shrink-0" size={10}/> {client.address}
+                    </div>
+
+                    {/* Información y Botones de Cuota */}
+                    {cuotaActiva && !prestamoTerminado && (
+                      <div className="mt-2 bg-[#0B0B12] rounded-lg p-2.5 border border-white/5">
+                        <div className="flex justify-between items-center mb-2">
+                           <span className="text-xs font-bold text-white">
+                             ${Math.round(Number(cuotaActiva.expectedAmount) || 0).toLocaleString('es-CO')}
+                           </span>
+                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded text-blue-400 bg-blue-500/10 uppercase">
+                             Cuota {cuotaActiva.installmentNumber}
+                           </span>
+                        </div>
+                        
+                        {(cuotaActiva.status === 'PENDING' || cuotaActiva.status === 'PARTIAL' || cuotaActiva.status === 'OVERDUE') && (
+                          <div className="flex gap-1.5">
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const faltante = Number(cuotaActiva.expectedAmount) - Number(cuotaActiva.paidAmount || 0);
+                                handleUpdateStatus(cuotaActiva.id, 'PAID', faltante);
+                              }} 
+                              disabled={updatingInstId === cuotaActiva.id}
+                              className="flex-[2] bg-blue-600 hover:bg-blue-500 py-1.5 rounded text-white text-[10px] font-bold flex justify-center items-center transition-all"
+                            >
+                              {updatingInstId === cuotaActiva.id ? <FiLoader className="animate-spin" size={12} /> : 'PAGAR'}
+                            </button>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); setManualPayModal({ open: true, inst: cuotaActiva }); setManualAmount(""); }}
+                              className="flex-1 bg-white/10 hover:bg-white/20 py-1.5 rounded text-white text-[10px] font-bold flex justify-center items-center transition-all"
+                            >
+                              ABONO
+                            </button>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); setConfirmOverdue({ open: true, instId: cuotaActiva.id }); }}
+                              className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 py-1.5 rounded text-[10px] font-bold flex justify-center items-center transition-all"
+                            >
+                              MORA
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 mt-2">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); openClientModal(client); }}
+                        className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 bg-white/5 px-2 py-1 rounded"
+                      >
+                        <FiCalendar size={10} /> Historial
+                      </button>
+                      {client.latitude && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); openNavigationApp(client.latitude, client.longitude); }}
+                          className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-blue-500/10 px-2 py-1 rounded"
+                        >
+                          <FiNavigation size={10} /> GPS
+                        </button>
+                      )}
+                    </div>
+
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
 
-      {/* MAPA */}
-      <div className="w-full aspect-square md:aspect-[21/9] lg:h-[400px] rounded-3xl overflow-hidden border border-white/10 shadow-2xl relative z-0 mb-6 bg-[#0B0B12]">
+      {/* ÁREA DERECHA: MAPA */}
+      <div className="flex-1 h-[50vh] md:h-full relative z-0">
         <button
           onClick={() => setMapTheme(prev => prev === 'light' ? 'dark' : 'light')}
-          className="absolute top-4 right-4 z-[400] p-3 bg-[#05050A]/80 backdrop-blur-md text-white rounded-xl shadow-2xl border border-white/10 hover:bg-white/5 transition-all active:scale-95"
+          className="absolute top-4 right-4 z-[400] p-2.5 bg-[#05050A]/80 backdrop-blur-md text-white rounded-lg shadow-xl border border-white/10 hover:bg-white/5 transition-all"
           title="Alternar estilo de mapa"
         >
-          {mapTheme === 'light' ? <FiMoon size={20} className="text-blue-400" /> : <FiSun size={20} className="text-yellow-400" />}
+          {mapTheme === 'light' ? <FiMoon size={18} className="text-blue-400" /> : <FiSun size={18} className="text-yellow-400" />}
         </button>
 
         <MapContainer center={[6.2442, -75.5812]} zoom={13} style={{ height: '100%', width: '100%', zIndex: 1 }} zoomControl={false}>
@@ -233,14 +367,14 @@ export default function CarteraActiva() {
             return client.latitude && (
               <Marker key={client.id} position={[client.latitude, client.longitude]} icon={hasPaidToday ? greenIcon : redIcon}>
                 <Popup className="custom-popup">
-                  <div className="p-3 text-slate-800 bg-white rounded-xl">
+                  <div className="p-3 text-slate-800 bg-white rounded-xl shadow-lg">
                     <p className="font-bold text-sm mb-1">{client.name}</p>
                     <p className="text-xs text-slate-500 mb-3">{client.address}</p>
                     <button 
                       onClick={() => openNavigationApp(client.latitude, client.longitude)}
-                      className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                      className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
                     >
-                      <FiExternalLink size={14} /> Navegar
+                      <FiExternalLink size={12} /> Navegar
                     </button>
                   </div>
                 </Popup>
@@ -251,175 +385,10 @@ export default function CarteraActiva() {
         </MapContainer>
       </div>
 
-      {/* CONTROLES */}
-      <div className="flex flex-col lg:flex-row gap-4 mb-8 relative z-10">
-        <div className="relative flex-1">
-          <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-          <input 
-            type="text" placeholder="Buscar cliente..." 
-            value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl pl-12 pr-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all shadow-inner"
-          />
-        </div>
-
-        <div className="flex bg-[#05050A]/50 p-1.5 rounded-2xl border border-white/10 overflow-x-auto [scrollbar-width:none]">
-          {[ { id: 'HOY', label: 'Ruta Activa', icon: <FiNavigation /> }, { id: 'PENDIENTES', label: 'Mora', icon: <FiAlertTriangle /> }, { id: 'TODOS', label: 'Todos', icon: <FiFilter /> } ].map((btn) => (
-            <button
-              key={btn.id} onClick={() => setFilter(btn.id as any)}
-              className={`flex-1 min-w-[110px] flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${filter === btn.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
-            >
-              {btn.icon} <span>{btn.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* LISTA DE CLIENTES */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 relative z-10">
-        {isLoading ? (
-          <div className="col-span-full py-12 flex flex-col items-center justify-center gap-3 text-slate-400 bg-[#0B0B12]/80 backdrop-blur-sm rounded-3xl border border-white/5">
-            <FiLoader className="animate-spin text-blue-500" size={24} />
-            <span className="text-sm font-semibold">Sincronizando ruta...</span>
-          </div>
-        ) : filteredData.length === 0 ? (
-          <div className="col-span-full py-12 text-center bg-[#0B0B12]/80 backdrop-blur-sm border border-dashed border-white/10 rounded-3xl">
-            <p className="text-slate-400 font-medium">No hay clientes que coincidan con los filtros.</p>
-          </div>
-        ) : filteredData.map(client => {
-          const loan = client.loans[0];
-          
-          const today = new Date();
-          const yyyy = today.getFullYear();
-          const mm = String(today.getMonth() + 1).padStart(2, '0');
-          const dd = String(today.getDate()).padStart(2, '0');
-          const todayLocalStr = `${yyyy}-${mm}-${dd}`;
-
-          const cuotaActiva = loan?.installmentDetails?.find((i: any) => {
-            if (!i.dueDate) return false;
-            const dbDate = i.dueDate.split('T')[0];
-            return i.status !== 'PAID' && dbDate <= todayLocalStr;
-          });
-
-          const prestamoTerminado = loan?.installmentDetails?.every((i: any) => i.status === 'PAID');
-
-          return (
-            <div 
-              key={client.id} 
-              onClick={(e) => {
-                if ((e.target as HTMLElement).closest('button')) return;
-                if (client.latitude && client.longitude) {
-                  setFocusCoords([client.latitude, client.longitude]);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
-              }}
-              className="bg-[#0B0B12]/80 backdrop-blur-sm border border-white/5 rounded-3xl p-6 flex flex-col justify-between hover:border-blue-500/30 transition-all cursor-pointer group shadow-xl"
-            >
-              <div className="flex justify-between items-start mb-6">
-                <div className="flex gap-4 overflow-hidden items-center">
-                  <div className="h-12 w-12 shrink-0 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold text-lg group-hover:bg-blue-600 group-hover:text-white transition-all">
-                    {client.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-white font-semibold text-base truncate">{client.name}</h3>
-                    <div className="flex items-center gap-1.5 text-slate-500 text-xs mt-1">
-                      <FiMapPin className="shrink-0"/>
-                      <span className="truncate">{client.address}</span>
-                      {client.latitude && (
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); openNavigationApp(client.latitude, client.longitude); }}
-                          className="shrink-0 p-1 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500 hover:text-white transition-all"
-                          title="Abrir GPS"
-                        >
-                          <FiExternalLink size={12} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); openClientModal(client); }} 
-                  className="shrink-0 p-2.5 bg-[#05050A] border border-white/5 rounded-xl text-slate-400 hover:bg-blue-600/10 hover:text-blue-400 hover:border-blue-500/30 transition-all"
-                >
-                  <FiCalendar size={18} />
-                </button>
-              </div>
-
-              {prestamoTerminado ? (
-                 <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-center">
-                   <FiCheckCircle className="mx-auto text-emerald-400 mb-2" size={20} />
-                   <p className="text-[10px] text-emerald-400/80 font-bold uppercase tracking-widest">Préstamo Finalizado</p>
-                 </div>
-              ) : cuotaActiva ? (
-                <div className="bg-[#05050A]/50 border border-white/5 rounded-2xl p-5 shadow-inner">
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-widest">
-                      {cuotaActiva.status === 'OVERDUE' ? 'Cuota Atrasada' : 'Cuota Activa'}
-                    </span>
-                    <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${cuotaActiva.status === 'PAID' ? 'bg-emerald-500/10 text-emerald-400' : cuotaActiva.status === 'PARTIAL' ? 'bg-blue-500/10 text-blue-400' : cuotaActiva.status === 'OVERDUE' ? 'bg-red-500/10 text-red-400' : 'bg-yellow-500/10 text-yellow-500'}`}>
-                      {traducirEstado(cuotaActiva.status)}
-                    </span>
-                  </div>
-                  
-                  <div className="mb-5">
-                    <p className="text-3xl font-bold text-white tracking-tight">
-                      ${Math.round(Number(cuotaActiva.expectedAmount) || 0).toLocaleString('es-CO')}
-                    </p>
-                    {cuotaActiva.status === 'PARTIAL' && (
-                      <p className="text-xs font-medium text-blue-400 mt-1.5">
-                        Abonado: ${Math.round(Number(cuotaActiva.paidAmount) || 0).toLocaleString('es-CO')} 
-                        <span className="text-slate-500 ml-1">
-                          (Faltan: ${Math.round(Number(cuotaActiva.expectedAmount) - Number(cuotaActiva.paidAmount)).toLocaleString('es-CO')})
-                        </span>
-                      </p>
-                    )}
-                  </div>
-                  
-                  {(cuotaActiva.status === 'PENDING' || cuotaActiva.status === 'PARTIAL' || cuotaActiva.status === 'OVERDUE') && (
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const faltante = Number(cuotaActiva.expectedAmount) - Number(cuotaActiva.paidAmount || 0);
-                          handleUpdateStatus(cuotaActiva.id, 'PAID', faltante);
-                        }} 
-                        disabled={updatingInstId === cuotaActiva.id} 
-                        className="flex-[2] bg-blue-600 hover:bg-blue-500 active:scale-[0.98] py-3 rounded-xl text-white text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(37,99,235,0.2)]"
-                      >
-                        {updatingInstId === cuotaActiva.id ? <FiLoader className="animate-spin" /> : 'PAGO TOTAL'}
-                      </button>
-                      
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setManualPayModal({ open: true, inst: cuotaActiva });
-                          setManualAmount(""); 
-                        }} 
-                        className="flex-1 bg-white/5 hover:bg-white/10 active:scale-95 py-3 rounded-xl text-slate-300 hover:text-white flex items-center justify-center transition-all border border-white/5"
-                      >
-                        <FiDollarSign size={16} />
-                      </button>
-                      
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setConfirmOverdue({ open: true, instId: cuotaActiva.id });
-                        }} 
-                        className="flex-1 bg-red-500/10 hover:bg-red-500/20 active:scale-95 py-3 rounded-xl text-red-400 border border-red-500/10 flex items-center justify-center transition-all"
-                      >
-                        <FiSlash size={16} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                 <div className="p-5 bg-white/[0.02] border border-dashed border-white/10 rounded-2xl text-center"><p className="text-xs text-slate-500 font-medium">Cliente al día.</p></div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* MODALES MANTIENEN SU ESTILO PERO CON BORDES REDONDEADOS ALINEADOS */}
+      {/* ==========================================================
+          MODALES (Se mantienen exactamente igual para no perder funcionalidad)
+          ========================================================== */}
+      
       {/* MODAL DE SEGURIDAD: CONFIRMAR MORA */}
       {confirmOverdue.open && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
