@@ -1,13 +1,14 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   FiMapPin, FiUploadCloud, FiSave, FiUser, FiDollarSign, 
-  FiMap, FiBriefcase, FiAlertTriangle, FiX, FiLoader, FiCalendar, FiList, FiCreditCard, FiPhone 
+  FiMap, FiBriefcase, FiAlertTriangle, FiX, FiLoader, FiCalendar, FiList, FiCreditCard, FiPhone, FiChevronDown, 
+  FiSearch
 } from 'react-icons/fi';
 
 interface ClientFormData {
   name: string;
-  documentId: string; // NUEVO CAMPO
-  phone: string;      // NUEVO CAMPO
+  documentId: string;
+  phone: string;
   address: string;
   routeId: string;
   amount: string;
@@ -22,7 +23,6 @@ interface LocationData {
   longitude: number | null;
 }
 
-// TIPOS PARA LA ALERTA PREMIUM
 type AlertVariant = "info" | "success" | "danger";
 
 type PremiumAlertState = {
@@ -35,8 +35,25 @@ type PremiumAlertState = {
   onConfirm?: (() => void) | null;
 };
 
+// LISTA DE PAÍSES PARA EL BUSCADOR
+const COUNTRY_CODES = [
+  { code: '+57', country: 'Colombia' },
+  { code: '+52', country: 'México' },
+  { code: '+51', country: 'Perú' },
+  { code: '+54', country: 'Argentina' },
+  { code: '+56', country: 'Chile' },
+  { code: '+593', country: 'Ecuador' },
+  { code: '+58', country: 'Venezuela' },
+  { code: '+507', country: 'Panamá' },
+  { code: '+34', country: 'España' },
+  { code: '+1', country: 'USA/Canadá' },
+  { code: '+55', country: 'Brasil' },
+  { code: '+598', country: 'Uruguay' },
+  { code: '+595', country: 'Paraguay' },
+  { code: '+591', country: 'Paraguay' }, // Extra por seguridad
+];
+
 export default function NuevoCredito() {
-  // Función auxiliar para obtener la fecha de hoy local, evitando el salto de día UTC
   const getTodayLocalFormatted = () => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -46,16 +63,9 @@ export default function NuevoCredito() {
   };
 
   const [formData, setFormData] = useState<ClientFormData>({
-    name: '', 
-    documentId: '', 
-    phone: '', 
-    address: '', 
-    routeId: '',
-    amount: '', 
-    installments: '', 
-    interestRate: '', 
-    periodicity: 'MENSUAL', 
-    firstPaymentDate: getTodayLocalFormatted() 
+    name: '', documentId: '', phone: '', address: '', routeId: '',
+    amount: '', installments: '', interestRate: '', 
+    periodicity: 'MENSUAL', firstPaymentDate: getTodayLocalFormatted() 
   });
   
   const [location, setLocation] = useState<LocationData>({ latitude: null, longitude: null });
@@ -66,38 +76,25 @@ export default function NuevoCredito() {
   const [isLoadingRuta, setIsLoadingRuta] = useState(true);
   const [errorFetchRuta, setErrorFetchRuta] = useState<string | null>(null);
 
-  // NUEVO ESTADO: Controla la visibilidad del modal de amortización
   const [showAmortization, setShowAmortization] = useState(false);
 
-  // ESTADO DE LA ALERTA PREMIUM
+  // NUEVOS ESTADOS PARA EL BUSCADOR DE INDICATIVOS
+  const [phoneCode, setPhoneCode] = useState('+57');
+  const [isPhoneDropdownOpen, setIsPhoneDropdownOpen] = useState(false);
+  const [phoneSearch, setPhoneSearch] = useState('');
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const [alertState, setAlertState] = useState<PremiumAlertState>({
-    open: false,
-    variant: "info",
-    title: "",
-    message: "",
-    confirmText: "Confirmar",
-    cancelText: "",
-    onConfirm: null,
+    open: false, variant: "info", title: "", message: "",
+    confirmText: "Confirmar", cancelText: "", onConfirm: null,
   });
 
   const openAlert = (payload: Partial<PremiumAlertState>) => {
-    setAlertState((prev) => ({
-      ...prev,
-      open: true,
-      variant: payload.variant ?? prev.variant,
-      title: payload.title ?? prev.title,
-      message: payload.message ?? prev.message,
-      confirmText: payload.confirmText ?? prev.confirmText,
-      cancelText: payload.cancelText ?? prev.cancelText,
-      onConfirm: payload.onConfirm ?? prev.onConfirm,
-    }));
+    setAlertState((prev) => ({ ...prev, open: true, ...payload }));
   };
 
-  const closeAlert = () => {
-    setAlertState((prev) => ({ ...prev, open: false, onConfirm: null }));
-  };
+  const closeAlert = () => setAlertState((prev) => ({ ...prev, open: false, onConfirm: null }));
 
-  // Evitar scroll cuando la alerta o la tabla están abiertas
   useEffect(() => {
     document.body.style.overflow = (alertState.open || showAmortization) ? "hidden" : "auto";
   }, [alertState.open, showAmortization]);
@@ -107,13 +104,25 @@ export default function NuevoCredito() {
       if (e.key === "Escape") {
         if (alertState.open) closeAlert();
         if (showAmortization) setShowAmortization(false);
+        if (isPhoneDropdownOpen) setIsPhoneDropdownOpen(false);
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [alertState.open, showAmortization]);
+    
+    // Cerrar el dropdown al hacer clic afuera
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsPhoneDropdownOpen(false);
+      }
+    };
 
-  // FUNCIÓN PARA OBTENER LA RUTA
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [alertState.open, showAmortization, isPhoneDropdownOpen]);
+
   const fetchMiRuta = async () => {
     setIsLoadingRuta(true);
     setErrorFetchRuta(null);
@@ -127,11 +136,6 @@ export default function NuevoCredito() {
       }
 
       const currentUser = JSON.parse(userStr);
-      if (!currentUser.id) {
-        setErrorFetchRuta("Falta el ID del usuario en la sesión. Inicia sesión nuevamente.");
-        return;
-      }
-
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
       const res = await fetch(`${baseUrl}/api/rutas`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -140,14 +144,13 @@ export default function NuevoCredito() {
       if (res.ok) {
         const data = await res.json();
         const rutas = Array.isArray(data) ? data : data.data || []; 
-        
         const miRutaEncontrada = rutas.find((r: any) => r.assignedTo?.id === currentUser.id);
         
         if (miRutaEncontrada) {
           setRutaAsignada(miRutaEncontrada);
           setFormData(prev => ({ ...prev, routeId: miRutaEncontrada.id.toString() }));
         } else {
-          setErrorFetchRuta("No tienes ninguna ruta asignada actualmente. Contacta al administrador.");
+          setErrorFetchRuta("No tienes ninguna ruta asignada actualmente.");
         }
       } else {
         setErrorFetchRuta(`Error del servidor: código ${res.status}`);
@@ -159,22 +162,17 @@ export default function NuevoCredito() {
     }
   };
 
-  // Cargar ruta al iniciar
-  useEffect(() => {
-    fetchMiRuta();
-  }, []);
+  useEffect(() => { fetchMiRuta(); }, []);
 
-  // AUTO-CALCULAR FECHA DE PRIMER PAGO AL CAMBIAR PERIODICIDAD
   useEffect(() => {
     const today = new Date();
-    let daysToAdd = 1; // Diario
+    let daysToAdd = 1; 
 
     if (formData.periodicity === 'QUINCENAL') daysToAdd = 15;
     if (formData.periodicity === 'MENSUAL') daysToAdd = 30;
 
     today.setDate(today.getDate() + daysToAdd);
     
-    // Convertir a YYYY-MM-DD considerando zona horaria local
     const yyyy = today.getFullYear();
     const mm = String(today.getMonth() + 1).padStart(2, '0');
     const dd = String(today.getDate()).padStart(2, '0');
@@ -182,7 +180,6 @@ export default function NuevoCredito() {
     setFormData(prev => ({ ...prev, firstPaymentDate: `${yyyy}-${mm}-${dd}` }));
   }, [formData.periodicity]);
 
-  // CÁLCULOS MATEMÁTICOS DEL PRÉSTAMO Y TABLA DE AMORTIZACIÓN
   const creditMetrics = useMemo(() => {
     const amountNum = parseFloat(formData.amount) || 0;
     const interestNum = parseFloat(formData.interestRate) || 0;
@@ -196,7 +193,6 @@ export default function NuevoCredito() {
     if (formData.periodicity === 'QUINCENAL') daysPerInstallment = 15;
     if (formData.periodicity === 'MENSUAL') daysPerInstallment = 30;
 
-    // Calcular días hasta el primer pago corrigiendo zona horaria
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -206,20 +202,15 @@ export default function NuevoCredito() {
 
     const diffTime = firstPayment.getTime() - today.getTime();
     let daysUntilFirstPayment = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
     if (daysUntilFirstPayment <= 0) daysUntilFirstPayment = 1;
 
-    // Días totales del préstamo
     const totalDays = daysUntilFirstPayment + ((installmentsNum - 1) * daysPerInstallment);
-
-    // Cálculos finales
     const interestPerDay = (interestNum / 100 / 30) * amountNum;
     const totalInterest = interestPerDay * totalDays;
 
     const total = amountNum + totalInterest;
     const installmentValue = total / installmentsNum;
 
-    // Generar la tabla de amortización
     const schedule = [];
     let currentBalance = total;
     let currentDate = new Date(firstPayment);
@@ -232,7 +223,6 @@ export default function NuevoCredito() {
         balance: Math.max(0, currentBalance - installmentValue) 
       });
       
-      // Sumar el periodo exacto para el próximo pago
       if (formData.periodicity === 'MENSUAL') {
         currentDate.setMonth(currentDate.getMonth() + 1); 
       } else if (formData.periodicity === 'QUINCENAL') {
@@ -240,10 +230,8 @@ export default function NuevoCredito() {
       } else {
         currentDate.setDate(currentDate.getDate() + 1); 
       }
-      
       currentBalance -= installmentValue;
     }
-
     return { total, installmentValue, schedule };
   }, [formData.amount, formData.interestRate, formData.installments, formData.periodicity, formData.firstPaymentDate]);
 
@@ -251,35 +239,26 @@ export default function NuevoCredito() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setLocation({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude
-          });
+          setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude });
           openAlert({
-            variant: "success",
-            title: "Ubicación capturada",
+            variant: "success", title: "Ubicación capturada",
             message: "Las coordenadas GPS se han registrado correctamente.",
-            confirmText: "Entendido",
-            onConfirm: () => closeAlert()
+            confirmText: "Entendido", onConfirm: () => closeAlert()
           });
         },
         () => {
           openAlert({
-            variant: "danger",
-            title: "Error GPS",
+            variant: "danger", title: "Error GPS",
             message: "Por favor habilita el GPS o los permisos de ubicación en tu navegador.",
-            confirmText: "Entendido",
-            onConfirm: () => closeAlert()
+            confirmText: "Entendido", onConfirm: () => closeAlert()
           });
         }
       );
     } else {
       openAlert({
-        variant: "info",
-        title: "No Soportado",
+        variant: "info", title: "No Soportado",
         message: "Tu navegador o dispositivo no soporta geolocalización.",
-        confirmText: "Entendido",
-        onConfirm: () => closeAlert()
+        confirmText: "Entendido", onConfirm: () => closeAlert()
       });
     }
   };
@@ -288,14 +267,8 @@ export default function NuevoCredito() {
     const data = new FormData();
     data.append("file", imageFile);
     data.append("upload_preset", "fyncol_cedulas"); 
-    
-    const response = await fetch(`https://api.cloudinary.com/v1_1/dr2fkqgfz/image/upload`, {
-      method: "POST",
-      body: data,
-    });
-    
+    const response = await fetch(`https://api.cloudinary.com/v1_1/dr2fkqgfz/image/upload`, { method: "POST", body: data });
     if (!response.ok) throw new Error("Error al subir la imagen a Cloudinary");
-    
     const json = await response.json();
     return json.secure_url;
   };
@@ -303,23 +276,19 @@ export default function NuevoCredito() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-
     try {
-      if (!formData.routeId) {
-        throw new Error("No hay una ruta asignada válida para registrar el crédito.");
-      }
-
-      if (!formData.firstPaymentDate) {
-        throw new Error("Debes seleccionar una fecha para el primer pago.");
-      }
+      if (!formData.routeId) throw new Error("No hay una ruta asignada válida.");
+      if (!formData.firstPaymentDate) throw new Error("Selecciona una fecha de primer pago.");
 
       let documentUrl = null;
-      if (file) {
-        documentUrl = await uploadToCloudinary(file);
-      }
+      if (file) documentUrl = await uploadToCloudinary(file);
+
+      // Concatenamos el código de país con el teléfono
+      const finalPhone = formData.phone ? `${phoneCode} ${formData.phone.trim()}` : '';
 
       const payload = {
         ...formData,
+        phone: finalPhone, // Enviamos el teléfono completo
         latitude: location.latitude,
         longitude: location.longitude,
         documentUrl
@@ -327,56 +296,37 @@ export default function NuevoCredito() {
 
       const token = localStorage.getItem("token");
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-      
       const response = await fetch(`${baseUrl}/api/clients/create`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(payload)
       });
 
       const responseData = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(responseData?.error || "Error del servidor al registrar la operación");
-      }
+      if (!response.ok) throw new Error(responseData?.error || "Error del servidor");
 
       openAlert({
-        variant: "success",
-        title: "Crédito Registrado",
-        message: "El cliente y su préstamo inicial se guardaron correctamente. El capital ha sido descontado de la ruta.",
+        variant: "success", title: "Crédito Registrado",
+        message: "El cliente y su préstamo inicial se guardaron correctamente.",
         confirmText: "Listo",
         onConfirm: () => {
           closeAlert();
           setFormData({ 
-            name: '', 
-            documentId: '', 
-            phone: '', 
-            address: '', 
-            routeId: rutaAsignada?.id.toString() || '', 
-            amount: '', 
-            installments: '', 
-            interestRate: '', 
-            periodicity: 'DIARIO', 
-            firstPaymentDate: getTodayLocalFormatted()
+            name: '', documentId: '', phone: '', address: '', routeId: rutaAsignada?.id.toString() || '', 
+            amount: '', installments: '', interestRate: '', 
+            periodicity: 'DIARIO', firstPaymentDate: getTodayLocalFormatted()
           });
           setLocation({ latitude: null, longitude: null });
           setFile(null);
-          
+          setPhoneCode('+57'); // Reseteamos el indicativo
           fetchMiRuta();
         }
       });
-      
     } catch (error: any) {
-      console.error(error);
       openAlert({
-        variant: "danger",
-        title: "Error al guardar",
+        variant: "danger", title: "Error al guardar",
         message: error.message || "Ocurrió un error inesperado.",
-        confirmText: "Revisar",
-        onConfirm: () => closeAlert()
+        confirmText: "Revisar", onConfirm: () => closeAlert()
       });
     } finally {
       setIsSubmitting(false);
@@ -386,6 +336,11 @@ export default function NuevoCredito() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
+
+  const filteredCountries = COUNTRY_CODES.filter(country => 
+    country.country.toLowerCase().includes(phoneSearch.toLowerCase()) || 
+    country.code.includes(phoneSearch)
+  );
 
   return (
     <div className="max-w-6xl mx-auto px-4 md:px-8 pt-8 md:pt-10 md:h-[calc(100dvh-90px)] md:overflow-y-auto md:[&::-webkit-scrollbar]:hidden md:[-ms-overflow-style:none] md:[scrollbar-width:none] pb-10">
@@ -487,14 +442,66 @@ export default function NuevoCredito() {
               <label className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">
                 <FiPhone size={12} /> Celular
               </label>
-              <input 
-                name="phone" 
-                value={formData.phone} 
-                onChange={handleChange} 
-                disabled={!rutaAsignada} 
-                className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl px-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all shadow-inner" 
-                placeholder="Ej: 3001234567" 
-              />
+              <div className="flex gap-2">
+                {/* Menú Desplegable Personalizado para Código de País */}
+                <div className="relative" ref={dropdownRef}>
+                  <button 
+                    type="button" 
+                    onClick={() => setIsPhoneDropdownOpen(!isPhoneDropdownOpen)}
+                    disabled={!rutaAsignada}
+                    className="flex items-center justify-between gap-1 min-w-[70px] h-[48px] px-3 bg-[#05050A]/50 border border-white/10 rounded-2xl text-sm text-white shadow-inner transition-colors hover:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span>{phoneCode}</span>
+                    <FiChevronDown size={14} className="text-slate-500" />
+                  </button>
+
+                  {isPhoneDropdownOpen && (
+                    <div className="absolute top-full left-0 mt-2 w-48 bg-[#12121A] border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden animate-[scaleIn_0.1s_ease-out]">
+                      <div className="p-2 border-b border-white/5">
+                        <div className="relative">
+                          <FiSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" size={12} />
+                          <input 
+                            type="text" 
+                            placeholder="Buscar país..." 
+                            value={phoneSearch}
+                            onChange={(e) => setPhoneSearch(e.target.value)}
+                            className="w-full bg-[#05050A] text-xs text-white border border-white/10 rounded-lg pl-7 pr-2 py-2 focus:outline-none focus:border-blue-500"
+                            autoFocus
+                          />
+                        </div>
+                      </div>
+                      <ul className="max-h-40 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                        {filteredCountries.length > 0 ? filteredCountries.map((c, i) => (
+                          <li 
+                            key={i} 
+                            onClick={() => {
+                              setPhoneCode(c.code);
+                              setIsPhoneDropdownOpen(false);
+                              setPhoneSearch('');
+                            }}
+                            className="px-3 py-2 text-sm text-slate-300 hover:bg-blue-600/20 hover:text-blue-400 cursor-pointer transition-colors flex justify-between"
+                          >
+                            <span>{c.country}</span>
+                            <span className="text-slate-500">{c.code}</span>
+                          </li>
+                        )) : (
+                          <li className="px-3 py-4 text-xs text-slate-500 text-center">Sin resultados</li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                <input 
+                  type="tel"
+                  name="phone" 
+                  value={formData.phone} 
+                  onChange={handleChange} 
+                  disabled={!rutaAsignada} 
+                  className="flex-1 w-full bg-[#05050A]/50 border border-white/10 rounded-2xl px-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all shadow-inner" 
+                  placeholder="Ej: 3001234567" 
+                />
+              </div>
             </div>
 
             <div className="md:col-span-2">
@@ -672,7 +679,7 @@ export default function NuevoCredito() {
               </div>
             </div>
             
-            {/* CAJA DE RESULTADOS CON EL BOTÓN "VER TABLA" */}
+            {/* CAJA DE RESULTADOS */}
             <div className="mt-8 bg-gradient-to-br from-blue-900/10 to-blue-600/5 border border-blue-500/20 rounded-3xl p-6 flex flex-col gap-5 shadow-[inset_0_0_20px_rgba(37,99,235,0.05)] relative">
               
               <button 
