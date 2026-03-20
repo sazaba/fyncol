@@ -18,7 +18,7 @@ interface InstallmentInput {
 export const createClientAndLoan = async (req: any, res: any) => {
   try {
     const {
-      name, address, latitude, longitude, documentUrl, routeId,
+      name, documentId, phone, address, latitude, longitude, documentUrl, routeId,
       amount, installments, interestRate, periodicity, firstPaymentDate
     } = req.body;
 
@@ -87,7 +87,11 @@ export const createClientAndLoan = async (req: any, res: any) => {
 
       const newClient = await tx.client.create({
         data: {
-          name, address, latitude: latitude ? parseFloat(latitude) : null,
+          name, 
+          documentId, // Nuevo campo
+          phone,      // Nuevo campo
+          address, 
+          latitude: latitude ? parseFloat(latitude) : null,
           longitude: longitude ? parseFloat(longitude) : null,
           documentUrl,
           routeId: routeIdInt,
@@ -179,8 +183,7 @@ export const getCarteraDelCobrador = async (req: any, res: any) => {
 };
 
 /**
- * 3. REGISTRAR PAGO (ABONO)
- * Registra el dinero recibido, lo suma al capital de la ruta y cierra el crédito si ya se pagó todo
+ * 3. REGISTRAR PAGO (ABONO ANTIGUO - MANTENIDO POR COMPATIBILIDAD SI LO NECESITAS)
  */
 export const registrarPago = async (req: any, res: any) => {
   try {
@@ -238,6 +241,11 @@ export const registrarPago = async (req: any, res: any) => {
     res.status(400).json({ error: error.message || "Error al procesar el pago" });
   }
 };
+
+/**
+ * 4. ACTUALIZAR ESTADO DE CUOTA (AMORTIZACIÓN DINÁMICA)
+ * Cierra automáticamente el préstamo si todas las cuotas están pagadas
+ */
 export const updateInstallmentStatus = async (req: any, res: any) => {
   try {
     const { id } = req.params;
@@ -253,7 +261,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
 
       if (!installment) throw new Error("La cuota no existe.");
 
-      // 2. Sumar el abono nuevo a lo que ya había pagado antes
+      // 2. LOGÍSTICA REAL: Sumar el abono nuevo a lo que ya había pagado antes
       const totalPagadoHistorico = Number(installment.paidAmount || 0);
       const nuevoTotalPagado = totalPagadoHistorico + amountNum;
       const metaCuota = Number(installment.expectedAmount);
@@ -266,7 +274,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
         nuevoEstado = 'PARTIAL';
       }
 
-      // 4. Actualizar la cuota
+      // 4. Actualizar la cuota con el valor ACUMULADO
       const updatedInstallment = await tx.installment.update({
         where: { id: parseInt(id) },
         data: {
@@ -276,7 +284,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
         }
       });
 
-      // 5. Registrar recibo y devolver capital
+      // 5. Registrar el recibo exacto del monto que entregó hoy
       if (amountNum > 0 && (nuevoEstado === 'PAID' || nuevoEstado === 'PARTIAL')) {
         await tx.payment.create({
           data: {
@@ -285,13 +293,14 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
           }
         });
 
+        // 6. Devolver el capital a la ruta
         await tx.route.update({
           where: { id: installment.loan.client.routeId },
           data: { availableCapital: { increment: amountNum } }
         });
       }
 
-      // ---> NUEVO: 6. CERRAR EL PRÉSTAMO AUTOMÁTICAMENTE <---
+      // ---> 7. CERRAR EL PRÉSTAMO AUTOMÁTICAMENTE <---
       // Obtenemos todas las cuotas de este préstamo específico
       const todasLasCuotas = await tx.installment.findMany({
         where: { loanId: installment.loanId }

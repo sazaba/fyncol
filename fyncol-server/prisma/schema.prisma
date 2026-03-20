@@ -65,6 +65,8 @@ model CapitalTransaction {
 model Client {
   id          Int      @id @default(autoincrement())
   name        String   @db.VarChar(255)
+  documentId  String?  @db.VarChar(50) 
+  phone       String?  @db.VarChar(50)
   address     String   @db.VarChar(255)
   latitude    Float?   // Para guardar la latitud del GPS
   longitude   Float?   // Para guardar la longitud del GPS

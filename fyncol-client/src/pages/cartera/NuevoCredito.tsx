@@ -1,11 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   FiMapPin, FiUploadCloud, FiSave, FiUser, FiDollarSign, 
-  FiMap, FiBriefcase, FiAlertTriangle, FiX, FiLoader, FiCalendar, FiList 
+  FiMap, FiBriefcase, FiAlertTriangle, FiX, FiLoader, FiCalendar, FiList, FiCreditCard, FiPhone 
 } from 'react-icons/fi';
 
 interface ClientFormData {
   name: string;
+  documentId: string; // NUEVO CAMPO
+  phone: string;      // NUEVO CAMPO
   address: string;
   routeId: string;
   amount: string;
@@ -20,6 +22,7 @@ interface LocationData {
   longitude: number | null;
 }
 
+// TIPOS PARA LA ALERTA PREMIUM
 type AlertVariant = "info" | "success" | "danger";
 
 type PremiumAlertState = {
@@ -33,13 +36,26 @@ type PremiumAlertState = {
 };
 
 export default function NuevoCredito() {
-  const getTodayFormatted = () => new Date().toISOString().split('T')[0];
+  // Función auxiliar para obtener la fecha de hoy local, evitando el salto de día UTC
+  const getTodayLocalFormatted = () => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
 
   const [formData, setFormData] = useState<ClientFormData>({
-    name: '', address: '', routeId: '',
-    amount: '', installments: '', interestRate: '', 
-    periodicity: 'MENSUAL',
-    firstPaymentDate: getTodayFormatted() 
+    name: '', 
+    documentId: '', 
+    phone: '', 
+    address: '', 
+    routeId: '',
+    amount: '', 
+    installments: '', 
+    interestRate: '', 
+    periodicity: 'MENSUAL', 
+    firstPaymentDate: getTodayLocalFormatted() 
   });
   
   const [location, setLocation] = useState<LocationData>({ latitude: null, longitude: null });
@@ -50,8 +66,10 @@ export default function NuevoCredito() {
   const [isLoadingRuta, setIsLoadingRuta] = useState(true);
   const [errorFetchRuta, setErrorFetchRuta] = useState<string | null>(null);
 
+  // NUEVO ESTADO: Controla la visibilidad del modal de amortización
   const [showAmortization, setShowAmortization] = useState(false);
 
+  // ESTADO DE LA ALERTA PREMIUM
   const [alertState, setAlertState] = useState<PremiumAlertState>({
     open: false,
     variant: "info",
@@ -79,6 +97,7 @@ export default function NuevoCredito() {
     setAlertState((prev) => ({ ...prev, open: false, onConfirm: null }));
   };
 
+  // Evitar scroll cuando la alerta o la tabla están abiertas
   useEffect(() => {
     document.body.style.overflow = (alertState.open || showAmortization) ? "hidden" : "auto";
   }, [alertState.open, showAmortization]);
@@ -94,6 +113,7 @@ export default function NuevoCredito() {
     return () => window.removeEventListener("keydown", onKey);
   }, [alertState.open, showAmortization]);
 
+  // FUNCIÓN PARA OBTENER LA RUTA
   const fetchMiRuta = async () => {
     setIsLoadingRuta(true);
     setErrorFetchRuta(null);
@@ -139,21 +159,30 @@ export default function NuevoCredito() {
     }
   };
 
+  // Cargar ruta al iniciar
   useEffect(() => {
     fetchMiRuta();
   }, []);
 
+  // AUTO-CALCULAR FECHA DE PRIMER PAGO AL CAMBIAR PERIODICIDAD
   useEffect(() => {
     const today = new Date();
-    let daysToAdd = 1; 
+    let daysToAdd = 1; // Diario
 
     if (formData.periodicity === 'QUINCENAL') daysToAdd = 15;
     if (formData.periodicity === 'MENSUAL') daysToAdd = 30;
 
     today.setDate(today.getDate() + daysToAdd);
-    setFormData(prev => ({ ...prev, firstPaymentDate: today.toISOString().split('T')[0] }));
+    
+    // Convertir a YYYY-MM-DD considerando zona horaria local
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    
+    setFormData(prev => ({ ...prev, firstPaymentDate: `${yyyy}-${mm}-${dd}` }));
   }, [formData.periodicity]);
 
+  // CÁLCULOS MATEMÁTICOS DEL PRÉSTAMO Y TABLA DE AMORTIZACIÓN
   const creditMetrics = useMemo(() => {
     const amountNum = parseFloat(formData.amount) || 0;
     const interestNum = parseFloat(formData.interestRate) || 0;
@@ -167,6 +196,7 @@ export default function NuevoCredito() {
     if (formData.periodicity === 'QUINCENAL') daysPerInstallment = 15;
     if (formData.periodicity === 'MENSUAL') daysPerInstallment = 30;
 
+    // Calcular días hasta el primer pago corrigiendo zona horaria
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -179,14 +209,17 @@ export default function NuevoCredito() {
     
     if (daysUntilFirstPayment <= 0) daysUntilFirstPayment = 1;
 
+    // Días totales del préstamo
     const totalDays = daysUntilFirstPayment + ((installmentsNum - 1) * daysPerInstallment);
 
+    // Cálculos finales
     const interestPerDay = (interestNum / 100 / 30) * amountNum;
     const totalInterest = interestPerDay * totalDays;
 
     const total = amountNum + totalInterest;
     const installmentValue = total / installmentsNum;
 
+    // Generar la tabla de amortización
     const schedule = [];
     let currentBalance = total;
     let currentDate = new Date(firstPayment);
@@ -199,6 +232,7 @@ export default function NuevoCredito() {
         balance: Math.max(0, currentBalance - installmentValue) 
       });
       
+      // Sumar el periodo exacto para el próximo pago
       if (formData.periodicity === 'MENSUAL') {
         currentDate.setMonth(currentDate.getMonth() + 1); 
       } else if (formData.periodicity === 'QUINCENAL') {
@@ -317,10 +351,16 @@ export default function NuevoCredito() {
         onConfirm: () => {
           closeAlert();
           setFormData({ 
-            name: '', address: '', 
+            name: '', 
+            documentId: '', 
+            phone: '', 
+            address: '', 
             routeId: rutaAsignada?.id.toString() || '', 
-            amount: '', installments: '', interestRate: '', 
-            periodicity: 'DIARIO', firstPaymentDate: getTodayFormatted()
+            amount: '', 
+            installments: '', 
+            interestRate: '', 
+            periodicity: 'DIARIO', 
+            firstPaymentDate: getTodayLocalFormatted()
           });
           setLocation({ latitude: null, longitude: null });
           setFile(null);
@@ -363,7 +403,9 @@ export default function NuevoCredito() {
               Actualizando métricas de tu ruta...
             </div>
           ) : errorFetchRuta ? (
-            <div className="col-span-3 text-red-400 text-sm p-4 bg-red-500/10 rounded-xl border border-red-500/30">⚠️ {errorFetchRuta}</div>
+            <div className="col-span-3 text-red-400 text-sm p-4 bg-red-500/10 rounded-xl border border-red-500/30">
+              ⚠️ {errorFetchRuta}
+            </div>
           ) : rutaAsignada && (
             <>
               <div className="bg-[#0B0B12] border border-white/5 rounded-xl p-4 flex flex-col justify-center">
@@ -376,7 +418,6 @@ export default function NuevoCredito() {
                 </p>
               </div>
 
-              {/* CORRECCIÓN: Math.round agregado aquí */}
               <div className="bg-[#0B0B12] border border-white/5 rounded-xl p-4 flex flex-col justify-center border-b-2 border-b-green-500/50 shadow-[0_4px_20px_-10px_rgba(34,197,94,0.3)]">
                 <div className="flex items-center gap-2 text-slate-400 mb-1">
                   <FiDollarSign size={14} className="text-green-400" />
@@ -387,7 +428,6 @@ export default function NuevoCredito() {
                 </p>
               </div>
 
-              {/* CORRECCIÓN: Math.round agregado aquí */}
               <div className="bg-[#0B0B12] border border-white/5 rounded-xl p-4 flex flex-col justify-center border-b-2 border-b-blue-500/50 shadow-[0_4px_20px_-10px_rgba(59,130,246,0.3)]">
                 <div className="flex items-center gap-2 text-slate-400 mb-1">
                   <FiBriefcase size={14} className="text-blue-400" />
@@ -413,36 +453,115 @@ export default function NuevoCredito() {
             <h2 className="text-lg font-semibold text-white">Datos del Cliente</h2>
           </div>
 
-          <div className="space-y-5">
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Nombre Completo</label>
-              <input required name="name" value={formData.name} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl px-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner" placeholder="Ej: Juan Pérez" />
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Dirección</label>
-              <input required name="address" value={formData.address} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl px-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner" placeholder="Ej: Calle Principal 123" />
-            </div>
-
-            <div className="pt-2">
-              <button type="button" onClick={handleGetLocation} disabled={!rutaAsignada} className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border transition-all ${!rutaAsignada ? 'opacity-50 cursor-not-allowed bg-blue-500/5 border-white/5 text-slate-500' : location.latitude ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20'}`}>
-                <FiMapPin size={18} />
-                <span className="font-medium text-sm">{location.latitude ? "Ubicación Capturada" : "Capturar Ubicación GPS"}</span>
-              </button>
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Foto de la Cédula</label>
-              <label className={`flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-white/10 rounded-2xl transition-all bg-[#05050A]/30 ${rutaAsignada ? 'hover:border-blue-500/50 hover:bg-blue-500/5 cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
-                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  <FiUploadCloud className="w-8 h-8 mb-3 text-slate-400" />
-                  <p className="mb-2 text-sm text-slate-300"><span className="font-semibold text-blue-400">Haz clic para subir</span> o arrastra</p>
-                  <p className="text-[10px] uppercase tracking-wider text-slate-500">SVG, PNG, JPG (MAX. 5MB)</p>
-                </div>
-                <input type="file" className="hidden" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} disabled={!rutaAsignada} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="md:col-span-2">
+              <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">
+                Nombre Completo
               </label>
-              {file && <p className="text-xs font-medium text-emerald-400 mt-2 text-center bg-emerald-500/10 py-2 rounded-xl">Archivo: {file.name}</p>}
+              <input 
+                required 
+                name="name" 
+                value={formData.name} 
+                onChange={handleChange} 
+                disabled={!rutaAsignada} 
+                className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl px-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all shadow-inner" 
+                placeholder="Ej: Juan Pérez" 
+              />
             </div>
+
+            <div>
+              <label className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">
+                <FiCreditCard size={12} /> Cédula / ID
+              </label>
+              <input 
+                name="documentId" 
+                value={formData.documentId} 
+                onChange={handleChange} 
+                disabled={!rutaAsignada} 
+                className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl px-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all shadow-inner" 
+                placeholder="Ej: 1020304050" 
+              />
+            </div>
+
+            <div>
+              <label className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">
+                <FiPhone size={12} /> Celular
+              </label>
+              <input 
+                name="phone" 
+                value={formData.phone} 
+                onChange={handleChange} 
+                disabled={!rutaAsignada} 
+                className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl px-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all shadow-inner" 
+                placeholder="Ej: 3001234567" 
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">
+                Dirección Operativa
+              </label>
+              <input 
+                required 
+                name="address" 
+                value={formData.address} 
+                onChange={handleChange} 
+                disabled={!rutaAsignada} 
+                className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl px-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all shadow-inner" 
+                placeholder="Ej: Calle Principal 123" 
+              />
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <button 
+              type="button" 
+              onClick={handleGetLocation} 
+              disabled={!rutaAsignada} 
+              className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border transition-all ${
+                !rutaAsignada 
+                  ? 'opacity-50 cursor-not-allowed bg-blue-500/5 border-white/5 text-slate-500' 
+                  : location.latitude 
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)]' 
+                  : 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20'
+              }`}
+            >
+              <FiMapPin size={18} />
+              <span className="font-medium text-sm">
+                {location.latitude ? "Ubicación Capturada" : "Capturar Ubicación GPS"}
+              </span>
+            </button>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">
+              Foto de la Cédula
+            </label>
+            <label className={`flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-white/10 rounded-2xl transition-all bg-[#05050A]/30 ${
+              rutaAsignada ? 'hover:border-blue-500/50 hover:bg-blue-500/5 cursor-pointer' : 'opacity-50 cursor-not-allowed'
+            }`}>
+              <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                <FiUploadCloud className="w-8 h-8 mb-3 text-slate-400" />
+                <p className="mb-2 text-sm text-slate-300">
+                  <span className="font-semibold text-blue-400">Haz clic para subir</span> o arrastra
+                </p>
+                <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                  SVG, PNG, JPG (MAX. 5MB)
+                </p>
+              </div>
+              <input 
+                type="file" 
+                className="hidden" 
+                accept="image/*" 
+                onChange={(e) => setFile(e.target.files?.[0] || null)} 
+                disabled={!rutaAsignada} 
+              />
+            </label>
+            {file && (
+              <p className="text-xs font-medium text-emerald-400 mt-2 text-center bg-emerald-500/10 py-2 rounded-xl">
+                Archivo: {file.name}
+              </p>
+            )}
           </div>
         </div>
 
@@ -459,30 +578,65 @@ export default function NuevoCredito() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Monto a Prestar</label>
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">
+                  Monto a Prestar
+                </label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
-                  <input required type="number" name="amount" value={formData.amount} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl pl-8 pr-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner" placeholder="0.00" />
+                  <input 
+                    required 
+                    type="number" 
+                    name="amount" 
+                    value={formData.amount} 
+                    onChange={handleChange} 
+                    disabled={!rutaAsignada} 
+                    className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl pl-8 pr-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner" 
+                    placeholder="0.00" 
+                  />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Cuotas</label>
-                <input required type="number" name="installments" value={formData.installments} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl px-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner" placeholder="Ej: 30" />
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">
+                  Cuotas
+                </label>
+                <input 
+                  required 
+                  type="number" 
+                  name="installments" 
+                  value={formData.installments} 
+                  onChange={handleChange} 
+                  disabled={!rutaAsignada} 
+                  className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl px-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner" 
+                  placeholder="Ej: 30" 
+                />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Interés Mensual</label>
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">
+                  Interés Mensual
+                </label>
                 <div className="relative">
-                  <input required type="number" name="interestRate" value={formData.interestRate} onChange={handleChange} disabled={!rutaAsignada} className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl pl-4 pr-8 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner" placeholder="Ej: 20" />
+                  <input 
+                    required 
+                    type="number" 
+                    name="interestRate" 
+                    value={formData.interestRate} 
+                    onChange={handleChange} 
+                    disabled={!rutaAsignada} 
+                    className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl pl-4 pr-8 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner" 
+                    placeholder="Ej: 20" 
+                  />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">%</span>
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Periodicidad</label>
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">
+                  Periodicidad
+                </label>
                 <select 
                   required 
                   name="periodicity" 
@@ -498,7 +652,9 @@ export default function NuevoCredito() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">Primer Pago</label>
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">
+                  Primer Pago
+                </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
                     <FiCalendar size={14} />
@@ -525,12 +681,17 @@ export default function NuevoCredito() {
                 disabled={creditMetrics.schedule.length === 0}
                 className="absolute top-5 right-5 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 text-xs font-semibold hover:bg-blue-500/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed border border-blue-500/20"
               >
-                <FiList size={14} /> <span className="hidden sm:inline">Ver Tabla</span>
+                <FiList size={14} /> 
+                <span className="hidden sm:inline">Ver Tabla</span>
               </button>
 
               <div>
-                <p className="text-[10px] text-blue-400/80 font-bold uppercase tracking-widest mb-1">Total Proyectado a Recoger</p>
-                <p className="text-3xl md:text-4xl font-bold text-white tracking-tight">${creditMetrics.total.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+                <p className="text-[10px] text-blue-400/80 font-bold uppercase tracking-widest mb-1">
+                  Total Proyectado a Recoger
+                </p>
+                <p className="text-3xl md:text-4xl font-bold text-white tracking-tight">
+                  ${Math.round(creditMetrics.total).toLocaleString('es-CO')}
+                </p>
               </div>
 
               <div className="pt-5 border-t border-blue-500/20">
@@ -538,7 +699,7 @@ export default function NuevoCredito() {
                   Valor Cuota ({formData.periodicity.toLowerCase()})
                 </p>
                 <p className="text-2xl font-bold text-emerald-400">
-                  ${creditMetrics.installmentValue.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  ${Math.round(creditMetrics.installmentValue).toLocaleString('es-CO')}
                 </p>
               </div>
 
@@ -546,11 +707,21 @@ export default function NuevoCredito() {
           </div>
 
           <div className="pt-6 mt-6 border-t border-white/5">
-            <button type="submit" disabled={isSubmitting || !rutaAsignada} className="group relative w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 text-white rounded-2xl py-4 font-semibold transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_25px_rgba(37,99,235,0.5)]">
+            <button 
+              type="submit" 
+              disabled={isSubmitting || !rutaAsignada} 
+              className="group relative w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 text-white rounded-2xl py-4 font-semibold transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_25px_rgba(37,99,235,0.5)]"
+            >
               {isSubmitting ? (
-                <><FiLoader className="animate-spin" size={18} /> Procesando Transacción...</>
+                <>
+                  <FiLoader className="animate-spin" size={18} /> 
+                  Procesando Transacción...
+                </>
               ) : (
-                <><FiSave size={18} /> Guardar Cliente y Crédito</>
+                <>
+                  <FiSave size={18} /> 
+                  Guardar Cliente y Crédito
+                </>
               )}
             </button>
           </div>
@@ -565,9 +736,14 @@ export default function NuevoCredito() {
             <div className="flex justify-between items-center p-6 border-b border-white/10 shrink-0">
               <div>
                 <h3 className="text-xl font-bold text-white">Tabla de Pagos Proyectada</h3>
-                <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">{formData.periodicity} - {formData.installments} CUOTAS</p>
+                <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">
+                  {formData.periodicity} - {formData.installments} CUOTAS
+                </p>
               </div>
-              <button onClick={() => setShowAmortization(false)} className="text-slate-500 hover:text-white p-2 bg-white/5 rounded-full transition-colors">
+              <button 
+                onClick={() => setShowAmortization(false)} 
+                className="text-slate-500 hover:text-white p-2 bg-white/5 rounded-full transition-colors"
+              >
                 <FiX size={20} />
               </button>
             </div>
@@ -583,10 +759,18 @@ export default function NuevoCredito() {
               <div className="space-y-2">
                 {creditMetrics.schedule.map((item: any) => (
                   <div key={item.number} className="grid grid-cols-4 gap-2 text-sm items-center bg-white/[0.02] p-3 rounded-xl hover:bg-white/[0.04] transition-colors border border-transparent hover:border-white/5">
-                    <div className="font-semibold text-slate-300">#{item.number}</div>
-                    <div className="text-blue-300 text-xs md:text-sm">{item.date}</div>
-                    <div className="text-right font-medium text-emerald-400">${item.amount.toLocaleString('es-CO', { maximumFractionDigits: 0 })}</div>
-                    <div className="text-right font-medium text-slate-400">${item.balance.toLocaleString('es-CO', { maximumFractionDigits: 0 })}</div>
+                    <div className="font-semibold text-slate-300">
+                      #{item.number}
+                    </div>
+                    <div className="text-blue-300 text-xs md:text-sm">
+                      {item.date}
+                    </div>
+                    <div className="text-right font-medium text-emerald-400">
+                      ${Math.round(item.amount).toLocaleString('es-CO')}
+                    </div>
+                    <div className="text-right font-medium text-slate-400">
+                      ${Math.round(item.balance).toLocaleString('es-CO')}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -594,10 +778,17 @@ export default function NuevoCredito() {
 
             <div className="p-6 border-t border-white/10 bg-[#0B0B12] rounded-b-[30px] shrink-0 flex justify-between items-center">
               <div>
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Total a Recoger</p>
-                <p className="text-xl font-bold text-white">${creditMetrics.total.toLocaleString('es-CO', { maximumFractionDigits: 0 })}</p>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">
+                  Total a Recoger
+                </p>
+                <p className="text-xl font-bold text-white">
+                  ${Math.round(creditMetrics.total).toLocaleString('es-CO')}
+                </p>
               </div>
-              <button onClick={() => setShowAmortization(false)} className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-semibold transition-all active:scale-95">
+              <button 
+                onClick={() => setShowAmortization(false)} 
+                className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-semibold transition-all active:scale-95"
+              >
                 Cerrar Tabla
               </button>
             </div>
