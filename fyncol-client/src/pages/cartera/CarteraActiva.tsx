@@ -63,6 +63,7 @@ export default function CarteraActiva() {
   const [manualPayModal, setManualPayModal] = useState<{open: boolean, inst: any, loan: any}>({ open: false, inst: null, loan: null });
   const [manualAmount, setManualAmount] = useState("");
   const [saldoAction, setSaldoAction] = useState<'MANTENER' | 'PROXIMA_CUOTA' | 'DIFERIR'>('MANTENER');
+  const [overpaymentAction, setOverpaymentAction] = useState<'NEXT_QUOTA' | 'REDUCE_TIME' | 'REDUCE_QUOTA'>('NEXT_QUOTA');
 
   const fetchCartera = async () => {
     setIsLoading(true);
@@ -122,14 +123,13 @@ export default function CarteraActiva() {
     }
   }, [routePolylineCoords]);
 
-  // Modificado para soportar lógica extra si tu API lo requiere en el futuro
+  // Manejador que envía la data inteligente al backend
   const handleUpdateStatus = async (instId: number, status: string, amount: number, actionData?: any) => {
     setUpdatingInstId(instId);
     try {
       const token = localStorage.getItem("token");
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
       
-      // Aquí envías el actionData si tu backend lo necesita para diferir o sumar a la próxima cuota
       const payload: any = { status, paidAmount: amount };
       if(actionData) payload.actionParams = actionData;
 
@@ -145,7 +145,9 @@ export default function CarteraActiva() {
         setConfirmOverdue({ open: false, instId: null }); 
         setManualAmount("");
         setSaldoAction('MANTENER');
+        setOverpaymentAction('NEXT_QUOTA');
         await fetchCartera();
+        
         if (selectedClient) {
            const resData = await fetch(`${baseUrl}/api/clients/cartera`, { headers: { 'Authorization': `Bearer ${token}` } });
            const updatedData = await resData.json();
@@ -291,7 +293,7 @@ export default function CarteraActiva() {
                               PAGAR
                             </button>
                             <button 
-                              onClick={(e) => { e.stopPropagation(); setManualPayModal({ open: true, inst: cuotaActiva, loan }); setManualAmount(""); setSaldoAction('MANTENER'); }}
+                              onClick={(e) => { e.stopPropagation(); setManualPayModal({ open: true, inst: cuotaActiva, loan }); setManualAmount(""); setSaldoAction('MANTENER'); setOverpaymentAction('NEXT_QUOTA'); }}
                               className="flex-1 bg-white/10 hover:bg-white/20 py-1.5 rounded text-white text-[10px] font-bold flex justify-center items-center transition-all"
                             >
                               ABONO
@@ -385,7 +387,7 @@ export default function CarteraActiva() {
 
       {/* ================= MODALES ================= */}
       
-      {/* NUEVO: CONFIRMAR PAGO TOTAL */}
+      {/* CONFIRMAR PAGO TOTAL */}
       {confirmPayModal.open && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-[#05050A] border border-white/10 rounded-3xl p-7 shadow-2xl text-center animate-[slideUp_0.18s_ease-out]">
@@ -404,7 +406,7 @@ export default function CarteraActiva() {
                 Cancelar
               </button>
               <button 
-                onClick={() => confirmPayModal.inst && handleUpdateStatus(confirmPayModal.inst.id, 'PAID', confirmPayModal.faltante)}
+                onClick={() => confirmPayModal.inst && handleUpdateStatus(confirmPayModal.inst.id, 'PAID', confirmPayModal.faltante, { action: 'NONE' })}
                 disabled={updatingInstId === confirmPayModal.inst?.id}
                 className="flex-[2] py-3 bg-blue-600 text-white rounded-xl font-semibold text-sm hover:bg-blue-500 transition-all disabled:opacity-50 flex items-center justify-center shadow-[0_0_15px_rgba(37,99,235,0.3)]"
               >
@@ -415,7 +417,7 @@ export default function CarteraActiva() {
         </div>
       )}
 
-      {/* CONFIRMAR MORA (Existente) */}
+      {/* CONFIRMAR MORA */}
       {confirmOverdue.open && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-[#05050A] border border-white/10 rounded-3xl p-7 shadow-2xl text-center animate-[slideUp_0.18s_ease-out]">
@@ -433,7 +435,7 @@ export default function CarteraActiva() {
                 Cancelar
               </button>
               <button 
-                onClick={() => confirmOverdue.instId && handleUpdateStatus(confirmOverdue.instId, 'OVERDUE', 0)}
+                onClick={() => confirmOverdue.instId && handleUpdateStatus(confirmOverdue.instId, 'OVERDUE', 0, { action: 'NONE' })}
                 disabled={updatingInstId === confirmOverdue.instId}
                 className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold text-sm hover:bg-red-500 transition-all disabled:opacity-50 flex items-center justify-center shadow-[0_0_15px_rgba(220,38,38,0.3)]"
               >
@@ -444,14 +446,17 @@ export default function CarteraActiva() {
         </div>
       )}
 
-      {/* POPUP INTELIGENTE DE ABONOS PARCIALES */}
+      {/* POPUP INTELIGENTE DE ABONOS (Soporta Parciales y Excedentes) */}
       {manualPayModal.open && (() => {
         const inst = manualPayModal.inst;
         const faltante = Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount || 0));
         const abonoValue = parseFloat(manualAmount) || 0;
-        const saldoRestante = faltante - abonoValue;
+        
+        // Lógica de estado
+        const diferencia = Math.abs(faltante - abonoValue);
         const esParcial = abonoValue > 0 && abonoValue < faltante;
-        const excedido = abonoValue > faltante;
+        const esExacto = abonoValue === faltante;
+        const esExcedente = abonoValue > faltante;
 
         return (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -460,25 +465,24 @@ export default function CarteraActiva() {
               <div className="p-6 border-b border-white/5">
                 <div className="flex justify-between items-center mb-5">
                    <h3 className="text-lg font-bold text-white">Registrar Abono</h3>
-                   <span className="text-[10px] text-blue-400/80 font-bold uppercase tracking-widest bg-blue-500/10 px-2 py-1 rounded">Cuota Total: ${faltante.toLocaleString('es-CO')}</span>
+                   <span className="text-[10px] text-blue-400/80 font-bold uppercase tracking-widest bg-blue-500/10 px-2 py-1 rounded">Cuota Actual: ${faltante.toLocaleString('es-CO')}</span>
                 </div>
                 
-                <div className="relative mb-2">
+                <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
                   <input 
                     type="number" value={manualAmount} onChange={(e) => setManualAmount(e.target.value)} 
-                    className={`w-full bg-[#0B0B12] border ${excedido ? 'border-red-500 focus:border-red-500 text-red-400' : 'border-white/10 focus:border-emerald-500 text-white'} rounded-2xl pl-8 pr-4 py-4 text-2xl font-bold outline-none shadow-inner transition-colors text-center`} 
+                    className={`w-full bg-[#0B0B12] border ${esExcedente ? 'border-emerald-500 focus:border-emerald-400 text-emerald-400' : 'border-white/10 focus:border-blue-500 text-white'} rounded-2xl pl-8 pr-4 py-4 text-2xl font-bold outline-none shadow-inner transition-colors text-center`} 
                     placeholder="0.00" autoFocus
                   />
                 </div>
-                {excedido && <p className="text-xs text-red-400 mt-2 font-medium text-center">El abono no puede superar el saldo pendiente.</p>}
               </div>
 
-              {/* OPCIONES INTELIGENTES SI EL ABONO ES PARCIAL */}
+              {/* SI EL ABONO ES PARCIAL (Falta dinero) */}
               {esParcial && (
                 <div className="p-6 bg-blue-500/5 border-b border-white/5">
                   <p className="text-sm font-semibold text-blue-400 mb-3 text-center">
-                    Quedará un saldo de <span className="text-white">${saldoRestante.toLocaleString('es-CO')}</span>. ¿Qué hacer con él?
+                    Falta un saldo de <span className="text-white">${diferencia.toLocaleString('es-CO')}</span>. ¿Qué hacer con él?
                   </p>
                   
                   <div className="space-y-2">
@@ -494,7 +498,7 @@ export default function CarteraActiva() {
                       <input type="radio" name="saldoAction" checked={saldoAction === 'PROXIMA_CUOTA'} onChange={() => setSaldoAction('PROXIMA_CUOTA')} className="mt-1 shrink-0 accent-blue-500" />
                       <div>
                         <p className="text-sm font-semibold text-white">Sumarlo a la próxima cuota</p>
-                        <p className="text-xs text-slate-400 mt-0.5">Liquida la cuota de hoy. La próxima será de ${(Number(inst.expectedAmount) + saldoRestante).toLocaleString('es-CO')}.</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Liquida la cuota de hoy. La próxima será más costosa.</p>
                       </div>
                     </label>
 
@@ -502,7 +506,42 @@ export default function CarteraActiva() {
                       <input type="radio" name="saldoAction" checked={saldoAction === 'DIFERIR'} onChange={() => setSaldoAction('DIFERIR')} className="mt-1 shrink-0 accent-blue-500" />
                       <div>
                         <p className="text-sm font-semibold text-white">Diferir en cuotas restantes</p>
-                        <p className="text-xs text-slate-400 mt-0.5">Reparte los ${saldoRestante.toLocaleString('es-CO')} equitativamente.</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Reparte la deuda restante equitativamente.</p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* SI HAY EXCEDENTE (Pagó de más) */}
+              {esExcedente && (
+                <div className="p-6 bg-emerald-500/5 border-b border-white/5">
+                  <p className="text-sm font-semibold text-emerald-400 mb-3 text-center">
+                    ¡Hay un excedente de <span className="text-white">${diferencia.toLocaleString('es-CO')}</span>! ¿Dónde lo aplicamos?
+                  </p>
+                  
+                  <div className="space-y-2">
+                    <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overpaymentAction === 'NEXT_QUOTA' ? 'bg-emerald-600/20 border-emerald-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
+                      <input type="radio" name="overpaymentAction" checked={overpaymentAction === 'NEXT_QUOTA'} onChange={() => setOverpaymentAction('NEXT_QUOTA')} className="mt-1 shrink-0 accent-emerald-500" />
+                      <div>
+                        <p className="text-sm font-semibold text-white">Abonar a la próxima cuota</p>
+                        <p className="text-xs text-slate-400 mt-0.5">La cuota de mañana será más económica.</p>
+                      </div>
+                    </label>
+
+                    <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overpaymentAction === 'REDUCE_TIME' ? 'bg-emerald-600/20 border-emerald-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
+                      <input type="radio" name="overpaymentAction" checked={overpaymentAction === 'REDUCE_TIME'} onChange={() => setOverpaymentAction('REDUCE_TIME')} className="mt-1 shrink-0 accent-emerald-500" />
+                      <div>
+                        <p className="text-sm font-semibold text-white">Reducir tiempo (De atrás hacia adelante)</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Aplica el dinero a las últimas cuotas del préstamo.</p>
+                      </div>
+                    </label>
+
+                    <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overpaymentAction === 'REDUCE_QUOTA' ? 'bg-emerald-600/20 border-emerald-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
+                      <input type="radio" name="overpaymentAction" checked={overpaymentAction === 'REDUCE_QUOTA'} onChange={() => setOverpaymentAction('REDUCE_QUOTA')} className="mt-1 shrink-0 accent-emerald-500" />
+                      <div>
+                        <p className="text-sm font-semibold text-white">Reducción simétrica</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Baja el valor de todas las cuotas restantes por igual.</p>
                       </div>
                     </label>
                   </div>
@@ -510,19 +549,26 @@ export default function CarteraActiva() {
               )}
               
               <div className="p-6 flex gap-3">
-                <button onClick={() => { setManualPayModal({ open: false, inst: null, loan: null }); setSaldoAction('MANTENER'); }} className="flex-1 py-3.5 border border-white/5 text-slate-300 font-medium text-sm bg-[#0B0B12] hover:bg-white/5 rounded-xl transition-colors">Cancelar</button>
+                <button onClick={() => { setManualPayModal({ open: false, inst: null, loan: null }); setSaldoAction('MANTENER'); setOverpaymentAction('NEXT_QUOTA'); }} className="flex-1 py-3.5 border border-white/5 text-slate-300 font-medium text-sm bg-[#0B0B12] hover:bg-white/5 rounded-xl transition-colors">Cancelar</button>
                 <button 
                   onClick={() => {
-                    const finalStatus = (esParcial && saldoAction !== 'MANTENER') || abonoValue === faltante ? 'PAID' : 'PARTIAL';
-                    handleUpdateStatus(inst.id, finalStatus, abonoValue, {
-                      action: esParcial ? saldoAction : 'NONE',
-                      remainingSaldo: saldoRestante
-                    });
+                    let finalStatus = 'PAID';
+                    let actionData = { action: 'NONE', amount: 0 };
+
+                    if (esParcial) {
+                       finalStatus = saldoAction !== 'MANTENER' ? 'PAID' : 'PARTIAL';
+                       actionData = { action: saldoAction, amount: diferencia };
+                    } else if (esExcedente) {
+                       finalStatus = 'PAID';
+                       actionData = { action: overpaymentAction, amount: diferencia };
+                    }
+
+                    handleUpdateStatus(inst.id, finalStatus, abonoValue, actionData);
                   }}
-                  disabled={updatingInstId === inst.id || abonoValue <= 0 || excedido}
-                  className="flex-[2] py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold text-sm disabled:opacity-50 flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all"
+                  disabled={updatingInstId === inst.id || abonoValue <= 0}
+                  className={`flex-[2] py-3.5 text-white rounded-xl font-semibold text-sm disabled:opacity-50 flex items-center justify-center transition-all shadow-lg ${esExcedente ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-blue-600 hover:bg-blue-500'}`}
                 >
-                  {updatingInstId === inst.id ? <FiLoader className="animate-spin" /> : (abonoValue === faltante ? 'Liquidar Total' : 'Confirmar Abono')}
+                  {updatingInstId === inst.id ? <FiLoader className="animate-spin" /> : (esExacto ? 'Liquidar Total' : 'Confirmar Abono')}
                 </button>
               </div>
             </div>
@@ -530,7 +576,7 @@ export default function CarteraActiva() {
         );
       })()}
 
-      {/* MODAL: HISTORIAL DEL CLIENTE (Existente) */}
+      {/* MODAL: HISTORIAL DEL CLIENTE */}
       {selectedClient && (
         <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setSelectedClient(null)}>
           <div className="w-full max-w-2xl bg-[#05050A] border border-white/10 rounded-[30px] shadow-2xl flex flex-col max-h-[85dvh] animate-[slideUp_0.18s_ease-out]" onClick={e => e.stopPropagation()}>
@@ -544,6 +590,7 @@ export default function CarteraActiva() {
               </div>
               <button onClick={() => setSelectedClient(null)} className="p-2 bg-[#0B0B12] border border-white/5 rounded-full text-slate-400 hover:text-white transition-colors"><FiX size={18} /></button>
             </div>
+            
             <div className="flex border-b border-white/5 bg-[#0B0B12] px-6 shrink-0">
               <button onClick={() => setModalTab('PLAN')} className={`py-4 px-2 mr-6 text-xs font-bold uppercase tracking-wider border-b-2 transition-all ${modalTab === 'PLAN' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>Plan de Cuotas</button>
               <button onClick={() => setModalTab('RECIBOS')} className={`py-4 px-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all ${modalTab === 'RECIBOS' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>Historial de Pagos</button>
@@ -567,6 +614,25 @@ export default function CarteraActiva() {
                          </p>
                       </div>
                     </div>
+                    
+                    {/* BOTONES RESTAURADOS EN EL HISTORIAL */}
+                    {inst.status !== 'PAID' && (
+                      <div className="flex gap-2 mt-2 pt-3 border-t border-white/5">
+                        <button 
+                          onClick={() => setConfirmPayModal({ open: true, inst: inst, faltante: Number(inst.expectedAmount) - Number(inst.paidAmount || 0) })} 
+                          disabled={updatingInstId === inst.id} 
+                          className="flex-[2] bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 py-2.5 rounded-xl text-blue-400 text-xs font-semibold transition-all flex items-center justify-center"
+                        >
+                          {updatingInstId === inst.id ? <FiLoader className="animate-spin" /> : 'Liquidar Cuota'}
+                        </button>
+                        <button 
+                          onClick={() => { setManualPayModal({ open: true, inst: inst, loan: selectedClient.loans[0] }); setManualAmount(""); setSaldoAction('MANTENER'); setOverpaymentAction('NEXT_QUOTA'); }} 
+                          className="flex-1 bg-white/5 hover:bg-white/10 py-2.5 rounded-xl text-slate-300 flex items-center justify-center transition-colors border border-white/5"
+                        >
+                          <FiDollarSign size={14} /> Abono Especial
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))
               )}

@@ -11,7 +11,13 @@ interface InstallmentInput {
   status: string;
 }
 
+/**
 
+ */
+/**
+ * 1. CREAR CLIENTE Y PRÉSTAMO
+ * Crea el cliente, el préstamo inicial y genera automáticamente el plan de pagos (amortización)
+ */
 export const createClientAndLoan = async (req: any, res: any) => {
   try {
     const {
@@ -244,13 +250,12 @@ export const registrarPago = async (req: any, res: any) => {
 };
 
 /**
- * 4. ACTUALIZAR ESTADO DE CUOTA (AMORTIZACIÓN DINÁMICA)
- * Cierra automáticamente el préstamo si todas las cuotas están pagadas
+ * 4. ACTUALIZAR ESTADO DE CUOTA (AMORTIZACIÓN DINÁMICA INTELIGENTE)
  */
 export const updateInstallmentStatus = async (req: any, res: any) => {
   try {
     const { id } = req.params;
-    const { status, paidAmount } = req.body;
+    const { status, paidAmount, actionParams } = req.body;
     const amountNum = parseFloat(paidAmount) || 0;
 
     const result = await prisma.$transaction(async (tx) => {
@@ -262,31 +267,12 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
 
       if (!installment) throw new Error("La cuota no existe.");
 
-      // 2. LOGÍSTICA REAL: Sumar el abono nuevo a lo que ya había pagado antes
+      const expected = Number(installment.expectedAmount);
       const totalPagadoHistorico = Number(installment.paidAmount || 0);
       const nuevoTotalPagado = totalPagadoHistorico + amountNum;
-      const metaCuota = Number(installment.expectedAmount);
 
-      // 3. Evaluar el estado final automáticamente
-      let nuevoEstado = status; 
-      if (status === 'PAID' || nuevoTotalPagado >= metaCuota) {
-        nuevoEstado = 'PAID';
-      } else if (nuevoTotalPagado > 0 && status !== 'OVERDUE') {
-        nuevoEstado = 'PARTIAL';
-      }
-
-      // 4. Actualizar la cuota con el valor ACUMULADO
-      const updatedInstallment = await tx.installment.update({
-        where: { id: parseInt(id) },
-        data: {
-          status: nuevoEstado,
-          paidAmount: nuevoTotalPagado,
-          paidAt: nuevoEstado === 'PAID' ? new Date() : null
-        }
-      });
-
-      // 5. Registrar el recibo exacto del monto que entregó hoy
-      if (amountNum > 0 && (nuevoEstado === 'PAID' || nuevoEstado === 'PARTIAL')) {
+      // 2. Crear recibo y devolver dinero a la ruta
+      if (amountNum > 0) {
         await tx.payment.create({
           data: {
             amount: amountNum,
@@ -294,26 +280,139 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
           }
         });
 
-        // 6. Devolver el capital a la ruta
         await tx.route.update({
           where: { id: installment.loan.client.routeId },
           data: { availableCapital: { increment: amountNum } }
         });
       }
 
-      // ---> 7. CERRAR EL PRÉSTAMO AUTOMÁTICAMENTE <---
-      // Obtenemos todas las cuotas de este préstamo específico
+      // Variable maestra del estado
+      let nuevoEstado = status; 
+      const hasAction = actionParams && actionParams.action !== 'NONE' && actionParams.action !== 'MANTENER';
+
+      // 3. MOTOR INTELIGENTE
+      if (hasAction) {
+        const diffAmount = Number(actionParams.amount);
+
+        // Liquidamos la cuota actual
+        await tx.installment.update({
+          where: { id: parseInt(id) },
+          data: {
+            expectedAmount: nuevoTotalPagado,
+            paidAmount: nuevoTotalPagado,
+            status: 'PAID',
+            paidAt: new Date()
+          }
+        });
+        nuevoEstado = 'PAID';
+
+        // Procesar cuotas futuras (¡AQUÍ ESTABA EL ERROR CORREGIDO "gt:"!)
+        const futureInstallments = await tx.installment.findMany({
+          where: {
+            loanId: installment.loanId,
+            installmentNumber: { gt: installment.installmentNumber },
+            status: { not: 'PAID' }
+          },
+          orderBy: { installmentNumber: 'asc' }
+        });
+
+        if (futureInstallments.length > 0) {
+          if (actionParams.action === 'PROXIMA_CUOTA') {
+            await tx.installment.update({
+              where: { id: futureInstallments[0].id },
+              data: { expectedAmount: { increment: diffAmount } }
+            });
+          } 
+          else if (actionParams.action === 'DIFERIR') {
+            const extraPorCuota = diffAmount / futureInstallments.length;
+            for (const inst of futureInstallments) {
+              await tx.installment.update({
+                where: { id: inst.id },
+                data: { expectedAmount: { increment: extraPorCuota } }
+              });
+            }
+          }
+          else if (actionParams.action === 'NEXT_QUOTA') {
+            let saldoAFavor = diffAmount;
+            for (const inst of futureInstallments) {
+              if (saldoAFavor <= 0) break;
+              const metaFutura = Number(inst.expectedAmount);
+              
+              if (saldoAFavor >= metaFutura) {
+                await tx.installment.update({
+                  where: { id: inst.id },
+                  data: { expectedAmount: 0, status: 'PAID', paidAt: new Date() }
+                });
+                saldoAFavor -= metaFutura;
+              } else {
+                await tx.installment.update({
+                  where: { id: inst.id },
+                  data: { expectedAmount: { decrement: saldoAFavor } }
+                });
+                saldoAFavor = 0;
+              }
+            }
+          } 
+          else if (actionParams.action === 'REDUCE_TIME') {
+            let saldoAFavor = diffAmount;
+            const reversedFuture = [...futureInstallments].reverse();
+            for (const inst of reversedFuture) {
+              if (saldoAFavor <= 0) break;
+              const metaFutura = Number(inst.expectedAmount);
+              
+              if (saldoAFavor >= metaFutura) {
+                await tx.installment.update({
+                  where: { id: inst.id },
+                  data: { expectedAmount: 0, status: 'PAID', paidAt: new Date() }
+                });
+                saldoAFavor -= metaFutura;
+              } else {
+                await tx.installment.update({
+                  where: { id: inst.id },
+                  data: { expectedAmount: { decrement: saldoAFavor } }
+                });
+                saldoAFavor = 0;
+              }
+            }
+          } 
+          else if (actionParams.action === 'REDUCE_QUOTA') {
+            const rebajaPorCuota = diffAmount / futureInstallments.length;
+            for (const inst of futureInstallments) {
+              const decrementoReal = Math.min(Number(inst.expectedAmount), rebajaPorCuota);
+              await tx.installment.update({
+                where: { id: inst.id },
+                data: { expectedAmount: { decrement: decrementoReal } }
+              });
+            }
+          }
+        }
+      } else {
+        // FLUJO TRADICIONAL
+        if (status === 'PAID' || nuevoTotalPagado >= expected) {
+          nuevoEstado = 'PAID';
+        } else if (nuevoTotalPagado > 0 && status !== 'OVERDUE') {
+          nuevoEstado = 'PARTIAL';
+        }
+
+        await tx.installment.update({
+          where: { id: parseInt(id) },
+          data: {
+            status: nuevoEstado,
+            paidAmount: nuevoTotalPagado,
+            paidAt: nuevoEstado === 'PAID' ? new Date() : null
+          }
+        });
+      }
+
+      // ---> 4. CERRAR EL PRÉSTAMO AUTOMÁTICAMENTE <---
       const todasLasCuotas = await tx.installment.findMany({
         where: { loanId: installment.loanId }
       });
 
-      // Verificamos si absolutamente TODAS están pagadas
-      const prestamoTerminado = todasLasCuotas.every(inst => 
-        // Si es la cuota actual, usamos el nuevo estado, sino, usamos el de la BD
+      const prestamoTerminado = todasLasCuotas.every((inst: any) => 
         inst.id === parseInt(id) ? nuevoEstado === 'PAID' : inst.status === 'PAID'
       );
 
-      // Si todo está pagado, apagamos el préstamo (isActive = false)
       if (prestamoTerminado) {
         await tx.loan.update({
           where: { id: installment.loanId },
@@ -321,7 +420,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
         });
       }
 
-      return updatedInstallment;
+      return { success: true };
     });
 
     res.json({ success: true, installment: result });
