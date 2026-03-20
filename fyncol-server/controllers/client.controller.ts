@@ -288,7 +288,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
       if (hasAction) {
         const diffAmount = Number(actionParams.amount);
 
-        // Liquidamos la cuota actual
+        // Liquidamos la cuota actual (Si se mueve la deuda, la cuota actual queda "Saldada" en $0 o en lo que haya alcanzado a dar)
         await tx.installment.update({
           where: { id: parseInt(id) },
           data: {
@@ -311,7 +311,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
         });
 
         if (futureInstallments.length > 0) {
-          // --- ACCIONES PARA ABONOS PARCIALES (DEUDA) ---
+          // --- ACCIONES PARA ABONOS PARCIALES / MORA (DEUDA) ---
           if (actionParams.action === 'PROXIMA_CUOTA') {
             const target = futureInstallments[0];
             await tx.installment.update({
@@ -348,7 +348,6 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
           }
 
           // --- ACCIONES PARA EXCEDENTES (SALDO A FAVOR) ---
-          // NOTA: Se cambiaron los { increment/decrement } por asignación directa para evitar fallos de tipos con Prisma
           else if (actionParams.action === 'NEXT_QUOTA') {
             let saldoAFavor = diffAmount;
             for (const inst of futureInstallments) {
@@ -399,7 +398,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
               const decrementoReal = Math.min(metaFutura, rebajaPorCuota);
               const nuevoEsperado = metaFutura - decrementoReal;
 
-              if (nuevoEsperado <= 0.01) { // Tolerancia para punto flotante
+              if (nuevoEsperado <= 0.01) { 
                 await tx.installment.update({
                   where: { id: inst.id },
                   data: { expectedAmount: 0, status: 'PAID', paidAt: new Date() }
@@ -412,6 +411,39 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
               }
             }
           }
+        }
+
+        // --- ACCIÓN PARA AGREGAR CUOTA EXTRA AL FINAL (Funciona aunque no haya cuotas futuras) ---
+        if (actionParams.action === 'CUOTA_EXTRA') {
+            const loanInfo = await tx.loan.findUnique({ where: { id: installment.loanId } });
+            
+            // Buscar la última cuota existente para saber fecha y número
+            const allInst = await tx.installment.findMany({
+                where: { loanId: installment.loanId },
+                orderBy: { installmentNumber: 'desc' },
+                take: 1
+            });
+            const lastInst = allInst[0];
+
+            let newDate = new Date(lastInst.dueDate);
+            if (loanInfo?.periodicity === 'MENSUAL') {
+                newDate.setMonth(newDate.getMonth() + 1);
+            } else if (loanInfo?.periodicity === 'QUINCENAL') {
+                newDate.setDate(newDate.getDate() + 15);
+            } else {
+                newDate.setDate(newDate.getDate() + 1); // Diario
+            }
+
+            await tx.installment.create({
+                data: {
+                    loanId: installment.loanId,
+                    installmentNumber: lastInst.installmentNumber + 1,
+                    dueDate: newDate,
+                    expectedAmount: diffAmount,
+                    paidAmount: 0,
+                    status: 'PENDING'
+                }
+            });
         }
       } else {
         // FLUJO TRADICIONAL

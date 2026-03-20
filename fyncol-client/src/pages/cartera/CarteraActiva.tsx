@@ -55,16 +55,18 @@ export default function CarteraActiva() {
   
   const [updatingInstId, setUpdatingInstId] = useState<number | null>(null);
   
-  // Estados para modales de confirmación
+  // Modales de pago completo y abono manual
   const [confirmPayModal, setConfirmPayModal] = useState<{open: boolean, inst: any, faltante: number}>({ open: false, inst: null, faltante: 0 });
-  const [confirmOverdue, setConfirmOverdue] = useState<{open: boolean, instId: number | null}>({ open: false, instId: null });
-  
-  // Estados para modal inteligente de abonos
   const [manualPayModal, setManualPayModal] = useState<{open: boolean, inst: any, loan: any}>({ open: false, inst: null, loan: null });
   const [manualAmount, setManualAmount] = useState("");
   const [saldoAction, setSaldoAction] = useState<'MANTENER' | 'PROXIMA_CUOTA' | 'DIFERIR' | 'CUOTA_ESPECIFICA'>('MANTENER');
   const [overpaymentAction, setOverpaymentAction] = useState<'NEXT_QUOTA' | 'REDUCE_TIME' | 'REDUCE_QUOTA'>('NEXT_QUOTA');
   const [targetInstallmentNum, setTargetInstallmentNum] = useState<number>(0);
+
+  // NUEVO: Modal de Mora Inteligente
+  const [overdueModal, setOverdueModal] = useState<{open: boolean, inst: any, loan: any}>({ open: false, inst: null, loan: null });
+  const [overdueAction, setOverdueAction] = useState<'SOLO_ESTADO' | 'PROXIMA_CUOTA' | 'DIFERIR' | 'CUOTA_ESPECIFICA' | 'CUOTA_EXTRA'>('SOLO_ESTADO');
+  const [overdueTargetInst, setOverdueTargetInst] = useState<number>(0);
 
   const fetchCartera = async () => {
     setIsLoading(true);
@@ -143,10 +145,11 @@ export default function CarteraActiva() {
       if (res.ok) {
         setConfirmPayModal({ open: false, inst: null, faltante: 0 });
         setManualPayModal({ open: false, inst: null, loan: null });
-        setConfirmOverdue({ open: false, instId: null }); 
+        setOverdueModal({ open: false, inst: null, loan: null });
         setManualAmount("");
         setSaldoAction('MANTENER');
         setOverpaymentAction('NEXT_QUOTA');
+        setOverdueAction('SOLO_ESTADO');
         await fetchCartera();
         
         if (selectedClient) {
@@ -300,7 +303,11 @@ export default function CarteraActiva() {
                               ABONO
                             </button>
                             <button 
-                              onClick={(e) => { e.stopPropagation(); setConfirmOverdue({ open: true, instId: cuotaActiva.id }); }}
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                setOverdueModal({ open: true, inst: cuotaActiva, loan: loan }); 
+                                setOverdueAction('SOLO_ESTADO'); 
+                              }}
                               className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 py-1.5 rounded text-[10px] font-bold flex justify-center items-center transition-all"
                             >
                               MORA
@@ -418,34 +425,128 @@ export default function CarteraActiva() {
         </div>
       )}
 
-      {/* CONFIRMAR MORA */}
-      {confirmOverdue.open && (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm bg-[#05050A] border border-white/10 rounded-3xl p-7 shadow-2xl text-center animate-[slideUp_0.18s_ease-out]">
-            <div className="h-12 w-12 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-red-400">
-              <FiAlertTriangle size={24} />
-            </div>
-            <h3 className="text-lg font-bold text-white mb-2">¿Reportar en Mora?</h3>
-            <p className="text-sm text-slate-400 mb-6 leading-relaxed">Esta acción marcará la cuota del cliente como atrasada.</p>
-            
-            <div className="flex gap-3">
-              <button 
-                onClick={() => setConfirmOverdue({ open: false, instId: null })} 
-                className="flex-1 py-3 bg-white/5 border border-white/5 text-slate-300 rounded-xl font-medium text-sm hover:bg-white/10 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={() => confirmOverdue.instId && handleUpdateStatus(confirmOverdue.instId, 'OVERDUE', 0, { action: 'NONE' })}
-                disabled={updatingInstId === confirmOverdue.instId}
-                className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold text-sm hover:bg-red-500 transition-all disabled:opacity-50 flex items-center justify-center shadow-[0_0_15px_rgba(220,38,38,0.3)]"
-              >
-                {updatingInstId === confirmOverdue.instId ? <FiLoader className="animate-spin" /> : 'Confirmar'}
-              </button>
+      {/* NUEVO: POPUP INTELIGENTE DE MORA */}
+      {overdueModal.open && (() => {
+        const inst = overdueModal.inst;
+        const faltante = Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount || 0));
+        
+        // Calcular cuotas futuras disponibles (si es la última cuota, esto estará vacío)
+        const futureInstallmentsUI = overdueModal.loan?.installmentDetails?.filter(
+          (i: any) => i.installmentNumber > inst.installmentNumber && i.status !== 'PAID'
+        ) || [];
+
+        return (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <div className="w-full max-w-md bg-[#05050A] border border-white/10 rounded-3xl shadow-2xl animate-[slideUp_0.18s_ease-out] overflow-y-auto max-h-[95vh] [&::-webkit-scrollbar]:hidden">
+              
+              <div className="p-6 border-b border-white/5 text-center">
+                <div className="h-12 w-12 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-red-400">
+                  <FiAlertTriangle size={24} />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">Gestión de Mora</h3>
+                <p className="text-sm font-semibold text-red-400">
+                  El cliente tiene un saldo pendiente de <span className="text-white">${faltante.toLocaleString('es-CO')}</span>
+                </p>
+                <p className="text-xs text-slate-400 mt-1">Selecciona cómo reestructurar esta deuda:</p>
+              </div>
+
+              <div className="p-6 bg-red-500/5 border-b border-white/5 space-y-2">
+                <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overdueAction === 'SOLO_ESTADO' ? 'bg-red-600/20 border-red-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
+                  <input type="radio" name="overdueAction" checked={overdueAction === 'SOLO_ESTADO'} onChange={() => setOverdueAction('SOLO_ESTADO')} className="mt-1 shrink-0 accent-red-500" />
+                  <div>
+                    <p className="text-sm font-semibold text-white">Solo reportar en mora</p>
+                    <p className="text-xs text-slate-400 mt-0.5">La deuda se queda en esta misma cuota y se marca como atrasada.</p>
+                  </div>
+                </label>
+
+                {futureInstallmentsUI.length > 0 && (
+                  <>
+                    <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overdueAction === 'PROXIMA_CUOTA' ? 'bg-red-600/20 border-red-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
+                      <input type="radio" name="overdueAction" checked={overdueAction === 'PROXIMA_CUOTA'} onChange={() => setOverdueAction('PROXIMA_CUOTA')} className="mt-1 shrink-0 accent-red-500" />
+                      <div>
+                        <p className="text-sm font-semibold text-white">Pasar deuda a la siguiente cuota</p>
+                        <p className="text-xs text-slate-400 mt-0.5">La cuota actual se salda y la de mañana cobrará el doble.</p>
+                      </div>
+                    </label>
+
+                    <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overdueAction === 'DIFERIR' ? 'bg-red-600/20 border-red-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
+                      <input type="radio" name="overdueAction" checked={overdueAction === 'DIFERIR'} onChange={() => setOverdueAction('DIFERIR')} className="mt-1 shrink-0 accent-red-500" />
+                      <div>
+                        <p className="text-sm font-semibold text-white">Diferir en cuotas restantes</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Reparte la deuda entre todas las cuotas que le faltan.</p>
+                      </div>
+                    </label>
+
+                    <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overdueAction === 'CUOTA_ESPECIFICA' ? 'bg-red-600/20 border-red-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
+                      <input 
+                        type="radio" name="overdueAction" 
+                        checked={overdueAction === 'CUOTA_ESPECIFICA'} 
+                        onChange={() => { 
+                          setOverdueAction('CUOTA_ESPECIFICA'); 
+                          setOverdueTargetInst(futureInstallmentsUI[0]?.installmentNumber); 
+                        }} 
+                        className="mt-1 shrink-0 accent-red-500" 
+                      />
+                      <div className="w-full">
+                        <p className="text-sm font-semibold text-white">Sumar a una cuota específica</p>
+                        <p className="text-xs text-slate-400 mt-0.5 mb-2">Elige a qué cuota futura cargarle esta deuda.</p>
+                        
+                        {overdueAction === 'CUOTA_ESPECIFICA' && (
+                          <select 
+                            value={overdueTargetInst} 
+                            onChange={e => setOverdueTargetInst(Number(e.target.value))}
+                            className="w-full bg-[#05050A] border border-white/20 rounded-lg p-2 text-white text-sm focus:border-red-500 outline-none"
+                          >
+                            {futureInstallmentsUI.map((fInst: any) => (
+                              <option key={fInst.id} value={fInst.installmentNumber}>
+                                Cuota #{fInst.installmentNumber} - ({new Date(fInst.dueDate).toLocaleDateString('es-CO')})
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    </label>
+                  </>
+                )}
+
+                <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overdueAction === 'CUOTA_EXTRA' ? 'bg-red-600/20 border-red-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
+                  <input type="radio" name="overdueAction" checked={overdueAction === 'CUOTA_EXTRA'} onChange={() => setOverdueAction('CUOTA_EXTRA')} className="mt-1 shrink-0 accent-red-500" />
+                  <div>
+                    <p className="text-sm font-semibold text-white">Agregar una cuota extra al final</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Alarga el plazo del crédito creando una nueva cuota al final.</p>
+                  </div>
+                </label>
+
+              </div>
+              
+              <div className="p-6 flex gap-3 shrink-0">
+                <button onClick={() => { setOverdueModal({ open: false, inst: null, loan: null }); setOverdueAction('SOLO_ESTADO'); }} className="flex-1 py-3.5 border border-white/5 text-slate-300 font-medium text-sm bg-[#0B0B12] hover:bg-white/5 rounded-xl transition-colors">Cancelar</button>
+                <button 
+                  onClick={() => {
+                    let finalStatus = 'PAID';
+                    let actionData = { action: 'NONE', amount: 0, targetInstallment: 0 };
+
+                    if (overdueAction === 'SOLO_ESTADO') {
+                       finalStatus = 'OVERDUE';
+                       actionData = { action: 'NONE', amount: 0, targetInstallment: 0 };
+                    } else {
+                       finalStatus = 'PAID'; // Al reestructurar, la cuota original se cierra
+                       actionData = { action: overdueAction, amount: faltante, targetInstallment: overdueTargetInst };
+                    }
+
+                    // Se envía 0 en el pago, porque no entró dinero, solo se reestructura la deuda
+                    handleUpdateStatus(inst.id, finalStatus, 0, actionData);
+                  }}
+                  disabled={updatingInstId === inst.id}
+                  className="flex-[2] py-3.5 text-white rounded-xl font-semibold text-sm disabled:opacity-50 flex items-center justify-center transition-all shadow-lg bg-red-600 hover:bg-red-500"
+                >
+                  {updatingInstId === inst.id ? <FiLoader className="animate-spin" /> : 'Confirmar Mora'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* POPUP INTELIGENTE DE ABONOS (Soporta Parciales y Excedentes) */}
       {manualPayModal.open && (() => {
@@ -500,53 +601,54 @@ export default function CarteraActiva() {
                       </div>
                     </label>
 
-                    <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${saldoAction === 'PROXIMA_CUOTA' ? 'bg-blue-600/20 border-blue-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
-                      <input type="radio" name="saldoAction" checked={saldoAction === 'PROXIMA_CUOTA'} onChange={() => setSaldoAction('PROXIMA_CUOTA')} className="mt-1 shrink-0 accent-blue-500" />
-                      <div>
-                        <p className="text-sm font-semibold text-white">Sumarlo a la próxima cuota</p>
-                        <p className="text-xs text-slate-400 mt-0.5">Liquida la cuota de hoy. La próxima será más costosa.</p>
-                      </div>
-                    </label>
-
-                    <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${saldoAction === 'DIFERIR' ? 'bg-blue-600/20 border-blue-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
-                      <input type="radio" name="saldoAction" checked={saldoAction === 'DIFERIR'} onChange={() => setSaldoAction('DIFERIR')} className="mt-1 shrink-0 accent-blue-500" />
-                      <div>
-                        <p className="text-sm font-semibold text-white">Diferir en cuotas restantes</p>
-                        <p className="text-xs text-slate-400 mt-0.5">Reparte la deuda restante equitativamente.</p>
-                      </div>
-                    </label>
-
-                    {/* NUEVA OPCIÓN: SELECCIONAR CUOTA ESPECÍFICA */}
                     {futureInstallmentsUI.length > 0 && (
-                      <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${saldoAction === 'CUOTA_ESPECIFICA' ? 'bg-blue-600/20 border-blue-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
-                        <input 
-                          type="radio" name="saldoAction" 
-                          checked={saldoAction === 'CUOTA_ESPECIFICA'} 
-                          onChange={() => { 
-                            setSaldoAction('CUOTA_ESPECIFICA'); 
-                            setTargetInstallmentNum(futureInstallmentsUI[0]?.installmentNumber); 
-                          }} 
-                          className="mt-1 shrink-0 accent-blue-500" 
-                        />
-                        <div className="w-full">
-                          <p className="text-sm font-semibold text-white">Cargar a una cuota específica</p>
-                          <p className="text-xs text-slate-400 mt-0.5 mb-2">El cliente elige qué cuota futura asume esta deuda.</p>
-                          
-                          {saldoAction === 'CUOTA_ESPECIFICA' && (
-                            <select 
-                              value={targetInstallmentNum} 
-                              onChange={e => setTargetInstallmentNum(Number(e.target.value))}
-                              className="w-full bg-[#05050A] border border-white/20 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none"
-                            >
-                              {futureInstallmentsUI.map((fInst: any) => (
-                                <option key={fInst.id} value={fInst.installmentNumber}>
-                                  Cuota #{fInst.installmentNumber} - ({new Date(fInst.dueDate).toLocaleDateString('es-CO')})
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                        </div>
-                      </label>
+                      <>
+                        <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${saldoAction === 'PROXIMA_CUOTA' ? 'bg-blue-600/20 border-blue-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
+                          <input type="radio" name="saldoAction" checked={saldoAction === 'PROXIMA_CUOTA'} onChange={() => setSaldoAction('PROXIMA_CUOTA')} className="mt-1 shrink-0 accent-blue-500" />
+                          <div>
+                            <p className="text-sm font-semibold text-white">Sumarlo a la próxima cuota</p>
+                            <p className="text-xs text-slate-400 mt-0.5">Liquida la cuota de hoy. La próxima será más costosa.</p>
+                          </div>
+                        </label>
+
+                        <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${saldoAction === 'DIFERIR' ? 'bg-blue-600/20 border-blue-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
+                          <input type="radio" name="saldoAction" checked={saldoAction === 'DIFERIR'} onChange={() => setSaldoAction('DIFERIR')} className="mt-1 shrink-0 accent-blue-500" />
+                          <div>
+                            <p className="text-sm font-semibold text-white">Diferir en cuotas restantes</p>
+                            <p className="text-xs text-slate-400 mt-0.5">Reparte la deuda restante equitativamente.</p>
+                          </div>
+                        </label>
+
+                        <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${saldoAction === 'CUOTA_ESPECIFICA' ? 'bg-blue-600/20 border-blue-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
+                          <input 
+                            type="radio" name="saldoAction" 
+                            checked={saldoAction === 'CUOTA_ESPECIFICA'} 
+                            onChange={() => { 
+                              setSaldoAction('CUOTA_ESPECIFICA'); 
+                              setTargetInstallmentNum(futureInstallmentsUI[0]?.installmentNumber); 
+                            }} 
+                            className="mt-1 shrink-0 accent-blue-500" 
+                          />
+                          <div className="w-full">
+                            <p className="text-sm font-semibold text-white">Cargar a una cuota específica</p>
+                            <p className="text-xs text-slate-400 mt-0.5 mb-2">El cliente elige qué cuota futura asume esta deuda.</p>
+                            
+                            {saldoAction === 'CUOTA_ESPECIFICA' && (
+                              <select 
+                                value={targetInstallmentNum} 
+                                onChange={e => setTargetInstallmentNum(Number(e.target.value))}
+                                className="w-full bg-[#05050A] border border-white/20 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none"
+                              >
+                                {futureInstallmentsUI.map((fInst: any) => (
+                                  <option key={fInst.id} value={fInst.installmentNumber}>
+                                    Cuota #{fInst.installmentNumber} - ({new Date(fInst.dueDate).toLocaleDateString('es-CO')})
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                        </label>
+                      </>
                     )}
                   </div>
                 </div>
