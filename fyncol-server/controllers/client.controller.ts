@@ -15,6 +15,10 @@ interface InstallmentInput {
  * 1. CREAR CLIENTE Y PRÉSTAMO
  * Crea el cliente, el préstamo inicial y genera automáticamente el plan de pagos (amortización)
  */
+/**
+ * 1. CREAR CLIENTE Y PRÉSTAMO
+ * Crea el cliente, el préstamo inicial y genera automáticamente el plan de pagos (amortización)
+ */
 export const createClientAndLoan = async (req: any, res: any) => {
   try {
     const {
@@ -35,11 +39,15 @@ export const createClientAndLoan = async (req: any, res: any) => {
     if (periodicity === 'QUINCENAL') daysPerInstallment = 15;
     if (periodicity === 'MENSUAL') daysPerInstallment = 30;
 
+    // FIX ZONA HORARIA: Extraemos año, mes y día del string "YYYY-MM-DD" que viene del front
     const [year, month, day] = firstPaymentDate.split('-');
+    
+    // Creamos la fecha forzando la HORA LOCAL al mediodía (12:00 PM) para que,
+    // sin importar el UTC-5, siga cayendo en el mismo día.
     const firstPayment = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
 
     const today = new Date();
-    today.setHours(12, 0, 0, 0); 
+    today.setHours(12, 0, 0, 0); // También seteamos hoy al mediodía para calcular bien los días
 
     const diffTime = firstPayment.getTime() - today.getTime();
     let daysUntilFirstPayment = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -52,12 +60,14 @@ export const createClientAndLoan = async (req: any, res: any) => {
     const projectedTotal = amountNum + totalInterest;
     const installmentValue = projectedTotal / installmentsNum;
 
+    // Generamos el cronograma de cuotas (Installments)
     const installmentsArray: InstallmentInput[] = [];
     let currentDate = new Date(firstPayment);
 
     for (let i = 1; i <= installmentsNum; i++) {
       installmentsArray.push({
         installmentNumber: i,
+        // Guardamos la fecha manteniendo las 12:00 PM
         dueDate: new Date(currentDate),
         expectedAmount: installmentValue,
         paidAmount: 0,
@@ -73,7 +83,7 @@ export const createClientAndLoan = async (req: any, res: any) => {
       }
     }
 
-    // AQUI ESTÁ LA MAGIA: Le damos 20 segundos de timeout a la base de datos remota
+    // FIX DE RENDER (P2028): Aumentamos el timeout a 20 segundos
     const result = await prisma.$transaction(async (tx) => {
       const route = await tx.route.findUnique({ where: { id: routeIdInt } });
       
@@ -83,8 +93,8 @@ export const createClientAndLoan = async (req: any, res: any) => {
       const newClient = await tx.client.create({
         data: {
           name, 
-          documentId, 
-          phone,     
+          documentId, // Se guarda la cédula
+          phone,      // Se guarda el celular con el indicativo
           address, 
           latitude: latitude ? parseFloat(latitude) : null,
           longitude: longitude ? parseFloat(longitude) : null,
@@ -118,8 +128,8 @@ export const createClientAndLoan = async (req: any, res: any) => {
 
       return newClient;
     }, {
-      maxWait: 5000, // Tiempo máximo de espera para empezar
-      timeout: 20000 // 20 Segundos de tiempo límite para evitar el error P2028
+      maxWait: 5000, 
+      timeout: 20000 // 20 Segundos de tiempo límite para la base de datos remota
     });
 
     return res.status(201).json({
