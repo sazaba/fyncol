@@ -12,9 +12,6 @@ interface InstallmentInput {
 }
 
 /**
-
- */
-/**
  * 1. CREAR CLIENTE Y PRÉSTAMO
  * Crea el cliente, el préstamo inicial y genera automáticamente el plan de pagos (amortización)
  */
@@ -144,7 +141,6 @@ export const createClientAndLoan = async (req: any, res: any) => {
 
 /**
  * 2. OBTENER CARTERA DEL COBRADOR
- * Trae todos los clientes y préstamos activos de la ruta del usuario logueado
  */
 export const getCarteraDelCobrador = async (req: any, res: any) => {
   try {
@@ -190,7 +186,7 @@ export const getCarteraDelCobrador = async (req: any, res: any) => {
 };
 
 /**
- * 3. REGISTRAR PAGO (ABONO ANTIGUO - MANTENIDO POR COMPATIBILIDAD SI LO NECESITAS)
+ * 3. REGISTRAR PAGO (ABONO ANTIGUO - MANTENIDO POR COMPATIBILIDAD)
  */
 export const registrarPago = async (req: any, res: any) => {
   try {
@@ -222,15 +218,13 @@ export const registrarPago = async (req: any, res: any) => {
         }
       });
 
-      // Actualizamos el capital disponible de la ruta
       await tx.route.update({
         where: { id: loan.client.routeId },
         data: { availableCapital: { increment: amountNum } }
       });
 
-      // Si el pago total supera o iguala el proyectado, desactivamos el crédito
       let isFullyPaid = false;
-      if (newTotalPaid >= projectedTotal - 10) { // Margen de seguridad por decimales
+      if (newTotalPaid >= projectedTotal - 10) { 
         await tx.loan.update({
           where: { id: loan.id },
           data: { isActive: false }
@@ -306,7 +300,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
         });
         nuevoEstado = 'PAID';
 
-        // Procesar cuotas futuras (¡AQUÍ ESTABA EL ERROR CORREGIDO "gt:"!)
+        // Procesar cuotas futuras
         const futureInstallments = await tx.installment.findMany({
           where: {
             loanId: installment.loanId,
@@ -317,10 +311,12 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
         });
 
         if (futureInstallments.length > 0) {
+          // --- ACCIONES PARA ABONOS PARCIALES (DEUDA) ---
           if (actionParams.action === 'PROXIMA_CUOTA') {
+            const target = futureInstallments[0];
             await tx.installment.update({
-              where: { id: futureInstallments[0].id },
-              data: { expectedAmount: { increment: diffAmount } }
+              where: { id: target.id },
+              data: { expectedAmount: Number(target.expectedAmount) + diffAmount }
             });
           } 
           else if (actionParams.action === 'DIFERIR') {
@@ -328,10 +324,31 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
             for (const inst of futureInstallments) {
               await tx.installment.update({
                 where: { id: inst.id },
-                data: { expectedAmount: { increment: extraPorCuota } }
+                data: { expectedAmount: Number(inst.expectedAmount) + extraPorCuota }
               });
             }
           }
+          else if (actionParams.action === 'CUOTA_ESPECIFICA') {
+            const targetNum = Number(actionParams.targetInstallment);
+            const targetInst = futureInstallments.find((i: any) => i.installmentNumber === targetNum);
+            
+            if (targetInst) {
+              await tx.installment.update({
+                where: { id: targetInst.id },
+                data: { expectedAmount: Number(targetInst.expectedAmount) + diffAmount }
+              });
+            } else {
+              // Si no la encuentra, se lo carga a la próxima por seguridad
+              const target = futureInstallments[0];
+              await tx.installment.update({
+                where: { id: target.id },
+                data: { expectedAmount: Number(target.expectedAmount) + diffAmount }
+              });
+            }
+          }
+
+          // --- ACCIONES PARA EXCEDENTES (SALDO A FAVOR) ---
+          // NOTA: Se cambiaron los { increment/decrement } por asignación directa para evitar fallos de tipos con Prisma
           else if (actionParams.action === 'NEXT_QUOTA') {
             let saldoAFavor = diffAmount;
             for (const inst of futureInstallments) {
@@ -347,7 +364,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
               } else {
                 await tx.installment.update({
                   where: { id: inst.id },
-                  data: { expectedAmount: { decrement: saldoAFavor } }
+                  data: { expectedAmount: metaFutura - saldoAFavor }
                 });
                 saldoAFavor = 0;
               }
@@ -369,7 +386,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
               } else {
                 await tx.installment.update({
                   where: { id: inst.id },
-                  data: { expectedAmount: { decrement: saldoAFavor } }
+                  data: { expectedAmount: metaFutura - saldoAFavor }
                 });
                 saldoAFavor = 0;
               }
@@ -378,11 +395,21 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
           else if (actionParams.action === 'REDUCE_QUOTA') {
             const rebajaPorCuota = diffAmount / futureInstallments.length;
             for (const inst of futureInstallments) {
-              const decrementoReal = Math.min(Number(inst.expectedAmount), rebajaPorCuota);
-              await tx.installment.update({
-                where: { id: inst.id },
-                data: { expectedAmount: { decrement: decrementoReal } }
-              });
+              const metaFutura = Number(inst.expectedAmount);
+              const decrementoReal = Math.min(metaFutura, rebajaPorCuota);
+              const nuevoEsperado = metaFutura - decrementoReal;
+
+              if (nuevoEsperado <= 0.01) { // Tolerancia para punto flotante
+                await tx.installment.update({
+                  where: { id: inst.id },
+                  data: { expectedAmount: 0, status: 'PAID', paidAt: new Date() }
+                });
+              } else {
+                await tx.installment.update({
+                  where: { id: inst.id },
+                  data: { expectedAmount: nuevoEsperado }
+                });
+              }
             }
           }
         }

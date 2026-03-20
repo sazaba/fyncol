@@ -62,8 +62,9 @@ export default function CarteraActiva() {
   // Estados para modal inteligente de abonos
   const [manualPayModal, setManualPayModal] = useState<{open: boolean, inst: any, loan: any}>({ open: false, inst: null, loan: null });
   const [manualAmount, setManualAmount] = useState("");
-  const [saldoAction, setSaldoAction] = useState<'MANTENER' | 'PROXIMA_CUOTA' | 'DIFERIR'>('MANTENER');
+  const [saldoAction, setSaldoAction] = useState<'MANTENER' | 'PROXIMA_CUOTA' | 'DIFERIR' | 'CUOTA_ESPECIFICA'>('MANTENER');
   const [overpaymentAction, setOverpaymentAction] = useState<'NEXT_QUOTA' | 'REDUCE_TIME' | 'REDUCE_QUOTA'>('NEXT_QUOTA');
+  const [targetInstallmentNum, setTargetInstallmentNum] = useState<number>(0);
 
   const fetchCartera = async () => {
     setIsLoading(true);
@@ -458,9 +459,14 @@ export default function CarteraActiva() {
         const esExacto = abonoValue === faltante;
         const esExcedente = abonoValue > faltante;
 
+        // Calcular cuotas futuras disponibles para inyectar al Select de CUOTA_ESPECIFICA
+        const futureInstallmentsUI = manualPayModal.loan?.installmentDetails?.filter(
+          (i: any) => i.installmentNumber > inst.installmentNumber && i.status !== 'PAID'
+        ) || [];
+
         return (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="w-full max-w-md bg-[#05050A] border border-white/10 rounded-3xl shadow-2xl animate-[slideUp_0.18s_ease-out] overflow-hidden">
+            <div className="w-full max-w-md bg-[#05050A] border border-white/10 rounded-3xl shadow-2xl animate-[slideUp_0.18s_ease-out] overflow-y-auto max-h-[95vh] [&::-webkit-scrollbar]:hidden">
               
               <div className="p-6 border-b border-white/5">
                 <div className="flex justify-between items-center mb-5">
@@ -509,6 +515,39 @@ export default function CarteraActiva() {
                         <p className="text-xs text-slate-400 mt-0.5">Reparte la deuda restante equitativamente.</p>
                       </div>
                     </label>
+
+                    {/* NUEVA OPCIÓN: SELECCIONAR CUOTA ESPECÍFICA */}
+                    {futureInstallmentsUI.length > 0 && (
+                      <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${saldoAction === 'CUOTA_ESPECIFICA' ? 'bg-blue-600/20 border-blue-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
+                        <input 
+                          type="radio" name="saldoAction" 
+                          checked={saldoAction === 'CUOTA_ESPECIFICA'} 
+                          onChange={() => { 
+                            setSaldoAction('CUOTA_ESPECIFICA'); 
+                            setTargetInstallmentNum(futureInstallmentsUI[0]?.installmentNumber); 
+                          }} 
+                          className="mt-1 shrink-0 accent-blue-500" 
+                        />
+                        <div className="w-full">
+                          <p className="text-sm font-semibold text-white">Cargar a una cuota específica</p>
+                          <p className="text-xs text-slate-400 mt-0.5 mb-2">El cliente elige qué cuota futura asume esta deuda.</p>
+                          
+                          {saldoAction === 'CUOTA_ESPECIFICA' && (
+                            <select 
+                              value={targetInstallmentNum} 
+                              onChange={e => setTargetInstallmentNum(Number(e.target.value))}
+                              className="w-full bg-[#05050A] border border-white/20 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none"
+                            >
+                              {futureInstallmentsUI.map((fInst: any) => (
+                                <option key={fInst.id} value={fInst.installmentNumber}>
+                                  Cuota #{fInst.installmentNumber} - ({new Date(fInst.dueDate).toLocaleDateString('es-CO')})
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      </label>
+                    )}
                   </div>
                 </div>
               )}
@@ -548,19 +587,19 @@ export default function CarteraActiva() {
                 </div>
               )}
               
-              <div className="p-6 flex gap-3">
+              <div className="p-6 flex gap-3 shrink-0">
                 <button onClick={() => { setManualPayModal({ open: false, inst: null, loan: null }); setSaldoAction('MANTENER'); setOverpaymentAction('NEXT_QUOTA'); }} className="flex-1 py-3.5 border border-white/5 text-slate-300 font-medium text-sm bg-[#0B0B12] hover:bg-white/5 rounded-xl transition-colors">Cancelar</button>
                 <button 
                   onClick={() => {
                     let finalStatus = 'PAID';
-                    let actionData = { action: 'NONE', amount: 0 };
+                    let actionData = { action: 'NONE', amount: 0, targetInstallment: 0 };
 
                     if (esParcial) {
                        finalStatus = saldoAction !== 'MANTENER' ? 'PAID' : 'PARTIAL';
-                       actionData = { action: saldoAction, amount: diferencia };
+                       actionData = { action: saldoAction, amount: diferencia, targetInstallment: targetInstallmentNum };
                     } else if (esExcedente) {
                        finalStatus = 'PAID';
-                       actionData = { action: overpaymentAction, amount: diferencia };
+                       actionData = { action: overpaymentAction, amount: diferencia, targetInstallment: 0 };
                     }
 
                     handleUpdateStatus(inst.id, finalStatus, abonoValue, actionData);
@@ -615,7 +654,6 @@ export default function CarteraActiva() {
                       </div>
                     </div>
                     
-                    {/* BOTONES RESTAURADOS EN EL HISTORIAL */}
                     {inst.status !== 'PAID' && (
                       <div className="flex gap-2 mt-2 pt-3 border-t border-white/5">
                         <button 
