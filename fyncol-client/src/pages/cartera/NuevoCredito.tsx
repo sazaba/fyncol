@@ -46,11 +46,12 @@ const COUNTRY_CODES = [
   { code: '+58', country: 'Venezuela' },
   { code: '+507', country: 'Panamá' },
   { code: '+34', country: 'España' },
-  { code: '+1', country: 'USA/Canadá' },
+  { code: '+1', country: 'USA' },
+  { code: '+1', country: 'Canadá' },
   { code: '+55', country: 'Brasil' },
   { code: '+598', country: 'Uruguay' },
   { code: '+595', country: 'Paraguay' },
-  { code: '+591', country: 'Paraguay' }, // Extra por seguridad
+  { code: '+591', country: 'Bolivia' },
 ];
 
 export default function NuevoCredito() {
@@ -78,7 +79,6 @@ export default function NuevoCredito() {
 
   const [showAmortization, setShowAmortization] = useState(false);
 
-  // NUEVOS ESTADOS PARA EL BUSCADOR DE INDICATIVOS
   const [phoneCode, setPhoneCode] = useState('+57');
   const [isPhoneDropdownOpen, setIsPhoneDropdownOpen] = useState(false);
   const [phoneSearch, setPhoneSearch] = useState('');
@@ -108,7 +108,6 @@ export default function NuevoCredito() {
       }
     };
     
-    // Cerrar el dropdown al hacer clic afuera
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsPhoneDropdownOpen(false);
@@ -163,6 +162,18 @@ export default function NuevoCredito() {
   };
 
   useEffect(() => { fetchMiRuta(); }, []);
+
+  // NUEVO: AUTO-SELECCIONAR INDICATIVO SEGÚN EL PAÍS DE LA RUTA
+  useEffect(() => {
+    if (rutaAsignada && rutaAsignada.country) {
+      const rutaPais = rutaAsignada.country.toLowerCase();
+      // Buscamos si el país de la ruta coincide con alguno de nuestra lista
+      const match = COUNTRY_CODES.find(c => c.country.toLowerCase().includes(rutaPais));
+      if (match) {
+        setPhoneCode(match.code);
+      }
+    }
+  }, [rutaAsignada]);
 
   useEffect(() => {
     const today = new Date();
@@ -283,12 +294,11 @@ export default function NuevoCredito() {
       let documentUrl = null;
       if (file) documentUrl = await uploadToCloudinary(file);
 
-      // Concatenamos el código de país con el teléfono
       const finalPhone = formData.phone ? `${phoneCode} ${formData.phone.trim()}` : '';
 
       const payload = {
         ...formData,
-        phone: finalPhone, // Enviamos el teléfono completo
+        phone: finalPhone, 
         latitude: location.latitude,
         longitude: location.longitude,
         documentUrl
@@ -318,7 +328,11 @@ export default function NuevoCredito() {
           });
           setLocation({ latitude: null, longitude: null });
           setFile(null);
-          setPhoneCode('+57'); // Reseteamos el indicativo
+          // Volver a auto-detectar el indicativo
+          if (rutaAsignada && rutaAsignada.country) {
+            const match = COUNTRY_CODES.find(c => c.country.toLowerCase().includes(rutaAsignada.country.toLowerCase()));
+            setPhoneCode(match ? match.code : '+57');
+          }
           fetchMiRuta();
         }
       });
@@ -443,7 +457,6 @@ export default function NuevoCredito() {
                 <FiPhone size={12} /> Celular
               </label>
               <div className="flex gap-2">
-                {/* Menú Desplegable Personalizado para Código de País */}
                 <div className="relative" ref={dropdownRef}>
                   <button 
                     type="button" 

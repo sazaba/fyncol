@@ -11,14 +11,7 @@ interface InstallmentInput {
   status: string;
 }
 
-/**
- * 1. CREAR CLIENTE Y PRÉSTAMO
- * Crea el cliente, el préstamo inicial y genera automáticamente el plan de pagos (amortización)
- */
-/**
- * 1. CREAR CLIENTE Y PRÉSTAMO
- * Crea el cliente, el préstamo inicial y genera automáticamente el plan de pagos (amortización)
- */
+
 export const createClientAndLoan = async (req: any, res: any) => {
   try {
     const {
