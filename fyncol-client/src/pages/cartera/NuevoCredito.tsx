@@ -35,23 +35,22 @@ type PremiumAlertState = {
   onConfirm?: (() => void) | null;
 };
 
-// LISTA DE PAÍSES PARA EL BUSCADOR
+// LISTA DE PAÍSES MEJORADA CON "ALIAS" PARA EVITAR ERRORES DE ORTOGRAFÍA O IDIOMA
 const COUNTRY_CODES = [
-  { code: '+57', country: 'Colombia' },
-  { code: '+52', country: 'México' },
-  { code: '+51', country: 'Perú' },
-  { code: '+54', country: 'Argentina' },
-  { code: '+56', country: 'Chile' },
-  { code: '+593', country: 'Ecuador' },
-  { code: '+58', country: 'Venezuela' },
-  { code: '+507', country: 'Panamá' },
-  { code: '+34', country: 'España' },
-  { code: '+1', country: 'USA' },
-  { code: '+1', country: 'Canadá' },
-  { code: '+55', country: 'Brasil' },
-  { code: '+598', country: 'Uruguay' },
-  { code: '+595', country: 'Paraguay' },
-  { code: '+591', country: 'Bolivia' },
+  { code: '+57', country: 'Colombia', aliases: ['colombia', 'col'] },
+  { code: '+52', country: 'México', aliases: ['mexico', 'méxico', 'mex'] },
+  { code: '+51', country: 'Perú', aliases: ['peru', 'perú'] },
+  { code: '+54', country: 'Argentina', aliases: ['argentina', 'arg'] },
+  { code: '+56', country: 'Chile', aliases: ['chile'] },
+  { code: '+593', country: 'Ecuador', aliases: ['ecuador'] },
+  { code: '+58', country: 'Venezuela', aliases: ['venezuela', 'ven'] },
+  { code: '+507', country: 'Panamá', aliases: ['panama', 'panamá'] },
+  { code: '+34', country: 'España', aliases: ['españa', 'spain', 'es'] },
+  { code: '+1', country: 'USA/Canadá', aliases: ['usa', 'estados unidos', 'eeuu', 'us', 'canada', 'canadá'] },
+  { code: '+55', country: 'Brasil', aliases: ['brasil', 'brazil', 'br'] }, // <-- Aquí está la magia para tu ruta
+  { code: '+598', country: 'Uruguay', aliases: ['uruguay'] },
+  { code: '+595', country: 'Paraguay', aliases: ['paraguay'] },
+  { code: '+591', country: 'Bolivia', aliases: ['bolivia'] },
 ];
 
 export default function NuevoCredito() {
@@ -163,12 +162,13 @@ export default function NuevoCredito() {
 
   useEffect(() => { fetchMiRuta(); }, []);
 
-  // NUEVO: AUTO-SELECCIONAR INDICATIVO SEGÚN EL PAÍS DE LA RUTA
+  // DETECTOR INTELIGENTE DE PAÍS (AHORA USA LOS ALIAS)
   useEffect(() => {
     if (rutaAsignada && rutaAsignada.country) {
-      const rutaPais = rutaAsignada.country.toLowerCase();
-      // Buscamos si el país de la ruta coincide con alguno de nuestra lista
-      const match = COUNTRY_CODES.find(c => c.country.toLowerCase().includes(rutaPais));
+      const rutaPais = rutaAsignada.country.toLowerCase().trim();
+      const match = COUNTRY_CODES.find(c => 
+        c.aliases.some(alias => rutaPais.includes(alias))
+      );
       if (match) {
         setPhoneCode(match.code);
       }
@@ -328,11 +328,16 @@ export default function NuevoCredito() {
           });
           setLocation({ latitude: null, longitude: null });
           setFile(null);
-          // Volver a auto-detectar el indicativo
+          
+          // Re-detectar país por si acaso
           if (rutaAsignada && rutaAsignada.country) {
-            const match = COUNTRY_CODES.find(c => c.country.toLowerCase().includes(rutaAsignada.country.toLowerCase()));
+            const rutaPais = rutaAsignada.country.toLowerCase().trim();
+            const match = COUNTRY_CODES.find(c => c.aliases.some(alias => rutaPais.includes(alias)));
             setPhoneCode(match ? match.code : '+57');
+          } else {
+            setPhoneCode('+57');
           }
+          
           fetchMiRuta();
         }
       });
@@ -351,8 +356,9 @@ export default function NuevoCredito() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // Buscador mejorado para el dropdown manual
   const filteredCountries = COUNTRY_CODES.filter(country => 
-    country.country.toLowerCase().includes(phoneSearch.toLowerCase()) || 
+    country.aliases.some(alias => alias.includes(phoneSearch.toLowerCase().trim())) || 
     country.code.includes(phoneSearch)
   );
 
