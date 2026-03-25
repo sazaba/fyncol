@@ -40,6 +40,15 @@ function MapController({ coords, zoom }: { coords: [number, number] | null, zoom
   return null;
 }
 
+// Función auxiliar para obtener "hoy" basándose 100% en el horario del dispositivo local
+const getDeviceTodayStr = () => {
+    const today = new Date(); // Esto detecta la zona horaria del celular/PC
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+};
+
 export default function CarteraActiva() {
   const [clients, setClients] = useState<any[]>([]);
   const [routeInfo, setRouteInfo] = useState<any>(null);
@@ -72,7 +81,7 @@ export default function CarteraActiva() {
   const [closureModalOpen, setClosureModalOpen] = useState(false);
   const [closureSummary, setClosureSummary] = useState<any>(null);
   const [isClosing, setIsClosing] = useState(false);
-  const [isRouteClosed, setIsRouteClosed] = useState(false); // <--- NUEVO ESTADO DE BLOQUEO
+  const [isRouteClosed, setIsRouteClosed] = useState(false); 
 
   const fetchCartera = async () => {
     setIsLoading(true);
@@ -96,24 +105,25 @@ export default function CarteraActiva() {
 
   useEffect(() => { fetchCartera(); }, []);
 
-  // VERIFICAR SI LA RUTA FUE CERRADA HOY (Se ejecuta cuando carga la info de la ruta)
+  // VERIFICAR SI LA RUTA FUE CERRADA HOY EN EL DISPOSITIVO
   useEffect(() => {
     if (routeInfo) {
-      const today = new Date();
-      const todayLocalStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-      const isClosed = localStorage.getItem(`closed_route_${routeInfo.id}_${todayLocalStr}`);
+      const deviceTodayStr = getDeviceTodayStr();
+      const storageKey = `closed_route_${routeInfo.id}_${deviceTodayStr}`;
+      const isClosed = localStorage.getItem(storageKey);
+      
       if (isClosed === 'true') {
         setIsRouteClosed(true);
+      } else {
+        // Si es un día nuevo, el storageKey cambió, por lo tanto isClosed será null
+        // y la ruta volverá a estar abierta automáticamente.
+        setIsRouteClosed(false); 
       }
     }
   }, [routeInfo]);
 
   const filteredData = useMemo(() => {
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    const todayLocalStr = `${yyyy}-${mm}-${dd}`; 
+    const deviceTodayStr = getDeviceTodayStr();
 
     return clients.filter(client => {
       const loan = client.loans[0];
@@ -123,7 +133,7 @@ export default function CarteraActiva() {
       const cuotaActiva = loan?.installmentDetails?.find((i: any) => {
         if (!i.dueDate) return false;
         const dbDate = i.dueDate.split('T')[0];
-        return i.status !== 'PAID' && dbDate <= todayLocalStr;
+        return i.status !== 'PAID' && dbDate <= deviceTodayStr;
       });
 
       if (filter === 'HOY') return !!cuotaActiva;
@@ -146,6 +156,8 @@ export default function CarteraActiva() {
 
   // Manejador que envía la data inteligente al backend
   const handleUpdateStatus = async (instId: number, status: string, amount: number, actionData?: any) => {
+    if(isRouteClosed) return; // Bloqueo de seguridad a nivel de función
+
     setUpdatingInstId(instId);
     try {
       const token = localStorage.getItem("token");
@@ -207,9 +219,12 @@ export default function CarteraActiva() {
       if (res.ok && data.success) {
         setClosureSummary(data.summary);
         setClosureModalOpen(true);
+      } else {
+        alert("Error al calcular el arqueo: " + (data.error || "Desconocido"));
       }
     } catch (error) {
       console.error("Error al obtener el resumen de cierre");
+      alert("Hubo un problema de conexión con el servidor.");
     } finally {
       setIsLoading(false);
     }
@@ -229,20 +244,27 @@ export default function CarteraActiva() {
         body: JSON.stringify({ summary: closureSummary })
       });
       const data = await res.json();
+      
+      // SOLO si el backend guardó con éxito, bloqueamos la app.
       if (res.ok && data.success) {
         setClosureModalOpen(false);
         
-        // Registrar en el navegador que hoy se cerró la ruta exitosamente
-        const today = new Date();
-        const todayLocalStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-        localStorage.setItem(`closed_route_${routeInfo.id}_${todayLocalStr}`, 'true');
+        // Registrar en el navegador local que hoy se cerró la ruta exitosamente
+        const deviceTodayStr = getDeviceTodayStr();
+        const storageKey = `closed_route_${routeInfo.id}_${deviceTodayStr}`;
+        localStorage.setItem(storageKey, 'true');
+        
         setIsRouteClosed(true);
 
-        // Redirigir al dashboard para forzar la salida de esta pantalla
         window.location.href = '/dashboard'; 
+      } else {
+        // Si el backend falla (ej. Prisma error), te avisará aquí.
+        alert("Error del Backend al intentar cerrar: " + (data.error || "Revisa la consola."));
+        console.error("Backend response:", data);
       }
     } catch (error) {
-      console.error("Error al confirmar el cierre");
+      console.error("Error al confirmar el cierre:", error);
+      alert("Error crítico de conexión al confirmar el cierre.");
     } finally {
       setIsClosing(false);
     }
@@ -322,17 +344,16 @@ export default function CarteraActiva() {
           ) : (
             filteredData.map((client, index) => {
               const loan = client.loans[0];
-              const today = new Date();
-              const todayLocalStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+              const deviceTodayStr = getDeviceTodayStr();
               
               const cuotaActiva = loan?.installmentDetails?.find((i: any) => {
                 if (!i.dueDate) return false;
                 const dbDate = i.dueDate.split('T')[0];
-                return i.status !== 'PAID' && dbDate <= todayLocalStr;
+                return i.status !== 'PAID' && dbDate <= deviceTodayStr;
               });
 
               const prestamoTerminado = loan?.installmentDetails?.every((i: any) => i.status === 'PAID');
-              const hasPaidToday = loan?.installmentDetails?.some((i: any) => i.dueDate.startsWith(todayLocalStr) && i.status === 'PAID');
+              const hasPaidToday = loan?.installmentDetails?.some((i: any) => i.dueDate.startsWith(deviceTodayStr) && i.status === 'PAID');
 
               return (
                 <div 
@@ -476,12 +497,8 @@ export default function CarteraActiva() {
              <Polyline positions={routePolylineCoords} pathOptions={{ color: '#3b82f6', weight: 4, opacity: 0.6, dashArray: '10, 10' }} />
           )}
           {filteredData.map(client => {
-            const today = new Date();
-            const yyyy = today.getFullYear();
-            const mm = String(today.getMonth() + 1).padStart(2, '0');
-            const dd = String(today.getDate()).padStart(2, '0');
-            const todayLocalStr = `${yyyy}-${mm}-${dd}`;
-            const hasPaidToday = client.loans[0]?.installmentDetails?.some((i: any) => i.dueDate.startsWith(todayLocalStr) && i.status === 'PAID');
+            const deviceTodayStr = getDeviceTodayStr();
+            const hasPaidToday = client.loans[0]?.installmentDetails?.some((i: any) => i.dueDate.startsWith(deviceTodayStr) && i.status === 'PAID');
             
             return client.latitude && (
               <Marker key={client.id} position={[client.latitude, client.longitude]} icon={hasPaidToday ? greenIcon : redIcon}>
