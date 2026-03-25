@@ -14,6 +14,7 @@ interface InstallmentInput {
 /**
  * 1. CREAR CLIENTE Y PRÉSTAMO
  * Crea el cliente, el préstamo inicial y genera automáticamente el plan de pagos (amortización)
+ * Incluye validación de duplicados por documentId.
  */
 export const createClientAndLoan = async (req: any, res: any) => {
   try {
@@ -35,15 +36,12 @@ export const createClientAndLoan = async (req: any, res: any) => {
     if (periodicity === 'QUINCENAL') daysPerInstallment = 15;
     if (periodicity === 'MENSUAL') daysPerInstallment = 30;
 
-    // FIX ZONA HORARIA: Extraemos año, mes y día del string "YYYY-MM-DD" que viene del front
+    // FIX ZONA HORARIA
     const [year, month, day] = firstPaymentDate.split('-');
-    
-    // Creamos la fecha forzando la HORA LOCAL al mediodía (12:00 PM) para que,
-    // sin importar el UTC-5, siga cayendo en el mismo día.
     const firstPayment = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
 
     const today = new Date();
-    today.setHours(12, 0, 0, 0); // También seteamos hoy al mediodía para calcular bien los días
+    today.setHours(12, 0, 0, 0);
 
     const diffTime = firstPayment.getTime() - today.getTime();
     let daysUntilFirstPayment = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -56,14 +54,12 @@ export const createClientAndLoan = async (req: any, res: any) => {
     const projectedTotal = amountNum + totalInterest;
     const installmentValue = projectedTotal / installmentsNum;
 
-    // Generamos el cronograma de cuotas (Installments)
-    const installmentsArray: InstallmentInput[] = [];
+    const installmentsArray: any[] = [];
     let currentDate = new Date(firstPayment);
 
     for (let i = 1; i <= installmentsNum; i++) {
       installmentsArray.push({
         installmentNumber: i,
-        // Guardamos la fecha manteniendo las 12:00 PM
         dueDate: new Date(currentDate),
         expectedAmount: Number(installmentValue.toFixed(2)),
         paidAmount: 0,
@@ -79,7 +75,6 @@ export const createClientAndLoan = async (req: any, res: any) => {
       }
     }
 
-    // FIX DE RENDER (P2028): Aumentamos el timeout a 20 segundos
     const result = await prisma.$transaction(async (tx) => {
       const route = await tx.route.findUnique({ where: { id: routeIdInt } });
       
@@ -89,8 +84,8 @@ export const createClientAndLoan = async (req: any, res: any) => {
       const newClient = await tx.client.create({
         data: {
           name, 
-          documentId, // Se guarda la cédula
-          phone,      // Se guarda el celular con el indicativo
+          documentId, 
+          phone,      
           address, 
           latitude: latitude ? parseFloat(latitude) : null,
           longitude: longitude ? parseFloat(longitude) : null,
@@ -125,16 +120,24 @@ export const createClientAndLoan = async (req: any, res: any) => {
       return newClient;
     }, {
       maxWait: 5000, 
-      timeout: 20000 // 20 Segundos de tiempo límite para la base de datos remota
+      timeout: 20000 
     });
 
     return res.status(201).json({
-      message: "Cliente, préstamo y cronograma creados exitosamente",
+      message: "Cliente y préstamo creados exitosamente",
       data: result
     });
 
   } catch (error: any) {
     console.error("Error al crear cliente:", error);
+
+    // Captura específica de documento duplicado (Error P2002 de Prisma)
+    if (error.code === 'P2002') {
+      return res.status(400).json({ 
+        error: "Error: Ya existe un cliente registrado con este número de documento." 
+      });
+    }
+
     return res.status(400).json({ error: error.message || "Error interno del servidor" });
   }
 };

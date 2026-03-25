@@ -47,7 +47,7 @@ const COUNTRY_CODES = [
   { code: '+507', country: 'Panamá', aliases: ['panama', 'panamá'] },
   { code: '+34', country: 'España', aliases: ['españa', 'spain', 'es'] },
   { code: '+1', country: 'USA/Canadá', aliases: ['usa', 'estados unidos', 'eeuu', 'us', 'canada', 'canadá'] },
-  { code: '+55', country: 'Brasil', aliases: ['brasil', 'brazil', 'br'] }, // <-- Aquí está la magia para tu ruta
+  { code: '+55', country: 'Brasil', aliases: ['brasil', 'brazil', 'br'] }, 
   { code: '+598', country: 'Uruguay', aliases: ['uruguay'] },
   { code: '+595', country: 'Paraguay', aliases: ['paraguay'] },
   { code: '+591', country: 'Bolivia', aliases: ['bolivia'] },
@@ -162,7 +162,6 @@ export default function NuevoCredito() {
 
   useEffect(() => { fetchMiRuta(); }, []);
 
-  // DETECTOR INTELIGENTE DE PAÍS (AHORA USA LOS ALIAS)
   useEffect(() => {
     if (rutaAsignada && rutaAsignada.country) {
       const rutaPais = rutaAsignada.country.toLowerCase().trim();
@@ -329,7 +328,6 @@ export default function NuevoCredito() {
           setLocation({ latitude: null, longitude: null });
           setFile(null);
           
-          // Re-detectar país por si acaso
           if (rutaAsignada && rutaAsignada.country) {
             const rutaPais = rutaAsignada.country.toLowerCase().trim();
             const match = COUNTRY_CODES.find(c => c.aliases.some(alias => rutaPais.includes(alias)));
@@ -356,7 +354,6 @@ export default function NuevoCredito() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Buscador mejorado para el dropdown manual
   const filteredCountries = COUNTRY_CODES.filter(country => 
     country.aliases.some(alias => alias.includes(phoneSearch.toLowerCase().trim())) || 
     country.code.includes(phoneSearch)
@@ -449,6 +446,7 @@ export default function NuevoCredito() {
                 <FiCreditCard size={12} /> Cédula / ID
               </label>
               <input 
+                required 
                 name="documentId" 
                 value={formData.documentId} 
                 onChange={handleChange} 
