@@ -42,7 +42,6 @@ export const getClosureSummary = async (req: any, res: any) => {
       }
     });
     
-    // Tipamos explícitamente el acumulador y el iterador para que TypeScript no se queje
     const totalCollected = paymentsToday.reduce((acc: number, pay: any) => acc + Number(pay.amount), 0);
 
     // 4. CLIENTES COBRADOS (Clientes únicos que pagaron hoy)
@@ -61,7 +60,6 @@ export const getClosureSummary = async (req: any, res: any) => {
     let renewals = 0;
 
     loansToday.forEach((loan: any) => {
-      // Si el cliente también se creó hoy, es venta nueva. Si no, es renovación.
       if (loan.client.createdAt >= start && loan.client.createdAt <= end) {
         newSales += Number(loan.amount);
       } else {
@@ -72,11 +70,21 @@ export const getClosureSummary = async (req: any, res: any) => {
     // 6. TOTAL RUTA (Clientes activos asignados a la ruta)
     const totalClients = route.clients.length;
 
-    // 7. CLIENTES MORA (Clientes con cuotas OVERDUE hoy)
+    // 7. CLIENTES MORA (CORREGIDO: Incluye PENDING/PARTIAL vencidos o de hoy, mayores a $0)
     const overdueInstallments = await prisma.installment.findMany({
       where: {
-        status: 'OVERDUE',
-        loan: { client: { routeId } }
+        loan: { 
+          client: { routeId },
+          isActive: true // Solo préstamos activos
+        },
+        OR: [
+          { status: 'OVERDUE' },
+          {
+            status: { in: ['PENDING', 'PARTIAL'] },
+            dueDate: { lte: end }, // La fecha de pago es hoy o antes
+            expectedAmount: { gt: 0 } // Ignora las cuotas en $0 (rediferidas/exoneradas)
+          }
+        ]
       },
       select: { loanId: true }
     });
@@ -126,7 +134,6 @@ export const confirmDailyClosure = async (req: any, res: any) => {
       return res.status(400).json({ error: "Faltan los datos del resumen de cierre." });
     }
 
-    // Usamos la misma estructura de transacción con timeout que manejas para evitar bloqueos
     const result = await prisma.$transaction(async (tx) => {
       const route = await tx.route.findFirst({ 
         where: { assignedToId: userId } 
@@ -136,7 +143,6 @@ export const confirmDailyClosure = async (req: any, res: any) => {
         throw new Error("No tienes una ruta asignada.");
       }
 
-      // Guardar la "fotografía" en la base de datos asegurando que todo sea Number
       const closure = await tx.dailyClosure.create({
         data: {
           routeId: route.id,
@@ -155,7 +161,7 @@ export const confirmDailyClosure = async (req: any, res: any) => {
       return closure;
     }, {
       maxWait: 5000, 
-      timeout: 20000 // Manteniendo tu configuración de seguridad para la DB remota
+      timeout: 20000
     });
 
     return res.status(201).json({ 
@@ -169,20 +175,20 @@ export const confirmDailyClosure = async (req: any, res: any) => {
     return res.status(500).json({ error: error.message || "Error al procesar el cierre." });
   }
 };
+
 /**
  * 3. OBTENER HISTORIAL DE ARQUEOS (Para el Admin/Supervisor)
  */
 export const getAllClosures = async (req: any, res: any) => {
   try {
-    // Buscar todos los cierres, incluyendo datos de la ruta y del cobrador
     const closures = await prisma.dailyClosure.findMany({
       include: {
         route: true,
         closedBy: { 
-          select: { id: true, name: true, email: true } // Traemos solo lo necesario del usuario
+          select: { id: true, name: true, email: true } 
         }
       },
-      orderBy: { closedAt: 'desc' } // Los más recientes primero
+      orderBy: { closedAt: 'desc' } 
     });
 
     return res.json({ 
