@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { 
   FiDollarSign, FiMapPin, FiSearch, 
   FiAlertTriangle, FiX, FiLoader, FiNavigation,
-  FiSun, FiMoon, FiCheckCircle, FiExternalLink, FiMap, FiCalendar,
+  FiSun, FiMoon, FiCheckCircle, FiExternalLink, FiMap, FiCalendar, FiLock
 } from 'react-icons/fi';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
@@ -68,10 +68,11 @@ export default function CarteraActiva() {
   const [overdueAction, setOverdueAction] = useState<'PROXIMA_CUOTA' | 'DIFERIR' | 'CUOTA_ESPECIFICA' | 'CUOTA_EXTRA'>('PROXIMA_CUOTA');
   const [overdueTargetInst, setOverdueTargetInst] = useState<number>(0);
 
-  // NUEVOS ESTADOS PARA EL CIERRE DE CAJA
+  // ESTADOS PARA EL CIERRE DE CAJA
   const [closureModalOpen, setClosureModalOpen] = useState(false);
   const [closureSummary, setClosureSummary] = useState<any>(null);
   const [isClosing, setIsClosing] = useState(false);
+  const [isRouteClosed, setIsRouteClosed] = useState(false); // <--- NUEVO ESTADO DE BLOQUEO
 
   const fetchCartera = async () => {
     setIsLoading(true);
@@ -94,6 +95,18 @@ export default function CarteraActiva() {
   };
 
   useEffect(() => { fetchCartera(); }, []);
+
+  // VERIFICAR SI LA RUTA FUE CERRADA HOY (Se ejecuta cuando carga la info de la ruta)
+  useEffect(() => {
+    if (routeInfo) {
+      const today = new Date();
+      const todayLocalStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const isClosed = localStorage.getItem(`closed_route_${routeInfo.id}_${todayLocalStr}`);
+      if (isClosed === 'true') {
+        setIsRouteClosed(true);
+      }
+    }
+  }, [routeInfo]);
 
   const filteredData = useMemo(() => {
     const today = new Date();
@@ -181,7 +194,7 @@ export default function CarteraActiva() {
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  // NUEVAS FUNCIONES PARA EL CIERRE DE CAJA
+  // FUNCIONES PARA EL CIERRE DE CAJA
   const handleOpenClosure = async () => {
     setIsLoading(true);
     try {
@@ -218,7 +231,14 @@ export default function CarteraActiva() {
       const data = await res.json();
       if (res.ok && data.success) {
         setClosureModalOpen(false);
-        // Recargar la vista o redirigir tras cerrar
+        
+        // Registrar en el navegador que hoy se cerró la ruta exitosamente
+        const today = new Date();
+        const todayLocalStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        localStorage.setItem(`closed_route_${routeInfo.id}_${todayLocalStr}`, 'true');
+        setIsRouteClosed(true);
+
+        // Redirigir al dashboard para forzar la salida de esta pantalla
         window.location.href = '/dashboard'; 
       }
     } catch (error) {
@@ -249,13 +269,22 @@ export default function CarteraActiva() {
                 </div>
               </div>
               
-              {/* BOTÓN MAESTRO DE ARQUEO */}
-              <button 
-                onClick={handleOpenClosure}
-                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-emerald-900/20 transition-all flex items-center justify-center gap-2 border border-emerald-500/30"
-              >
-                <FiCheckCircle size={16} /> Cerrar Ruta de Hoy
-              </button>
+              {/* BOTÓN MAESTRO DE ARQUEO CON LÓGICA DE BLOQUEO */}
+              {isRouteClosed ? (
+                <button 
+                  disabled
+                  className="w-full bg-[#0B0B12] text-slate-500 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border border-white/5 cursor-not-allowed"
+                >
+                  <FiLock size={16} /> Ruta Cerrada por Hoy
+                </button>
+              ) : (
+                <button 
+                  onClick={handleOpenClosure}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-emerald-900/20 transition-all flex items-center justify-center gap-2 border border-emerald-500/30"
+                >
+                  <FiCheckCircle size={16} /> Cerrar Ruta de Hoy
+                </button>
+              )}
             </div>
           )}
 
@@ -347,48 +376,54 @@ export default function CarteraActiva() {
                         </div>
                         
                         {(cuotaActiva.status === 'PENDING' || cuotaActiva.status === 'PARTIAL' || cuotaActiva.status === 'OVERDUE') && (
-                          <div className="flex gap-1.5">
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const faltante = Number(cuotaActiva.expectedAmount) - Number(cuotaActiva.paidAmount || 0);
-                                setConfirmPayModal({ open: true, inst: cuotaActiva, faltante });
-                              }} 
-                              className="flex-[2] bg-blue-600 hover:bg-blue-500 py-1.5 rounded text-white text-[10px] font-bold flex justify-center items-center transition-all"
-                            >
-                              PAGAR
-                            </button>
-                            <button 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                setManualPayModal({ open: true, inst: cuotaActiva, loan }); 
-                                setManualAmount(""); 
-                                
-                                const futureInstallmentsUI = loan?.installmentDetails?.filter(
-                                  (i: any) => i.installmentNumber > cuotaActiva.installmentNumber && i.status !== 'PAID'
-                                ) || [];
-                                setSaldoAction(futureInstallmentsUI.length > 0 ? 'PROXIMA_CUOTA' : 'PROXIMA_CUOTA');
-                                setOverpaymentAction('NEXT_QUOTA'); 
-                              }}
-                              className="flex-1 bg-white/10 hover:bg-white/20 py-1.5 rounded text-white text-[10px] font-bold flex justify-center items-center transition-all"
-                            >
-                              ABONO
-                            </button>
-                            <button 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                setOverdueModal({ open: true, inst: cuotaActiva, loan: loan }); 
-                                
-                                const futureInstallmentsUI = loan?.installmentDetails?.filter(
-                                  (i: any) => i.installmentNumber > cuotaActiva.installmentNumber && i.status !== 'PAID'
-                                ) || [];
-                                setOverdueAction(futureInstallmentsUI.length > 0 ? 'PROXIMA_CUOTA' : 'CUOTA_EXTRA'); 
-                              }}
-                              className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 py-1.5 rounded text-[10px] font-bold flex justify-center items-center transition-all"
-                            >
-                              MORA
-                            </button>
-                          </div>
+                          isRouteClosed ? (
+                            <div className="py-2 text-center border border-white/5 bg-white/5 rounded-lg text-slate-500 text-xs font-semibold flex items-center justify-center gap-1.5 mt-1">
+                               <FiLock size={12} /> Pagos bloqueados por cierre
+                            </div>
+                          ) : (
+                            <div className="flex gap-1.5">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const faltante = Number(cuotaActiva.expectedAmount) - Number(cuotaActiva.paidAmount || 0);
+                                  setConfirmPayModal({ open: true, inst: cuotaActiva, faltante });
+                                }} 
+                                className="flex-[2] bg-blue-600 hover:bg-blue-500 py-1.5 rounded text-white text-[10px] font-bold flex justify-center items-center transition-all"
+                              >
+                                PAGAR
+                              </button>
+                              <button 
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  setManualPayModal({ open: true, inst: cuotaActiva, loan }); 
+                                  setManualAmount(""); 
+                                  
+                                  const futureInstallmentsUI = loan?.installmentDetails?.filter(
+                                    (i: any) => i.installmentNumber > cuotaActiva.installmentNumber && i.status !== 'PAID'
+                                  ) || [];
+                                  setSaldoAction(futureInstallmentsUI.length > 0 ? 'PROXIMA_CUOTA' : 'PROXIMA_CUOTA');
+                                  setOverpaymentAction('NEXT_QUOTA'); 
+                                }}
+                                className="flex-1 bg-white/10 hover:bg-white/20 py-1.5 rounded text-white text-[10px] font-bold flex justify-center items-center transition-all"
+                              >
+                                ABONO
+                              </button>
+                              <button 
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  setOverdueModal({ open: true, inst: cuotaActiva, loan: loan }); 
+                                  
+                                  const futureInstallmentsUI = loan?.installmentDetails?.filter(
+                                    (i: any) => i.installmentNumber > cuotaActiva.installmentNumber && i.status !== 'PAID'
+                                  ) || [];
+                                  setOverdueAction(futureInstallmentsUI.length > 0 ? 'PROXIMA_CUOTA' : 'CUOTA_EXTRA'); 
+                                }}
+                                className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 py-1.5 rounded text-[10px] font-bold flex justify-center items-center transition-all"
+                              >
+                                MORA
+                              </button>
+                            </div>
+                          )
                         )}
                       </div>
                     )}
@@ -818,21 +853,27 @@ export default function CarteraActiva() {
                       </div>
                       
                       {inst.status !== 'PAID' && (
-                        <div className="flex gap-2 mt-2 pt-3 border-t border-white/5">
-                          <button 
-                            onClick={() => setConfirmPayModal({ open: true, inst: inst, faltante: Number(inst.expectedAmount) - Number(inst.paidAmount || 0) })} 
-                            disabled={updatingInstId === inst.id} 
-                            className="flex-[2] bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 py-2.5 rounded-xl text-blue-400 text-xs font-semibold transition-all flex items-center justify-center"
-                          >
-                            {updatingInstId === inst.id ? <FiLoader className="animate-spin" /> : 'Liquidar Cuota'}
-                          </button>
-                          <button 
-                            onClick={() => { setManualPayModal({ open: true, inst: inst, loan: selectedClient.loans[0] }); setManualAmount(""); setSaldoAction('PROXIMA_CUOTA'); setOverpaymentAction('NEXT_QUOTA'); }} 
-                            className="flex-1 bg-white/5 hover:bg-white/10 py-2.5 rounded-xl text-slate-300 flex items-center justify-center transition-colors border border-white/5"
-                          >
-                            <FiDollarSign size={14} /> Abono Especial
-                          </button>
-                        </div>
+                        isRouteClosed ? (
+                          <div className="mt-2 pt-3 border-t border-white/5 text-center">
+                            <span className="text-xs text-slate-500 font-semibold flex items-center justify-center gap-1"><FiLock size={12} /> Caja cerrada hoy</span>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2 mt-2 pt-3 border-t border-white/5">
+                            <button 
+                              onClick={() => setConfirmPayModal({ open: true, inst: inst, faltante: Number(inst.expectedAmount) - Number(inst.paidAmount || 0) })} 
+                              disabled={updatingInstId === inst.id} 
+                              className="flex-[2] bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 py-2.5 rounded-xl text-blue-400 text-xs font-semibold transition-all flex items-center justify-center"
+                            >
+                              {updatingInstId === inst.id ? <FiLoader className="animate-spin" /> : 'Liquidar Cuota'}
+                            </button>
+                            <button 
+                              onClick={() => { setManualPayModal({ open: true, inst: inst, loan: selectedClient.loans[0] }); setManualAmount(""); setSaldoAction('PROXIMA_CUOTA'); setOverpaymentAction('NEXT_QUOTA'); }} 
+                              className="flex-1 bg-white/5 hover:bg-white/10 py-2.5 rounded-xl text-slate-300 flex items-center justify-center transition-colors border border-white/5"
+                            >
+                              <FiDollarSign size={14} /> Abono Especial
+                            </button>
+                          </div>
+                        )
                       )}
                     </div>
                   );
