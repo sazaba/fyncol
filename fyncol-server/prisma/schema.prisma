@@ -23,6 +23,7 @@ model User {
 
   // Relación (1:1): Un usuario solo puede tener MÁXIMO una ruta asignada a la vez.
   route     Route?
+  dailyClosures DailyClosure[]
 
   @@map("users")
 }
@@ -45,6 +46,7 @@ model Route {
 
   // Relación con los clientes de esta ruta
   clients          Client[]
+  dailyClosures DailyClosure[]
 
   @@map("routes")
 }
@@ -131,6 +133,30 @@ model Installment {
   loan              Loan     @relation(fields: [loanId], references: [id])
 
   @@map("installments")
+}
+
+model DailyClosure {
+  id               Int      @id @default(autoincrement())
+  closedAt         DateTime @default(now()) @map("closed_at")
+
+  // Los 8 KPIs del Arqueo
+  availableCapital Decimal  @map("available_capital") // DISPONIBLE
+  totalPortfolio   Decimal  @map("total_portfolio")   // CARTERA
+  totalCollected   Decimal  @map("total_collected")   // RECAUDO
+  newSales         Decimal  @map("new_sales")         // VENTAS (CTES NUEVOS)
+  renewals         Decimal  @map("renewals")          // RENOVACIONES (CTES VIEJOS)
+  totalClients     Int      @map("total_clients")     // TOTAL RUTA
+  collectedClients Int      @map("collected_clients") // CLIENTES COBRADOS
+  overdueClients   Int      @map("overdue_clients")   // CLIENTES MORA
+
+  // Relaciones
+  routeId          Int      @map("route_id")
+  route            Route    @relation(fields: [routeId], references: [id])
+
+  closedById       Int      @map("closed_by_id") // El cobrador que hizo el cierre
+  closedBy         User     @relation(fields: [closedById], references: [id])
+
+  @@map("daily_closures")
 }
 
 enum Role {

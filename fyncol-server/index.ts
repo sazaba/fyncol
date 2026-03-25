@@ -8,6 +8,7 @@ import userRoutes from "./routes/user.routes";
 import rutasRoutes from './routes/rutas.routes';
 import capitalRoutes from './routes/capital.routes';
 import clientRoutes from './routes/client.routes';
+import closureRoutes from './routes/closure.routes'
 
 dotenv.config();
 
@@ -30,6 +31,7 @@ app.use("/api/users", userRoutes);
 app.use('/api/rutas', rutasRoutes);
 app.use('/api/capital', capitalRoutes);
 app.use('/api/clients', clientRoutes);
+app.use('/api/closure', closureRoutes);
 
 app.get("/", (_req: Request, res: Response) => {
   res.send("Fyncol API con Prisma 🚀 - Online");

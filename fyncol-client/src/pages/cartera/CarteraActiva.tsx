@@ -68,6 +68,11 @@ export default function CarteraActiva() {
   const [overdueAction, setOverdueAction] = useState<'PROXIMA_CUOTA' | 'DIFERIR' | 'CUOTA_ESPECIFICA' | 'CUOTA_EXTRA'>('PROXIMA_CUOTA');
   const [overdueTargetInst, setOverdueTargetInst] = useState<number>(0);
 
+  // NUEVOS ESTADOS PARA EL CIERRE DE CAJA
+  const [closureModalOpen, setClosureModalOpen] = useState(false);
+  const [closureSummary, setClosureSummary] = useState<any>(null);
+  const [isClosing, setIsClosing] = useState(false);
+
   const fetchCartera = async () => {
     setIsLoading(true);
     try {
@@ -176,6 +181,53 @@ export default function CarteraActiva() {
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
+  // NUEVAS FUNCIONES PARA EL CIERRE DE CAJA
+  const handleOpenClosure = async () => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const res = await fetch(`${baseUrl}/api/closure/summary`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setClosureSummary(data.summary);
+        setClosureModalOpen(true);
+      }
+    } catch (error) {
+      console.error("Error al obtener el resumen de cierre");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleConfirmClosure = async () => {
+    setIsClosing(true);
+    try {
+      const token = localStorage.getItem("token");
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const res = await fetch(`${baseUrl}/api/closure/confirm`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ summary: closureSummary })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setClosureModalOpen(false);
+        // Recargar la vista o redirigir tras cerrar
+        window.location.href = '/dashboard'; 
+      }
+    } catch (error) {
+      console.error("Error al confirmar el cierre");
+    } finally {
+      setIsClosing(false);
+    }
+  };
+
   return (
     <div className="flex flex-col md:flex-row h-[calc(100dvh-64px)] w-full bg-[#0B0B12] overflow-hidden">
       
@@ -185,15 +237,25 @@ export default function CarteraActiva() {
           <h1 className="text-xl font-bold text-white mb-4">Sistema Logístico</h1>
           
           {routeInfo && (
-            <div className="flex items-center justify-between bg-white/5 p-3 rounded-xl mb-4 border border-white/5">
-              <div className="flex flex-col">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1"><FiMap size={12}/> Ruta Activa</span>
-                <span className="text-sm font-semibold text-white">{routeInfo.city}</span>
+            <div className="mb-4">
+              <div className="flex items-center justify-between bg-white/5 p-3 rounded-xl mb-2 border border-white/5">
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1"><FiMap size={12}/> Ruta Activa</span>
+                  <span className="text-sm font-semibold text-white">{routeInfo.city}</span>
+                </div>
+                <div className="flex flex-col items-end">
+                  <span className="text-[10px] text-green-400/80 font-bold uppercase tracking-widest">Capital</span>
+                  <span className="text-sm font-bold text-green-400">${Math.round(Number(routeInfo.availableCapital) || 0).toLocaleString('es-CO')}</span>
+                </div>
               </div>
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] text-green-400/80 font-bold uppercase tracking-widest">Capital</span>
-                <span className="text-sm font-bold text-green-400">${Math.round(Number(routeInfo.availableCapital) || 0).toLocaleString('es-CO')}</span>
-              </div>
+              
+              {/* BOTÓN MAESTRO DE ARQUEO */}
+              <button 
+                onClick={handleOpenClosure}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-emerald-900/20 transition-all flex items-center justify-center gap-2 border border-emerald-500/30"
+              >
+                <FiCheckCircle size={16} /> Cerrar Ruta de Hoy
+              </button>
             </div>
           )}
 
@@ -801,6 +863,70 @@ export default function CarteraActiva() {
           </div>
         </div>
       )}
+
+      {/* MODAL DE ARQUEO DE CAJA (CIERRE DIARIO) */}
+      {closureModalOpen && closureSummary && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-[#05050A] border border-white/10 rounded-3xl p-7 shadow-2xl animate-[slideUp_0.18s_ease-out]">
+            
+            <div className="text-center mb-6">
+              <div className="h-12 w-12 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-emerald-400">
+                <FiCheckCircle size={24} />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-1">Arqueo de Caja</h3>
+              <p className="text-sm text-slate-400">Verifica los valores antes de entregar el efectivo.</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl col-span-2 text-center">
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Efectivo a entregar (Recaudo)</p>
+                <p className="text-3xl font-bold text-emerald-400">${closureSummary.totalCollected.toLocaleString('es-CO')}</p>
+              </div>
+
+              <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl">
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Disponible en ruta</p>
+                <p className="text-sm font-bold text-blue-400">${closureSummary.availableCapital.toLocaleString('es-CO')}</p>
+              </div>
+              <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl">
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Cartera en la calle</p>
+                <p className="text-sm font-bold text-white">${closureSummary.totalPortfolio.toLocaleString('es-CO')}</p>
+              </div>
+              
+              <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl">
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Ventas (Nuevos)</p>
+                <p className="text-sm font-bold text-white">${closureSummary.newSales.toLocaleString('es-CO')}</p>
+              </div>
+              <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl">
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Renovaciones</p>
+                <p className="text-sm font-bold text-white">${closureSummary.renewals.toLocaleString('es-CO')}</p>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center mb-6 px-2 text-xs text-slate-400 font-medium bg-white/5 py-2 rounded-lg">
+              <span className="flex items-center gap-1"><FiMapPin /> Total: {closureSummary.totalClients}</span>
+              <span className="flex items-center gap-1 text-emerald-400/80"><FiCheckCircle /> Cobrados: {closureSummary.collectedClients}</span>
+              <span className="flex items-center gap-1 text-red-400/80"><FiAlertTriangle /> Mora: {closureSummary.overdueClients}</span>
+            </div>
+            
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setClosureModalOpen(false)} 
+                className="flex-1 py-3 bg-white/5 border border-white/5 text-slate-300 rounded-xl font-medium text-sm hover:bg-white/10 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleConfirmClosure}
+                disabled={isClosing}
+                className="flex-[2] py-3 bg-emerald-600 text-white rounded-xl font-semibold text-sm hover:bg-emerald-500 transition-all disabled:opacity-50 flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+              >
+                {isClosing ? <FiLoader className="animate-spin" /> : 'Confirmar Cierre'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
