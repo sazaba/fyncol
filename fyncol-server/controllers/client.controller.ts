@@ -65,7 +65,7 @@ export const createClientAndLoan = async (req: any, res: any) => {
         installmentNumber: i,
         // Guardamos la fecha manteniendo las 12:00 PM
         dueDate: new Date(currentDate),
-        expectedAmount: installmentValue,
+        expectedAmount: Number(installmentValue.toFixed(2)),
         paidAmount: 0,
         status: "PENDING",
       });
@@ -103,7 +103,7 @@ export const createClientAndLoan = async (req: any, res: any) => {
               interestRate: interestNum,
               periodicity: periodicity,
               firstPaymentDate: firstPayment,
-              projectedTotal: projectedTotal,
+              projectedTotal: Number(projectedTotal.toFixed(2)),
               installmentDetails: {
                 create: installmentsArray 
               }
@@ -263,7 +263,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
 
       const expected = Number(installment.expectedAmount);
       const totalPagadoHistorico = Number(installment.paidAmount || 0);
-      const nuevoTotalPagado = totalPagadoHistorico + amountNum;
+      const nuevoTotalPagado = Number((totalPagadoHistorico + amountNum).toFixed(2));
 
       // 2. Crear recibo y devolver dinero a la ruta
       if (amountNum > 0) {
@@ -288,7 +288,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
       if (hasAction) {
         const diffAmount = Number(actionParams.amount);
 
-        // Liquidamos la cuota actual (Si se mueve la deuda, la cuota actual queda "Saldada" en $0 o en lo que haya alcanzado a dar)
+        // Liquidamos la cuota actual
         await tx.installment.update({
           where: { id: parseInt(id) },
           data: {
@@ -314,17 +314,20 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
           // --- ACCIONES PARA ABONOS PARCIALES / MORA (DEUDA) ---
           if (actionParams.action === 'PROXIMA_CUOTA') {
             const target = futureInstallments[0];
+            const nuevoValor = Number(target.expectedAmount) + diffAmount;
             await tx.installment.update({
               where: { id: target.id },
-              data: { expectedAmount: Number(target.expectedAmount) + diffAmount }
+              data: { expectedAmount: Number(nuevoValor.toFixed(2)) }
             });
           } 
           else if (actionParams.action === 'DIFERIR') {
+            // FIX DE PRECISIÓN DE DECIMALES PARA PRISMA
             const extraPorCuota = diffAmount / futureInstallments.length;
             for (const inst of futureInstallments) {
+              const nuevoValor = Number(inst.expectedAmount) + extraPorCuota;
               await tx.installment.update({
                 where: { id: inst.id },
-                data: { expectedAmount: Number(inst.expectedAmount) + extraPorCuota }
+                data: { expectedAmount: Number(nuevoValor.toFixed(2)) }
               });
             }
           }
@@ -333,16 +336,17 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
             const targetInst = futureInstallments.find((i: any) => i.installmentNumber === targetNum);
             
             if (targetInst) {
+              const nuevoValor = Number(targetInst.expectedAmount) + diffAmount;
               await tx.installment.update({
                 where: { id: targetInst.id },
-                data: { expectedAmount: Number(targetInst.expectedAmount) + diffAmount }
+                data: { expectedAmount: Number(nuevoValor.toFixed(2)) }
               });
             } else {
-              // Si no la encuentra, se lo carga a la próxima por seguridad
               const target = futureInstallments[0];
+              const nuevoValor = Number(target.expectedAmount) + diffAmount;
               await tx.installment.update({
                 where: { id: target.id },
-                data: { expectedAmount: Number(target.expectedAmount) + diffAmount }
+                data: { expectedAmount: Number(nuevoValor.toFixed(2)) }
               });
             }
           }
@@ -361,9 +365,10 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
                 });
                 saldoAFavor -= metaFutura;
               } else {
+                const nuevoValor = metaFutura - saldoAFavor;
                 await tx.installment.update({
                   where: { id: inst.id },
-                  data: { expectedAmount: metaFutura - saldoAFavor }
+                  data: { expectedAmount: Number(nuevoValor.toFixed(2)) }
                 });
                 saldoAFavor = 0;
               }
@@ -383,15 +388,17 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
                 });
                 saldoAFavor -= metaFutura;
               } else {
+                const nuevoValor = metaFutura - saldoAFavor;
                 await tx.installment.update({
                   where: { id: inst.id },
-                  data: { expectedAmount: metaFutura - saldoAFavor }
+                  data: { expectedAmount: Number(nuevoValor.toFixed(2)) }
                 });
                 saldoAFavor = 0;
               }
             }
           } 
           else if (actionParams.action === 'REDUCE_QUOTA') {
+            // FIX DE PRECISIÓN DE DECIMALES PARA PRISMA
             const rebajaPorCuota = diffAmount / futureInstallments.length;
             for (const inst of futureInstallments) {
               const metaFutura = Number(inst.expectedAmount);
@@ -406,18 +413,17 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
               } else {
                 await tx.installment.update({
                   where: { id: inst.id },
-                  data: { expectedAmount: nuevoEsperado }
+                  data: { expectedAmount: Number(nuevoEsperado.toFixed(2)) }
                 });
               }
             }
           }
         }
 
-        // --- ACCIÓN PARA AGREGAR CUOTA EXTRA AL FINAL (Funciona aunque no haya cuotas futuras) ---
+        // --- ACCIÓN PARA AGREGAR CUOTA EXTRA AL FINAL ---
         if (actionParams.action === 'CUOTA_EXTRA') {
             const loanInfo = await tx.loan.findUnique({ where: { id: installment.loanId } });
             
-            // Buscar la última cuota existente para saber fecha y número
             const allInst = await tx.installment.findMany({
                 where: { loanId: installment.loanId },
                 orderBy: { installmentNumber: 'desc' },
@@ -439,7 +445,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
                     loanId: installment.loanId,
                     installmentNumber: lastInst.installmentNumber + 1,
                     dueDate: newDate,
-                    expectedAmount: diffAmount,
+                    expectedAmount: Number(diffAmount.toFixed(2)),
                     paidAmount: 0,
                     status: 'PENDING'
                 }
