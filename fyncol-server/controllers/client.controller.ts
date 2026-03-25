@@ -252,6 +252,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
     const { status, paidAmount, actionParams } = req.body;
     const amountNum = parseFloat(paidAmount) || 0;
 
+    // FIX P2028: Añadimos un tiempo límite de 20 segundos a esta transacción también
     const result = await prisma.$transaction(async (tx) => {
       // 1. Obtener la cuota
       const installment = await tx.installment.findUnique({
@@ -321,15 +322,16 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
             });
           } 
           else if (actionParams.action === 'DIFERIR') {
-            // FIX DE PRECISIÓN DE DECIMALES PARA PRISMA
+            // FIX P2028: Ejecutamos las actualizaciones en paralelo (Promise.all)
             const extraPorCuota = diffAmount / futureInstallments.length;
-            for (const inst of futureInstallments) {
+            const updatePromises = futureInstallments.map((inst: any) => {
               const nuevoValor = Number(inst.expectedAmount) + extraPorCuota;
-              await tx.installment.update({
+              return tx.installment.update({
                 where: { id: inst.id },
                 data: { expectedAmount: Number(nuevoValor.toFixed(2)) }
               });
-            }
+            });
+            await Promise.all(updatePromises);
           }
           else if (actionParams.action === 'CUOTA_ESPECIFICA') {
             const targetNum = Number(actionParams.targetInstallment);
@@ -398,25 +400,26 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
             }
           } 
           else if (actionParams.action === 'REDUCE_QUOTA') {
-            // FIX DE PRECISIÓN DE DECIMALES PARA PRISMA
+            // FIX P2028: Ejecutamos las actualizaciones en paralelo (Promise.all)
             const rebajaPorCuota = diffAmount / futureInstallments.length;
-            for (const inst of futureInstallments) {
+            const updatePromises = futureInstallments.map((inst: any) => {
               const metaFutura = Number(inst.expectedAmount);
               const decrementoReal = Math.min(metaFutura, rebajaPorCuota);
               const nuevoEsperado = metaFutura - decrementoReal;
 
               if (nuevoEsperado <= 0.01) { 
-                await tx.installment.update({
+                return tx.installment.update({
                   where: { id: inst.id },
                   data: { expectedAmount: 0, status: 'PAID', paidAt: new Date() }
                 });
               } else {
-                await tx.installment.update({
+                return tx.installment.update({
                   where: { id: inst.id },
                   data: { expectedAmount: Number(nuevoEsperado.toFixed(2)) }
                 });
               }
-            }
+            });
+            await Promise.all(updatePromises);
           }
         }
 
@@ -486,6 +489,9 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
       }
 
       return { success: true };
+    }, {
+      maxWait: 5000,
+      timeout: 20000 // 20 Segundos de tiempo de vida de la transacción para Render
     });
 
     res.json({ success: true, installment: result });
