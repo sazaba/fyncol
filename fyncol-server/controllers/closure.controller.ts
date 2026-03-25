@@ -169,3 +169,29 @@ export const confirmDailyClosure = async (req: any, res: any) => {
     return res.status(500).json({ error: error.message || "Error al procesar el cierre." });
   }
 };
+/**
+ * 3. OBTENER HISTORIAL DE ARQUEOS (Para el Admin/Supervisor)
+ */
+export const getAllClosures = async (req: any, res: any) => {
+  try {
+    // Buscar todos los cierres, incluyendo datos de la ruta y del cobrador
+    const closures = await prisma.dailyClosure.findMany({
+      include: {
+        route: true,
+        closedBy: { 
+          select: { id: true, name: true, email: true } // Traemos solo lo necesario del usuario
+        }
+      },
+      orderBy: { closedAt: 'desc' } // Los más recientes primero
+    });
+
+    return res.json({ 
+      success: true, 
+      data: closures 
+    });
+
+  } catch (error: any) {
+    console.error("Error al obtener historial de arqueos:", error);
+    return res.status(500).json({ error: error.message || "Error al procesar la solicitud." });
+  }
+};

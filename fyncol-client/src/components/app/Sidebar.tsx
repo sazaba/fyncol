@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png"; 
 import { 
   FiHome, FiSettings, FiUsers, FiLogOut, FiChevronDown, FiX, 
-  FiGlobe, FiMap, FiDollarSign, FiBriefcase, FiUserPlus 
+  FiGlobe, FiMap, FiDollarSign, FiBriefcase, FiUserPlus, FiCheckCircle 
 } from "react-icons/fi";
 
 export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (val: boolean) => void }) {
@@ -110,6 +110,13 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
                     className={`flex items-center gap-2 w-full text-left rounded-lg px-3 py-2 text-sm ${isActive("/admin/capital") ? "text-blue-400 bg-blue-500/10 font-medium" : "text-slate-500 hover:text-white hover:bg-white/5 transition-colors"}`}
                   >
                     <FiDollarSign size={16} /> Gestión Capital
+                  </Link>
+                  <Link 
+                    to="/admin/cierres" 
+                    onClick={() => setIsOpen(false)} 
+                    className={`flex items-center gap-2 w-full text-left rounded-lg px-3 py-2 text-sm ${isActive("/admin/cierres") ? "text-blue-400 bg-blue-500/10 font-medium" : "text-slate-500 hover:text-white hover:bg-white/5 transition-colors"}`}
+                  >
+                    <FiCheckCircle size={16} /> Cierres Diarios
                   </Link>
                 </div>
               </div>

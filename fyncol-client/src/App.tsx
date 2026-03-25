@@ -9,6 +9,9 @@ import UsersPage from "./pages/admin/UsersPage";
 import Rutas from "./pages/admin/Rutas"; 
 import GestionCapital from "./pages/admin/GestionCapital";
 
+// NUEVO COMPONENTE: CIERRES DIARIOS
+import CierresDiarios from "./pages/admin/CierresDiarios";
+
 // COMPONENTES DE CARTERA
 import NuevoCredito from "./pages/cartera/NuevoCredito";
 import CarteraActiva from "./pages/cartera/CarteraActiva";
@@ -31,6 +34,7 @@ export default function App() {
             <Route path="/admin/usuarios" element={<UsersPage />} />
             <Route path="/admin/rutas" element={<Rutas />} />
             <Route path="/admin/capital" element={<GestionCapital />} />
+            <Route path="/admin/cierres" element={<CierresDiarios />} />
             
             {/* CARTERA */}
             <Route path="/cartera/nuevo-credito" element={<NuevoCredito />} />
