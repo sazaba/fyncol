@@ -538,6 +538,8 @@ export default function CarteraActiva() {
         </MapContainer>
       </div>
 
+      {/* ================= MODALES ================= */}
+      
       {/* CONFIRMAR PAGO TOTAL */}
       {confirmPayModal.open && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -889,7 +891,17 @@ export default function CarteraActiva() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-xs text-slate-400 font-medium mb-0.5">Cuota #{inst.installmentNumber}</p>
-                          <p className="text-sm font-semibold text-slate-200">{new Date(inst.dueDate).toLocaleDateString('es-CO')}</p>
+                          {/* AQUI MOSTRAMOS LA FECHA ORIGINAL O LA PROMESA SI EXISTE */}
+                          <div className="flex flex-col">
+                             <p className={`text-sm font-semibold ${inst.promiseDate ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
+                               {new Date(inst.dueDate).toLocaleDateString('es-CO')}
+                             </p>
+                             {inst.promiseDate && (
+                                <p className="text-sm font-bold text-orange-400">
+                                  {new Date(inst.promiseDate).toLocaleDateString('es-CO')}
+                                </p>
+                             )}
+                          </div>
                         </div>
                         <div className="text-right">
                            <p className={`font-bold text-base ${inst.status === 'RENEGOTIATED' ? 'text-orange-400' : inst.status === 'PAID' ? 'text-emerald-400' : inst.status === 'OVERDUE' ? 'text-red-400' : 'text-white'}`}>
