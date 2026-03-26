@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FiSearch, FiLoader, FiCheckCircle, FiAlertTriangle, FiXCircle, FiUser } from 'react-icons/fi';
+import { FiSearch, FiLoader, FiCheckCircle, FiAlertTriangle, FiXCircle, FiUser, FiThumbsUp } from 'react-icons/fi';
 
 export default function DatacreditoConsulta() {
   const [documentId, setDocumentId] = useState('');
@@ -20,7 +20,6 @@ export default function DatacreditoConsulta() {
       const token = localStorage.getItem("token");
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
       
-      // Blindaje: Aseguramos que la URL sea válida incluso si hay espacios
       const res = await fetch(`${baseUrl}/api/clients/datacredito/${encodeURIComponent(cleanId)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -37,10 +36,46 @@ export default function DatacreditoConsulta() {
     }
   };
 
+  // === LÓGICA DE CALIFICACIÓN SEGÚN TUS NUEVOS RANGOS ===
   const getSemaforo = (fallas: number) => {
-    if (fallas === 0) return { color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', icon: <FiCheckCircle size={32} />, texto: 'EXCELENTE', desc: 'Cliente sin reportes negativos.' };
-    if (fallas >= 1 && fallas <= 3) return { color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20', icon: <FiAlertTriangle size={32} />, texto: 'REGULAR', desc: 'Presenta algunos atrasos leves.' };
-    return { color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20', icon: <FiXCircle size={32} />, texto: 'ALTO RIESGO', desc: 'Cliente con múltiples reportes de mora.' };
+    if (fallas === 0) {
+      return { 
+        color: 'text-emerald-400', 
+        bg: 'bg-emerald-500/10', 
+        border: 'border-emerald-500/20', 
+        icon: <FiCheckCircle size={32} />, 
+        texto: 'EXCELENTE', 
+        desc: 'Cliente impecable sin reportes negativos.' 
+      };
+    }
+    if (fallas >= 1 && fallas <= 6) {
+      return { 
+        color: 'text-blue-400', 
+        bg: 'bg-blue-500/10', 
+        border: 'border-blue-500/20', 
+        icon: <FiThumbsUp size={32} />, 
+        texto: 'BUENA', 
+        desc: 'Cliente confiable con retrasos mínimos.' 
+      };
+    }
+    if (fallas >= 7 && fallas <= 12) {
+      return { 
+        color: 'text-yellow-400', 
+        bg: 'bg-yellow-500/10', 
+        border: 'border-yellow-500/20', 
+        icon: <FiAlertTriangle size={32} />, 
+        texto: 'REGULAR', 
+        desc: 'Atención: Presenta moras frecuentes.' 
+      };
+    }
+    return { 
+      color: 'text-red-400', 
+      bg: 'bg-red-500/10', 
+      border: 'border-red-500/20', 
+      icon: <FiXCircle size={32} />, 
+      texto: 'ALTO RIESGO', 
+      desc: 'No recomendado. Múltiples fallas de pago.' 
+    };
   };
 
   return (
@@ -48,7 +83,7 @@ export default function DatacreditoConsulta() {
       <div className="w-full max-w-2xl bg-[#05050A] p-8 rounded-3xl border border-white/5 shadow-2xl mt-10">
         <div className="mb-8 text-center">
           <h2 className="text-3xl font-bold text-white tracking-tight mb-2">Buró Interno</h2>
-          <p className="text-slate-400">Consulte el historial crediticio de cualquier documento registrado.</p>
+          <p className="text-slate-400">Historial de comportamiento de pago basado en cuotas.</p>
         </div>
 
         <form onSubmit={handleSearch} className="relative mb-8">
@@ -59,7 +94,7 @@ export default function DatacreditoConsulta() {
             type="text" 
             value={documentId} 
             onChange={(e) => setDocumentId(e.target.value)} 
-            placeholder="Ingrese cédula o ID sin espacios..." 
+            placeholder="Ingrese cédula o ID..." 
             className="w-full bg-[#0B0B12] border border-white/10 rounded-2xl pl-12 pr-36 py-4 text-white text-lg focus:outline-none focus:border-blue-500 transition-all shadow-inner"
           />
           <button 
@@ -85,28 +120,28 @@ export default function DatacreditoConsulta() {
                   <FiUser size={32} />
                 </div>
                 <h3 className="text-xl font-bold text-white mb-2">Cliente Nuevo</h3>
-                <p className="text-slate-400">Esta cédula no tiene historial en el sistema. Es apto para su primer crédito.</p>
+                <p className="text-slate-400">Sin historial registrado. Apto para primer crédito.</p>
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="bg-[#0B0B12] border border-white/5 rounded-2xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="bg-[#0B0B12] border border-white/5 rounded-2xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm">
                   <div>
-                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">Nombre del Cliente</p>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Nombre</p>
                     <p className="text-lg font-bold text-white">{result.data.name}</p>
                   </div>
                   <div className="md:text-right">
-                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">Celular</p>
-                    <p className="text-sm font-medium text-slate-300">{result.data.phone || 'N/A'}</p>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Cédula Consultada</p>
+                    <p className="text-sm font-medium text-slate-300">{documentId}</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-[#0B0B12] border border-white/5 rounded-2xl p-5 text-center">
-                    <p className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-widest mb-2">Préstamos Activos</p>
+                    <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-2">Créditos Activos</p>
                     <p className="text-3xl font-bold text-blue-400">{result.data.prestamosActivos}</p>
                   </div>
                   <div className="bg-[#0B0B12] border border-white/5 rounded-2xl p-5 text-center">
-                    <p className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-widest mb-2">Préstamos Cancelados</p>
+                    <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-2">Créditos Finalizados</p>
                     <p className="text-3xl font-bold text-slate-300">{result.data.prestamosCancelados}</p>
                   </div>
                 </div>
@@ -122,7 +157,7 @@ export default function DatacreditoConsulta() {
                         <div className="flex flex-col sm:flex-row items-center gap-3 mb-2">
                           <h3 className={`text-xl font-black ${semaforo.color}`}>{semaforo.texto}</h3>
                           <span className="text-xs font-bold bg-white/10 px-2 py-1 rounded-lg text-white">
-                            {result.data.fallasTotales} fallas históricas
+                            {result.data.fallasTotales} moras registradas
                           </span>
                         </div>
                         <p className={`text-sm ${semaforo.color} opacity-80 font-medium`}>{semaforo.desc}</p>

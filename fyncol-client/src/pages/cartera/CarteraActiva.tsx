@@ -74,8 +74,8 @@ export default function CarteraActiva() {
 
   // Modal de Mora Inteligente
   const [overdueModal, setOverdueModal] = useState<{open: boolean, inst: any, loan: any}>({ open: false, inst: null, loan: null });
-  // Añadimos 'SOLO_MORA' a los tipos de acción
-  const [overdueAction, setOverdueAction] = useState<'SOLO_MORA' | 'PROXIMA_CUOTA' | 'DIFERIR' | 'CUOTA_ESPECIFICA' | 'CUOTA_EXTRA'>('SOLO_MORA');
+  // Quitamos SOLO_MORA del tipado de estado
+  const [overdueAction, setOverdueAction] = useState<'PROXIMA_CUOTA' | 'DIFERIR' | 'CUOTA_ESPECIFICA' | 'CUOTA_EXTRA'>('PROXIMA_CUOTA');
   const [overdueTargetInst, setOverdueTargetInst] = useState<number>(0);
 
   // ESTADOS PARA EL CIERRE DE CAJA
@@ -178,7 +178,7 @@ export default function CarteraActiva() {
         setManualAmount("");
         setSaldoAction('PROXIMA_CUOTA');
         setOverpaymentAction('NEXT_QUOTA');
-        setOverdueAction('SOLO_MORA'); // Reseteamos al nuevo valor por defecto
+        setOverdueAction('PROXIMA_CUOTA');
         await fetchCartera();
         
         if (selectedClient) {
@@ -428,16 +428,20 @@ export default function CarteraActiva() {
                               >
                                 ABONO
                               </button>
-                            <button 
-  onClick={(e) => { 
-    e.stopPropagation(); 
-    setOverdueModal({ open: true, inst: cuotaActiva, loan: loan }); 
-    setOverdueAction('SOLO_MORA'); 
-  }}
-  className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 py-1.5 rounded text-[10px] font-bold flex justify-center items-center transition-all"
->
-  MORA
-</button>
+                              <button 
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  setOverdueModal({ open: true, inst: cuotaActiva, loan: loan }); 
+                                  
+                                  const futureInstallmentsUI = loan?.installmentDetails?.filter(
+                                    (i: any) => i.installmentNumber > cuotaActiva.installmentNumber && i.status !== 'PAID'
+                                  ) || [];
+                                  setOverdueAction(futureInstallmentsUI.length > 0 ? 'PROXIMA_CUOTA' : 'CUOTA_EXTRA'); 
+                                }}
+                                className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 py-1.5 rounded text-[10px] font-bold flex justify-center items-center transition-all"
+                              >
+                                MORA
+                              </button>
                             </div>
                           )
                         )}
@@ -570,20 +574,11 @@ export default function CarteraActiva() {
                 <p className="text-sm font-semibold text-red-400">
                   El cliente tiene un saldo pendiente de <span className="text-white">${faltante.toLocaleString('es-CO')}</span>
                 </p>
-                <p className="text-xs text-slate-400 mt-1">Selecciona cómo gestionar esta deuda:</p>
+                <p className="text-xs text-slate-400 mt-1">Selecciona cómo reestructurar esta deuda:</p>
               </div>
 
               <div className="p-6 bg-red-500/5 border-b border-white/5 space-y-2">
                 
-                {/* NUEVA OPCIÓN: SOLO REPORTAR EN MORA */}
-                <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overdueAction === 'SOLO_MORA' ? 'bg-red-600/20 border-red-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
-                  <input type="radio" name="overdueAction" checked={overdueAction === 'SOLO_MORA'} onChange={() => setOverdueAction('SOLO_MORA')} className="mt-1 shrink-0 accent-red-500" />
-                  <div>
-                    <p className="text-sm font-semibold text-white">Solo reportar en mora (No estaba / No pagó)</p>
-                    <p className="text-xs text-slate-400 mt-0.5">Deja el saldo pendiente y marca al cliente como gestionado sin reestructurar la deuda.</p>
-                  </div>
-                </label>
-
                 {futureInstallmentsUI.length > 0 && (
                   <>
                     <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overdueAction === 'PROXIMA_CUOTA' ? 'bg-red-600/20 border-red-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
@@ -645,17 +640,12 @@ export default function CarteraActiva() {
               </div>
               
               <div className="p-6 flex gap-3 shrink-0">
-                <button onClick={() => { setOverdueModal({ open: false, inst: null, loan: null }); setOverdueAction('SOLO_MORA'); }} className="flex-1 py-3.5 border border-white/5 text-slate-300 font-medium text-sm bg-[#0B0B12] hover:bg-white/5 rounded-xl transition-colors">Cancelar</button>
+                <button onClick={() => { setOverdueModal({ open: false, inst: null, loan: null }); setOverdueAction('PROXIMA_CUOTA'); }} className="flex-1 py-3.5 border border-white/5 text-slate-300 font-medium text-sm bg-[#0B0B12] hover:bg-white/5 rounded-xl transition-colors">Cancelar</button>
                 <button 
                   onClick={() => {
-                    let finalStatus = 'OVERDUE';
-                    let actionData = { action: 'NONE', amount: 0, targetInstallment: 0 };
-
-                    // Si NO eligió "SOLO_MORA", entonces sí es una reestructuración (cambia a PAID y envía la acción elegida)
-                    if (overdueAction !== 'SOLO_MORA') {
-                      finalStatus = 'PAID'; 
-                      actionData = { action: overdueAction, amount: faltante, targetInstallment: overdueTargetInst };
-                    }
+                    // SIEMPRE ENVIAMOS OVERDUE PARA QUE QUEDE LA "MANCHA" EN DATACREDITO
+                    let finalStatus = 'OVERDUE'; 
+                    let actionData = { action: overdueAction, amount: faltante, targetInstallment: overdueTargetInst };
 
                     handleUpdateStatus(inst.id, finalStatus, 0, actionData);
                   }}
