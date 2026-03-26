@@ -130,6 +130,7 @@ model Installment {
   paidAt            DateTime? @map("paid_at")           // Cuándo lo pagó realmente
   wasLate           Boolean   @default(false) @map("was_late")
   promiseDate       DateTime? @map("promise_date")
+  actionDescription String?   @map("action_description") @db.VarChar(255)
   
   loanId            Int      @map("loan_id")
   loan              Loan     @relation(fields: [loanId], references: [id])

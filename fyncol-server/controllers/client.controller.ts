@@ -283,6 +283,9 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
 
       let nuevoEstado = status; 
       const hasAction = actionParams && actionParams.action !== 'NONE' && actionParams.action !== 'MANTENER';
+      
+      // --- CAPTURAMOS LA DESCRIPCIÓN DEL FRONTEND ---
+      const descripcionFrontend = actionParams?.description || null;
 
       if (hasAction) {
         const diffAmount = Number(actionParams.amount);
@@ -293,7 +296,8 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
             where: { id: parseInt(id) },
             data: {
               status: 'RENEGOTIATED',
-              wasLate: true // La mancha para Datacrédito
+              wasLate: true, // La mancha para Datacrédito
+              actionDescription: descripcionFrontend // Guardar nota
             }
           });
         } else {
@@ -304,7 +308,8 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
               expectedAmount: nuevoTotalPagado,
               paidAmount: nuevoTotalPagado,
               status: 'PAID',
-              paidAt: new Date()
+              paidAt: new Date(),
+              actionDescription: descripcionFrontend // Guardar nota
             }
           });
         }
@@ -316,7 +321,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
           where: {
             loanId: installment.loanId,
             installmentNumber: { gt: installment.installmentNumber },
-            status: { notIn: ['PAID', 'RENEGOTIATED'] } // Evitamos tocar las ya pagadas/renegociadas
+            status: { notIn: ['PAID', 'RENEGOTIATED'] } 
           },
           orderBy: { installmentNumber: 'asc' }
         });
@@ -479,7 +484,8 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
             paidAmount: nuevoTotalPagado,
             paidAt: nuevoEstado === 'PAID' ? new Date() : null,
             wasLate: status === 'OVERDUE' ? true : undefined,
-            promiseDate: promiseDateObj
+            promiseDate: promiseDateObj,
+            actionDescription: descripcionFrontend // Guardar nota
           }
         });
       }

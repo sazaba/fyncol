@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { 
   FiDollarSign, FiMapPin, FiSearch, 
   FiAlertTriangle, FiX, FiLoader, FiNavigation,
-  FiSun, FiMoon, FiCheckCircle, FiExternalLink, FiMap, FiCalendar, FiLock, FiClock
+  FiSun, FiMoon, FiCheckCircle, FiExternalLink, FiMap, FiCalendar, FiLock, FiClock, FiInfo
 } from 'react-icons/fi';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
@@ -416,6 +416,14 @@ export default function CarteraActiva() {
                             <FiCalendar size={10} /> Visita agendada: {new Date(cuotaActiva.promiseDate).toLocaleDateString('es-CO')}
                           </div>
                         )}
+
+                        {/* RENDERIZADO DE LA DESCRIPCIÓN DE LA BITÁCORA (SI EXISTE) */}
+                        {cuotaActiva.actionDescription && (
+                          <div className="mb-2 text-[10px] font-medium text-slate-400 bg-black/20 p-1.5 rounded flex items-center gap-1.5 italic border border-white/5">
+                            <FiInfo className="shrink-0 text-blue-400" size={12} />
+                            <span className="truncate">{cuotaActiva.actionDescription}</span>
+                          </div>
+                        )}
                         
                         {(cuotaActiva.status === 'PENDING' || cuotaActiva.status === 'PARTIAL' || cuotaActiva.status === 'OVERDUE' || cuotaActiva.status === 'RENEGOTIATED') && (
                           isRouteClosed ? (
@@ -454,7 +462,10 @@ export default function CarteraActiva() {
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
                                   setOverdueModal({ open: true, inst: cuotaActiva, loan: loan }); 
-                                  setOverdueAction('SOLO_MORA'); 
+                                  
+                                  // OCULTAR SOLO MORA SI ES DIARIO
+                                  const isDiario = loan?.periodicity === 'DIARIO';
+                                  setOverdueAction(isDiario ? 'PROXIMA_CUOTA' : 'SOLO_MORA'); 
                                 }}
                                 className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 py-1.5 rounded text-[10px] font-bold flex justify-center items-center transition-all"
                               >
@@ -538,8 +549,6 @@ export default function CarteraActiva() {
         </MapContainer>
       </div>
 
-      {/* ================= MODALES ================= */}
-      
       {/* CONFIRMAR PAGO TOTAL */}
       {confirmPayModal.open && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -559,7 +568,7 @@ export default function CarteraActiva() {
                 Cancelar
               </button>
               <button 
-                onClick={() => confirmPayModal.inst && handleUpdateStatus(confirmPayModal.inst.id, 'PAID', confirmPayModal.faltante, { action: 'NONE' })}
+                onClick={() => confirmPayModal.inst && handleUpdateStatus(confirmPayModal.inst.id, 'PAID', confirmPayModal.faltante, { action: 'NONE', description: 'Pago completo de la cuota.' })}
                 disabled={updatingInstId === confirmPayModal.inst?.id}
                 className="flex-[2] py-3 bg-blue-600 text-white rounded-xl font-semibold text-sm hover:bg-blue-500 transition-all disabled:opacity-50 flex items-center justify-center shadow-[0_0_15px_rgba(37,99,235,0.3)]"
               >
@@ -575,6 +584,9 @@ export default function CarteraActiva() {
         const inst = overdueModal.inst;
         const faltante = Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount || 0));
         
+        // LOGICA DE OCULTAR PARA DIARIOS
+        const isDiario = overdueModal.loan?.periodicity === 'DIARIO';
+
         const futureInstallmentsUI = overdueModal.loan?.installmentDetails?.filter(
           (i: any) => i.installmentNumber > inst.installmentNumber && i.status !== 'PAID'
         ) || [];
@@ -596,27 +608,30 @@ export default function CarteraActiva() {
 
               <div className="p-6 bg-red-500/5 border-b border-white/5 space-y-2">
                 
-                <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overdueAction === 'SOLO_MORA' ? 'bg-red-600/20 border-red-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
-                  <input type="radio" name="overdueAction" checked={overdueAction === 'SOLO_MORA'} onChange={() => setOverdueAction('SOLO_MORA')} className="mt-1 shrink-0 accent-red-500" />
-                  <div className="w-full">
-                    <p className="text-sm font-semibold text-white">Solo reportar en mora</p>
-                    <p className="text-xs text-slate-400 mt-0.5">Deja el saldo pendiente y no reestructura la deuda.</p>
-                    
-                    {overdueAction === 'SOLO_MORA' && (
-                      <div className="mt-3 p-3 bg-black/20 rounded-xl border border-white/5">
-                        <label className="text-xs text-slate-400 font-semibold uppercase tracking-widest">Agendar nueva visita (Opcional)</label>
-                        <input 
-                          type="date" 
-                          value={promiseDate} 
-                          onChange={e => setPromiseDate(e.target.value)} 
-                          min={getDeviceTodayStr()} 
-                          className="w-full mt-1 bg-[#05050A] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-red-500 outline-none [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert" 
-                        />
-                        <p className="text-[10px] text-slate-500 mt-1">El cliente volverá a aparecer en la ruta principal en esta fecha.</p>
-                      </div>
-                    )}
-                  </div>
-                </label>
+                {/* OPCIÓN 1: SOLO MORA / PROMESA (Oculta si es Diario) */}
+                {!isDiario && (
+                  <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overdueAction === 'SOLO_MORA' ? 'bg-red-600/20 border-red-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
+                    <input type="radio" name="overdueAction" checked={overdueAction === 'SOLO_MORA'} onChange={() => setOverdueAction('SOLO_MORA')} className="mt-1 shrink-0 accent-red-500" />
+                    <div className="w-full">
+                      <p className="text-sm font-semibold text-white">Solo reportar en mora</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Deja el saldo pendiente y no reestructura la deuda.</p>
+                      
+                      {overdueAction === 'SOLO_MORA' && (
+                        <div className="mt-3 p-3 bg-black/20 rounded-xl border border-white/5">
+                          <label className="text-xs text-slate-400 font-semibold uppercase tracking-widest">Agendar nueva visita (Opcional)</label>
+                          <input 
+                            type="date" 
+                            value={promiseDate} 
+                            onChange={e => setPromiseDate(e.target.value)} 
+                            min={getDeviceTodayStr()} 
+                            className="w-full mt-1 bg-[#05050A] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-red-500 outline-none [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert" 
+                          />
+                          <p className="text-[10px] text-slate-500 mt-1">El cliente volverá a aparecer en la ruta principal en esta fecha.</p>
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                )}
 
                 {futureInstallmentsUI.length > 0 && (
                   <>
@@ -679,17 +694,32 @@ export default function CarteraActiva() {
               </div>
               
               <div className="p-6 flex gap-3 shrink-0">
-                <button onClick={() => { setOverdueModal({ open: false, inst: null, loan: null }); setOverdueAction('SOLO_MORA'); setPromiseDate(''); }} className="flex-1 py-3.5 border border-white/5 text-slate-300 font-medium text-sm bg-[#0B0B12] hover:bg-white/5 rounded-xl transition-colors">Cancelar</button>
+                <button onClick={() => { setOverdueModal({ open: false, inst: null, loan: null }); setOverdueAction(isDiario ? 'PROXIMA_CUOTA' : 'SOLO_MORA'); setPromiseDate(''); }} className="flex-1 py-3.5 border border-white/5 text-slate-300 font-medium text-sm bg-[#0B0B12] hover:bg-white/5 rounded-xl transition-colors">Cancelar</button>
                 <button 
                   onClick={() => {
                     let finalStatus = 'OVERDUE';
-                    let actionData: any = { action: 'NONE', amount: 0, targetInstallment: 0 };
+                    let actionData: any = { action: 'NONE', amount: 0, targetInstallment: 0, description: '' };
 
                     if (overdueAction === 'SOLO_MORA') {
-                      if (promiseDate) actionData.promiseDate = promiseDate;
+                      if (promiseDate) {
+                        actionData.promiseDate = promiseDate;
+                        finalStatus = 'RENEGOTIATED'; 
+                        // Fix temporal de zona horaria para la visualización local en el mensaje
+                        actionData.description = `Mora renegociada. Visita reagendada para el ${new Date(promiseDate + 'T12:00:00').toLocaleDateString('es-CO')}`;
+                      } else {
+                        actionData.description = "Reportado en mora sin reagendamiento.";
+                      }
                     } else {
                       finalStatus = 'RENEGOTIATED'; 
-                      actionData = { action: overdueAction, amount: faltante, targetInstallment: overdueTargetInst };
+                      actionData.action = overdueAction;
+                      actionData.amount = faltante;
+                      actionData.targetInstallment = overdueTargetInst;
+
+                      // Creando las descripciones para las acciones
+                      if (overdueAction === 'PROXIMA_CUOTA') actionData.description = "Deuda sumada a la siguiente cuota.";
+                      if (overdueAction === 'DIFERIR') actionData.description = "Deuda diferida en cuotas restantes.";
+                      if (overdueAction === 'CUOTA_ESPECIFICA') actionData.description = `Deuda sumada a la cuota #${overdueTargetInst}.`;
+                      if (overdueAction === 'CUOTA_EXTRA') actionData.description = "Se agregó una nueva cuota extra al final del crédito.";
                     }
 
                     handleUpdateStatus(inst.id, finalStatus, 0, actionData);
@@ -841,12 +871,20 @@ export default function CarteraActiva() {
                 <button 
                   onClick={() => {
                     let finalStatus = 'PAID'; 
-                    let actionData = { action: 'NONE', amount: 0, targetInstallment: 0 };
+                    let actionData: any = { action: 'NONE', amount: 0, targetInstallment: 0, description: '' };
 
                     if (esParcial && futureInstallmentsUI.length > 0) {
                        actionData = { action: saldoAction, amount: diferencia, targetInstallment: targetInstallmentNum };
+                       if (saldoAction === 'PROXIMA_CUOTA') actionData.description = `Faltante de $${diferencia.toLocaleString('es-CO')} sumado a la siguiente cuota.`;
+                       if (saldoAction === 'DIFERIR') actionData.description = `Faltante de $${diferencia.toLocaleString('es-CO')} diferido en cuotas restantes.`;
+                       if (saldoAction === 'CUOTA_ESPECIFICA') actionData.description = `Faltante de $${diferencia.toLocaleString('es-CO')} sumado a cuota #${targetInstallmentNum}.`;
                     } else if (esExcedente) {
                        actionData = { action: overpaymentAction, amount: diferencia, targetInstallment: 0 };
+                       if (overpaymentAction === 'NEXT_QUOTA') actionData.description = `Excedente de $${diferencia.toLocaleString('es-CO')} abonado a la siguiente cuota.`;
+                       if (overpaymentAction === 'REDUCE_TIME') actionData.description = `Excedente de $${diferencia.toLocaleString('es-CO')} usado para reducir tiempo (atrás hacia adelante).`;
+                       if (overpaymentAction === 'REDUCE_QUOTA') actionData.description = `Excedente de $${diferencia.toLocaleString('es-CO')} usado para reducir cuotas restantes.`;
+                    } else {
+                       actionData.description = "Pago parcial registrado sin reestructuración.";
                     }
 
                     handleUpdateStatus(inst.id, finalStatus, abonoValue, actionData);
@@ -891,7 +929,6 @@ export default function CarteraActiva() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-xs text-slate-400 font-medium mb-0.5">Cuota #{inst.installmentNumber}</p>
-                          {/* AQUI MOSTRAMOS LA FECHA ORIGINAL O LA PROMESA SI EXISTE */}
                           <div className="flex flex-col">
                              <p className={`text-sm font-semibold ${inst.promiseDate ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
                                {new Date(inst.dueDate).toLocaleDateString('es-CO')}
@@ -912,6 +949,14 @@ export default function CarteraActiva() {
                            </p>
                         </div>
                       </div>
+
+                      {/* ETIQUETA DESCRIPTIVA DEL HISTORIAL (Si tiene una acción registrada) */}
+                      {inst.actionDescription && (
+                        <div className="mt-1 text-[10px] font-medium text-slate-400 bg-white/5 p-2 rounded flex items-start gap-1.5 border border-white/5 italic">
+                          <FiClock className="shrink-0 mt-0.5 text-blue-400" />
+                          <span>{inst.actionDescription}</span>
+                        </div>
+                      )}
                       
                       {inst.status !== 'PAID' && inst.status !== 'RENEGOTIATED' && (
                         isRouteClosed ? (
