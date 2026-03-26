@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { 
   addLoanToExistingClient,
+  consultarDatacredito,
   createClientAndLoan, 
   getCarteraDelCobrador, 
   getClientsByRoute, 
@@ -28,5 +29,6 @@ router.patch('/installment/:id', verifyToken, updateInstallmentStatus);
 
 router.get('/route/:routeId', verifyToken, getClientsByRoute);
 router.post('/:clientId/add-loan', verifyToken, addLoanToExistingClient);
+router.get('/datacredito/:documentId', verifyToken, consultarDatacredito);
 
 export default router;

@@ -9,7 +9,8 @@ export default function DatacreditoConsulta() {
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!documentId.trim()) return;
+    const cleanId = documentId.trim();
+    if (!cleanId) return;
 
     setIsLoading(true);
     setError('');
@@ -18,13 +19,15 @@ export default function DatacreditoConsulta() {
     try {
       const token = localStorage.getItem("token");
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-      const res = await fetch(`${baseUrl}/api/clients/datacredito/${documentId.trim()}`, {
+      
+      // Blindaje: Aseguramos que la URL sea válida incluso si hay espacios
+      const res = await fetch(`${baseUrl}/api/clients/datacredito/${encodeURIComponent(cleanId)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
       const data = await res.json();
 
-      if (!res.ok) throw new Error(data.error || "Error de consulta");
+      if (!res.ok) throw new Error(data.error || "Error de consulta. Verifique la conexión.");
       
       setResult(data);
     } catch (err: any) {
@@ -56,7 +59,7 @@ export default function DatacreditoConsulta() {
             type="text" 
             value={documentId} 
             onChange={(e) => setDocumentId(e.target.value)} 
-            placeholder="Ingrese cédula o ID..." 
+            placeholder="Ingrese cédula o ID sin espacios..." 
             className="w-full bg-[#0B0B12] border border-white/10 rounded-2xl pl-12 pr-36 py-4 text-white text-lg focus:outline-none focus:border-blue-500 transition-all shadow-inner"
           />
           <button 

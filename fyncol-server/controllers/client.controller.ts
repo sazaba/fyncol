@@ -513,8 +513,11 @@ export const consultarDatacredito = async (req: any, res: any) => {
 
     if (!documentId) return res.status(400).json({ error: "Debe proveer un documento" });
 
-    const client = await prisma.client.findUnique({
-      where: { documentId },
+    // Blindaje: Quitamos cualquier espacio en blanco al inicio o al final
+    const cleanDocumentId = documentId.trim();
+
+    const client = await prisma.client.findFirst({ // Cambiamos a findFirst por si quedaron duplicados viejos
+      where: { documentId: cleanDocumentId },
       include: {
         loans: {
           select: {
@@ -527,12 +530,10 @@ export const consultarDatacredito = async (req: any, res: any) => {
       }
     });
 
-    // Si no existe, es un cliente "Virgen"
     if (!client) {
       return res.json({ success: true, exists: false });
     }
 
-    // Calculamos el historial
     let fallasTotales = 0;
     let prestamosActivos = 0;
     let prestamosCancelados = 0;
