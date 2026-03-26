@@ -128,6 +128,7 @@ model Installment {
   
   status            String   @default("PENDING") @db.VarChar(20) // PENDING, PAID, PARTIAL, OVERDUE
   paidAt            DateTime? @map("paid_at")           // Cuándo lo pagó realmente
+  wasLate           Boolean   @default(false) @map("was_late")
   
   loanId            Int      @map("loan_id")
   loan              Loan     @relation(fields: [loanId], references: [id])

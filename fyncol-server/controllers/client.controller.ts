@@ -299,7 +299,9 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
             expectedAmount: nuevoTotalPagado,
             paidAmount: nuevoTotalPagado,
             status: 'PAID',
-            paidAt: new Date()
+            paidAt: new Date(),
+            // --- NUEVO DATACREDITO: Si reestructuró por mora, deja la mancha ---
+            wasLate: status === 'OVERDUE' ? true : undefined 
           }
         });
         nuevoEstado = 'PAID';
@@ -470,7 +472,9 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
           data: {
             status: nuevoEstado,
             paidAmount: nuevoTotalPagado,
-            paidAt: nuevoEstado === 'PAID' ? new Date() : null
+            paidAt: nuevoEstado === 'PAID' ? new Date() : null,
+            // --- NUEVO DATACREDITO: Si lo marcan "Solo Mora", deja la mancha ---
+            wasLate: status === 'OVERDUE' ? true : undefined
           }
         });
       }
@@ -501,5 +505,61 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
   } catch (error: any) {
     console.error("Error al actualizar cuota:", error);
     res.status(400).json({ error: "Error al procesar el abono." });
+  }
+};
+export const consultarDatacredito = async (req: any, res: any) => {
+  try {
+    const { documentId } = req.params;
+
+    if (!documentId) return res.status(400).json({ error: "Debe proveer un documento" });
+
+    const client = await prisma.client.findUnique({
+      where: { documentId },
+      include: {
+        loans: {
+          select: {
+            isActive: true,
+            installmentDetails: {
+              select: { wasLate: true }
+            }
+          }
+        }
+      }
+    });
+
+    // Si no existe, es un cliente "Virgen"
+    if (!client) {
+      return res.json({ success: true, exists: false });
+    }
+
+    // Calculamos el historial
+    let fallasTotales = 0;
+    let prestamosActivos = 0;
+    let prestamosCancelados = 0;
+
+    client.loans.forEach((loan: any) => {
+      if (loan.isActive) prestamosActivos++;
+      else prestamosCancelados++;
+
+      loan.installmentDetails.forEach((inst: any) => {
+        if (inst.wasLate) fallasTotales++;
+      });
+    });
+
+    return res.json({
+      success: true,
+      exists: true,
+      data: {
+        name: client.name,
+        phone: client.phone,
+        fallasTotales,
+        prestamosActivos,
+        prestamosCancelados
+      }
+    });
+
+  } catch (error: any) {
+    console.error("Error en Datacredito:", error);
+    return res.status(500).json({ error: "Error al consultar historial." });
   }
 };

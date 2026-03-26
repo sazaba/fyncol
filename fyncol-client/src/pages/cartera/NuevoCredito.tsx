@@ -5,6 +5,9 @@ import {
   FiSearch
 } from 'react-icons/fi';
 
+// === IMPORTACIÓN DEL NUEVO COMPONENTE DE DATACRÉDITO ===
+import DatacreditoConsulta from '../../components/cartera/DatacreditoConsulta';
+
 interface ClientFormData {
   name: string;
   documentId: string;
@@ -412,6 +415,11 @@ export default function NuevoCredito() {
             </>
           )}
         </div>
+      </div>
+
+      {/* --- SECCIÓN DE CONSULTA DE DATACRÉDITO INTERNO --- */}
+      <div className="mb-8">
+        <DatacreditoConsulta />
       </div>
 
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
