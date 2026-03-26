@@ -563,3 +563,103 @@ export const consultarDatacredito = async (req: any, res: any) => {
     return res.status(500).json({ error: "Error al consultar historial." });
   }
 };
+
+/**
+ * OBTENER TODOS LOS CLIENTES DE UNA RUTA (Para el Popup de Reutilizar Cliente)
+ */
+export const getClientsByRoute = async (req: any, res: any) => {
+  try {
+    const { routeId } = req.params;
+    const clients = await prisma.client.findMany({
+      where: { routeId: parseInt(routeId) },
+      orderBy: { name: 'asc' }
+    });
+    return res.json({ success: true, data: clients });
+  } catch (error) {
+    return res.status(500).json({ error: "Error al obtener clientes de la ruta." });
+  }
+};
+
+/**
+ * AGREGAR UN NUEVO PRÉSTAMO A UN CLIENTE EXISTENTE
+ */
+export const addLoanToExistingClient = async (req: any, res: any) => {
+  try {
+    const { clientId } = req.params;
+    const { amount, installments, interestRate, periodicity, firstPaymentDate } = req.body;
+
+    const amountNum = parseFloat(amount);
+    const interestNum = parseFloat(interestRate);
+    const installmentsNum = parseInt(installments);
+
+    let daysPerInstallment = 1; 
+    if (periodicity === 'QUINCENAL') daysPerInstallment = 15;
+    if (periodicity === 'MENSUAL') daysPerInstallment = 30;
+
+    const [year, month, day] = firstPaymentDate.split('-');
+    const firstPayment = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
+
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+
+    const diffTime = firstPayment.getTime() - today.getTime();
+    let daysUntilFirstPayment = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    if (daysUntilFirstPayment <= 0) daysUntilFirstPayment = 1;
+
+    const totalDays = daysUntilFirstPayment + ((installmentsNum - 1) * daysPerInstallment);
+    const interestPerDay = (interestNum / 100 / 30) * amountNum;
+    const totalInterest = interestPerDay * totalDays;
+    
+    const projectedTotal = amountNum + totalInterest;
+    const installmentValue = projectedTotal / installmentsNum;
+
+    const installmentsArray: any[] = [];
+    let currentDate = new Date(firstPayment);
+
+    for (let i = 1; i <= installmentsNum; i++) {
+      installmentsArray.push({
+        installmentNumber: i,
+        dueDate: new Date(currentDate),
+        expectedAmount: Number(installmentValue.toFixed(2)),
+        paidAmount: 0,
+        status: "PENDING",
+      });
+
+      if (periodicity === 'MENSUAL') currentDate.setMonth(currentDate.getMonth() + 1);
+      else if (periodicity === 'QUINCENAL') currentDate.setDate(currentDate.getDate() + 15);
+      else currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const client = await tx.client.findUnique({ where: { id: parseInt(clientId) } });
+      if (!client) throw new Error("El cliente no existe.");
+
+      const route = await tx.route.findUnique({ where: { id: client.routeId } });
+      if (Number(route?.availableCapital) < amountNum) throw new Error("Capital insuficiente en esta ruta.");
+
+      const newLoan = await tx.loan.create({
+        data: {
+          clientId: client.id,
+          amount: amountNum,
+          installments: installmentsNum,
+          interestRate: interestNum,
+          periodicity: periodicity,
+          firstPaymentDate: firstPayment,
+          projectedTotal: Number(projectedTotal.toFixed(2)),
+          installmentDetails: { create: installmentsArray }
+        }
+      });
+
+      await tx.route.update({
+        where: { id: client.routeId },
+        data: { availableCapital: { decrement: amountNum } }
+      });
+
+      return newLoan;
+    });
+
+    return res.status(201).json({ success: true, message: "Préstamo agregado", data: result });
+  } catch (error: any) {
+    return res.status(400).json({ error: error.message || "Error interno" });
+  }
+};

@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { 
+  addLoanToExistingClient,
   createClientAndLoan, 
   getCarteraDelCobrador, 
+  getClientsByRoute, 
   registrarPago, updateInstallmentStatus 
 } from '../controllers/client.controller';
 import { verifyToken } from '../middleware/auth.middleware'; 
@@ -23,5 +25,8 @@ router.get('/cartera', verifyToken, getCarteraDelCobrador);
 router.post('/pago', verifyToken, registrarPago);
 
 router.patch('/installment/:id', verifyToken, updateInstallmentStatus);
+
+router.get('/route/:routeId', verifyToken, getClientsByRoute);
+router.post('/:clientId/add-loan', verifyToken, addLoanToExistingClient);
 
 export default router;

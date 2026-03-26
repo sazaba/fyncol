@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png"; 
 import { 
   FiHome, FiSettings, FiUsers, FiLogOut, FiChevronDown, FiX, 
-  FiGlobe, FiMap, FiDollarSign, FiBriefcase, FiUserPlus, FiCheckCircle 
+  FiGlobe, FiMap, FiDollarSign, FiBriefcase, FiUserPlus, FiCheckCircle, FiShield 
 } from "react-icons/fi";
 
 export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (val: boolean) => void }) {
@@ -72,6 +72,9 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
           <p className="px-4 text-[10px] font-bold tracking-widest text-slate-500 mb-2 mt-2 uppercase">Operación</p>
           
           <NavItem label="Dashboard" path="/dashboard" icon={<FiHome size={20} />} active={isActive("/dashboard")} onClick={() => setIsOpen(false)} />
+          
+          {/* NUEVO BOTÓN: BURÓ INTERNO PARA TODOS */}
+          <NavItem label="Buró Interno" path="/buro" icon={<FiShield size={20} />} active={isActive("/buro")} onClick={() => setIsOpen(false)} />
           
           {/* SECCIÓN: EMPRESA (Oculta para cobradores) */}
           {showAdministracion && (
