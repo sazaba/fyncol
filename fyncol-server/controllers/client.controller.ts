@@ -255,9 +255,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
     const { status, paidAmount, actionParams } = req.body;
     const amountNum = parseFloat(paidAmount) || 0;
 
-    // FIX P2028: Añadimos un tiempo límite de 20 segundos a esta transacción también
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Obtener la cuota
       const installment = await tx.installment.findUnique({
         where: { id: parseInt(id) },
         include: { loan: { include: { client: true } } }
@@ -269,7 +267,6 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
       const totalPagadoHistorico = Number(installment.paidAmount || 0);
       const nuevoTotalPagado = Number((totalPagadoHistorico + amountNum).toFixed(2));
 
-      // 2. Crear recibo y devolver dinero a la ruta
       if (amountNum > 0) {
         await tx.payment.create({
           data: {
@@ -284,40 +281,47 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
         });
       }
 
-      // Variable maestra del estado
       let nuevoEstado = status; 
       const hasAction = actionParams && actionParams.action !== 'NONE' && actionParams.action !== 'MANTENER';
 
-      // 3. MOTOR INTELIGENTE
       if (hasAction) {
         const diffAmount = Number(actionParams.amount);
 
-        // Liquidamos la cuota actual
-        await tx.installment.update({
-          where: { id: parseInt(id) },
-          data: {
-            expectedAmount: nuevoTotalPagado,
-            paidAmount: nuevoTotalPagado,
-            status: 'PAID',
-            paidAt: new Date(),
-            // --- NUEVO DATACREDITO: Si reestructuró por mora, deja la mancha ---
-            wasLate: status === 'OVERDUE' ? true : undefined 
-          }
-        });
-        nuevoEstado = 'PAID';
+        // --- MANEJO DEL NUEVO ESTADO: RENEGOTIATED ---
+        if (status === 'RENEGOTIATED') {
+          await tx.installment.update({
+            where: { id: parseInt(id) },
+            data: {
+              status: 'RENEGOTIATED',
+              wasLate: true // La mancha para Datacrédito
+            }
+          });
+        } else {
+          // Liquidamos la cuota actual (Comportamiento original)
+          await tx.installment.update({
+            where: { id: parseInt(id) },
+            data: {
+              expectedAmount: nuevoTotalPagado,
+              paidAmount: nuevoTotalPagado,
+              status: 'PAID',
+              paidAt: new Date()
+            }
+          });
+        }
+        
+        nuevoEstado = status === 'RENEGOTIATED' ? 'RENEGOTIATED' : 'PAID';
 
         // Procesar cuotas futuras
         const futureInstallments = await tx.installment.findMany({
           where: {
             loanId: installment.loanId,
             installmentNumber: { gt: installment.installmentNumber },
-            status: { not: 'PAID' }
+            status: { notIn: ['PAID', 'RENEGOTIATED'] } // Evitamos tocar las ya pagadas/renegociadas
           },
           orderBy: { installmentNumber: 'asc' }
         });
 
         if (futureInstallments.length > 0) {
-          // --- ACCIONES PARA ABONOS PARCIALES / MORA (DEUDA) ---
           if (actionParams.action === 'PROXIMA_CUOTA') {
             const target = futureInstallments[0];
             const nuevoValor = Number(target.expectedAmount) + diffAmount;
@@ -327,7 +331,6 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
             });
           } 
           else if (actionParams.action === 'DIFERIR') {
-            // FIX P2028: Ejecutamos las actualizaciones en paralelo (Promise.all)
             const extraPorCuota = diffAmount / futureInstallments.length;
             const updatePromises = futureInstallments.map((inst: any) => {
               const nuevoValor = Number(inst.expectedAmount) + extraPorCuota;
@@ -357,8 +360,6 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
               });
             }
           }
-
-          // --- ACCIONES PARA EXCEDENTES (SALDO A FAVOR) ---
           else if (actionParams.action === 'NEXT_QUOTA') {
             let saldoAFavor = diffAmount;
             for (const inst of futureInstallments) {
@@ -405,7 +406,6 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
             }
           } 
           else if (actionParams.action === 'REDUCE_QUOTA') {
-            // FIX P2028: Ejecutamos las actualizaciones en paralelo (Promise.all)
             const rebajaPorCuota = diffAmount / futureInstallments.length;
             const updatePromises = futureInstallments.map((inst: any) => {
               const metaFutura = Number(inst.expectedAmount);
@@ -428,7 +428,6 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
           }
         }
 
-        // --- ACCIÓN PARA AGREGAR CUOTA EXTRA AL FINAL ---
         if (actionParams.action === 'CUOTA_EXTRA') {
             const loanInfo = await tx.loan.findUnique({ where: { id: installment.loanId } });
             
@@ -460,7 +459,13 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
             });
         }
       } else {
-        // FLUJO TRADICIONAL
+        // --- MANEJO DE LA PROMESA DE PAGO ---
+        let promiseDateObj = null;
+        if (actionParams && actionParams.promiseDate) {
+            const [year, month, day] = actionParams.promiseDate.split('-');
+            promiseDateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
+        }
+
         if (status === 'PAID' || nuevoTotalPagado >= expected) {
           nuevoEstado = 'PAID';
         } else if (nuevoTotalPagado > 0 && status !== 'OVERDUE') {
@@ -473,40 +478,45 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
             status: nuevoEstado,
             paidAmount: nuevoTotalPagado,
             paidAt: nuevoEstado === 'PAID' ? new Date() : null,
-            // --- NUEVO DATACREDITO: Si lo marcan "Solo Mora", deja la mancha ---
-            wasLate: status === 'OVERDUE' ? true : undefined
+            wasLate: status === 'OVERDUE' ? true : undefined,
+            promiseDate: promiseDateObj
           }
         });
       }
 
       // ---> 4. CERRAR EL PRÉSTAMO AUTOMÁTICAMENTE <---
       const todasLasCuotas = await tx.installment.findMany({
-        where: { loanId: installment.loanId }
+        where: { loanId: installment.loanId, status: { notIn: ['PAID', 'RENEGOTIATED'] } }
       });
 
-      const prestamoTerminado = todasLasCuotas.every((inst: any) => 
-        inst.id === parseInt(id) ? nuevoEstado === 'PAID' : inst.status === 'PAID'
-      );
-
-      if (prestamoTerminado) {
-        await tx.loan.update({
-          where: { id: installment.loanId },
-          data: { isActive: false }
+      if (todasLasCuotas.length === 0 || (todasLasCuotas.length === 1 && todasLasCuotas[0].id === parseInt(id) && (nuevoEstado === 'PAID' || nuevoEstado === 'RENEGOTIATED'))) {
+        const quedanPendientes = await tx.installment.count({
+            where: { loanId: installment.loanId, status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } }
         });
+        
+        if (quedanPendientes === 0 && nuevoEstado !== 'RENEGOTIATED') {
+            await tx.loan.update({
+                where: { id: installment.loanId },
+                data: { isActive: false }
+            });
+        }
       }
 
       return { success: true };
     }, {
       maxWait: 5000,
-      timeout: 20000 // 20 Segundos de tiempo de vida de la transacción para Render
+      timeout: 20000 
     });
 
     res.json({ success: true, installment: result });
   } catch (error: any) {
     console.error("Error al actualizar cuota:", error);
-    res.status(400).json({ error: "Error al procesar el abono." });
+    res.status(400).json({ error: "Error al procesar la gestión." });
   }
 };
+
+
+
 export const consultarDatacredito = async (req: any, res: any) => {
   try {
     const { documentId } = req.params;
