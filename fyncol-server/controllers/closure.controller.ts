@@ -90,17 +90,18 @@ export const getClosureSummary = async (req: any, res: any) => {
       select: { loanId: true, status: true } // <-- Traer también el status para contar las renegociadas
     });
     
-    // Conteo para MORA PURA (OVERDUE + PENDING vencidos)
-    const pureOverdueClients = new Set(
-        overdueInstallments
-            .filter((i: any) => i.status !== 'RENEGOTIATED')
-            .map((i: any) => i.loanId)
-    ).size;
-    
-    // Conteo para MORA RENEGOCIADA (RENEGOTIATED)
-    const renegotiatedClients = new Set(
+    // FIX: Conteo para MORA RENEGOCIADA (RENEGOTIATED) primero
+    const renegotiatedSet = new Set(
         overdueInstallments
             .filter((i: any) => i.status === 'RENEGOTIATED')
+            .map((i: any) => i.loanId)
+    );
+    const renegotiatedClients = renegotiatedSet.size;
+
+    // FIX: Conteo para MORA PURA excluyendo los que ya están en Acuerdos (renegotiatedSet)
+    const pureOverdueClients = new Set(
+        overdueInstallments
+            .filter((i: any) => i.status !== 'RENEGOTIATED' && !renegotiatedSet.has(i.loanId))
             .map((i: any) => i.loanId)
     ).size;
 
