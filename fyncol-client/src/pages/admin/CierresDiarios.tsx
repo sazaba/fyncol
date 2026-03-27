@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FiCheckCircle, FiLoader, FiMap, FiCalendar, FiUser, FiEye, FiX, FiAlertTriangle, FiClock, FiInfo } from 'react-icons/fi';
+import { FiCheckCircle, FiLoader, FiMap, FiCalendar, FiUser, FiEye, FiX, FiAlertTriangle, FiClock, FiInfo, FiDollarSign } from 'react-icons/fi';
 
 const traducirEstado = (status: string) => {
   switch (status) {
@@ -52,7 +52,6 @@ export default function CierresDiarios() {
     try {
       const token = localStorage.getItem("token");
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-      // Consumimos el nuevo endpoint
       const res = await fetch(`${baseUrl}/api/closure/history/${closure.id}/details`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -147,17 +146,19 @@ export default function CierresDiarios() {
       {/* MODAL: DETALLE DEL CIERRE Y AUDITORÍA */}
       {selectedClosure && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 text-left" onClick={() => setSelectedClosure(null)}>
-          <div className="w-full max-w-lg bg-[#05050A] border border-white/10 rounded-3xl shadow-2xl animate-[slideUp_0.18s_ease-out] flex flex-col max-h-[90dvh]" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-lg bg-[#05050A] border border-white/10 rounded-[30px] shadow-2xl animate-[slideUp_0.18s_ease-out] flex flex-col max-h-[90dvh]" onClick={e => e.stopPropagation()}>
             
             {/* Header del Modal */}
-            <div className="p-6 border-b border-white/5 flex justify-between items-start shrink-0">
+            <div className="p-6 border-b border-white/5 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center text-blue-400">
                   <FiCheckCircle size={20} />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-white">Auditoría de Cierre</h3>
-                  <p className="text-xs text-slate-400">{new Date(selectedClosure.closedAt).toLocaleString('es-CO')} • {selectedClosure.closedBy?.name}</p>
+                  <h3 className="text-lg font-bold text-white leading-tight">Auditoría de Cierre</h3>
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mt-0.5">
+                    {new Date(selectedClosure.closedAt).toLocaleDateString('es-CO')} • {selectedClosure.closedBy?.name}
+                  </p>
                 </div>
               </div>
               <button onClick={() => setSelectedClosure(null)} className="p-2 bg-[#0B0B12] border border-white/5 rounded-full text-slate-400 hover:text-white transition-colors"><FiX size={16} /></button>
@@ -172,7 +173,7 @@ export default function CierresDiarios() {
             {/* Contenido Scrollable */}
             <div className="p-6 overflow-y-auto [&::-webkit-scrollbar]:hidden">
               
-              {/* TAB 1: RESUMEN FINANCIERO (Tu código original) */}
+              {/* TAB 1: RESUMEN FINANCIERO */}
               {modalTab === 'RESUMEN' && (
                 <div className="animate-[fadeIn_0.2s_ease-out]">
                   <div className="grid grid-cols-2 gap-3 mb-6">
@@ -217,11 +218,14 @@ export default function CierresDiarios() {
                 </div>
               )}
 
-              {/* TAB 2: DETALLES DE GESTIÓN (La nueva lista) */}
+              {/* TAB 2: DETALLES DE GESTIÓN */}
               {modalTab === 'DETALLES' && (
                 <div className="animate-[fadeIn_0.2s_ease-out]">
                   {isLoadingDetails ? (
-                    <div className="py-10 flex justify-center text-slate-400"><FiLoader className="animate-spin" size={24} /></div>
+                    <div className="py-10 flex flex-col items-center justify-center gap-3 text-slate-400">
+                      <FiLoader className="animate-spin text-blue-500" size={24} />
+                      <span className="text-sm">Analizando bitácora...</span>
+                    </div>
                   ) : closureDetails.length === 0 ? (
                     <div className="py-10 text-center text-slate-500 text-sm bg-[#0B0B12] rounded-xl border border-white/5">
                       No hay detalles de clientes para este día.
@@ -229,23 +233,23 @@ export default function CierresDiarios() {
                   ) : (
                     <div className="space-y-3">
                       {closureDetails.map((detail) => (
-                        <div key={detail.id} className={`p-4 rounded-xl border ${detail.status === 'RENEGOTIATED' ? 'bg-orange-500/5 border-orange-500/20' : detail.status === 'OVERDUE' ? 'bg-red-500/5 border-red-500/20' : detail.status === 'PAID' ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-[#0B0B12] border-white/10'}`}>
+                        <div key={detail.id} className={`p-4 rounded-2xl border transition-colors ${detail.status === 'RENEGOTIATED' ? 'bg-orange-500/5 border-orange-500/10 hover:border-orange-500/20' : detail.status === 'OVERDUE' ? 'bg-red-500/5 border-red-500/10 hover:border-red-500/20' : detail.status === 'PAID' ? 'bg-emerald-500/5 border-emerald-500/10 hover:border-emerald-500/20' : detail.status === 'PARTIAL' ? 'bg-blue-500/5 border-blue-500/10 hover:border-blue-500/20' : 'bg-[#0B0B12] border-white/5 hover:border-white/10'}`}>
                           
                           <div className="flex justify-between items-start mb-2">
                             <h4 className="font-bold text-sm text-white">{detail.clientName}</h4>
-                            <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded ${detail.status === 'RENEGOTIATED' ? 'bg-orange-500/20 text-orange-400' : detail.status === 'OVERDUE' ? 'bg-red-500/20 text-red-400' : detail.status === 'PAID' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-500/20 text-slate-400'}`}>
+                            <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded ${detail.status === 'RENEGOTIATED' ? 'bg-orange-500/10 text-orange-400' : detail.status === 'OVERDUE' ? 'bg-red-500/10 text-red-400' : detail.status === 'PAID' ? 'bg-emerald-500/10 text-emerald-400' : detail.status === 'PARTIAL' ? 'bg-blue-500/10 text-blue-400' : 'bg-slate-500/20 text-slate-400'}`}>
                               {traducirEstado(detail.status)}
                             </span>
                           </div>
 
                           <div className="flex gap-4 text-xs font-medium text-slate-400 mb-3">
-                            <p>Esperado: <span className="text-slate-200">${Math.round(Number(detail.expectedAmount)).toLocaleString('es-CO')}</span></p>
-                            <p>Abonado: <span className="text-slate-200">${Math.round(Number(detail.paidAmount || 0)).toLocaleString('es-CO')}</span></p>
+                            <p className="flex items-center gap-1"><FiDollarSign className="text-slate-500"/> Esperado: <span className="text-slate-200">${Math.round(Number(detail.expectedAmount)).toLocaleString('es-CO')}</span></p>
+                            <p className="flex items-center gap-1"><FiCheckCircle className="text-emerald-500/50"/> Abonado: <span className={Number(detail.paidAmount) > 0 ? "text-emerald-400" : "text-slate-200"}>${Math.round(Number(detail.paidAmount || 0)).toLocaleString('es-CO')}</span></p>
                           </div>
 
-                          {/* Aquí se imprime la observación guardada desde la app del cobrador */}
-                          <div className={`p-2.5 rounded-lg text-xs flex items-start gap-2 border ${detail.status === 'OVERDUE' ? 'bg-red-500/10 border-red-500/10 text-red-300' : detail.status === 'RENEGOTIATED' ? 'bg-orange-500/10 border-orange-500/10 text-orange-300' : 'bg-black/20 border-white/5 text-slate-400'}`}>
-                            {detail.status === 'OVERDUE' ? <FiAlertTriangle className="shrink-0 mt-0.5" /> : detail.status === 'RENEGOTIATED' ? <FiClock className="shrink-0 mt-0.5" /> : <FiInfo className="shrink-0 mt-0.5" />}
+                          {/* TEXTO DE AUDITORÍA TIPO CARTERA ACTIVA */}
+                          <div className={`mt-1 text-[10px] font-medium p-2 rounded flex items-start gap-1.5 border italic ${detail.status === 'OVERDUE' ? 'bg-red-500/5 border-red-500/10 text-red-300' : detail.status === 'RENEGOTIATED' ? 'bg-orange-500/5 border-orange-500/10 text-orange-300' : 'bg-white/5 border-white/5 text-slate-400'}`}>
+                            {detail.status === 'OVERDUE' ? <FiAlertTriangle className="shrink-0 mt-0.5 text-red-400" /> : detail.status === 'RENEGOTIATED' ? <FiClock className="shrink-0 mt-0.5 text-orange-400" /> : <FiInfo className="shrink-0 mt-0.5 text-blue-400" />}
                             <span>{detail.observation}</span>
                           </div>
 

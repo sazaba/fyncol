@@ -226,7 +226,6 @@ export const getClosureDetails = async (req: any, res: any) => {
   try {
     const { id } = req.params;
     
-    // 1. Obtener la fecha del cierre y la ruta
     const closure = await prisma.dailyClosure.findUnique({
       where: { id: parseInt(id) }
     });
@@ -235,20 +234,31 @@ export const getClosureDetails = async (req: any, res: any) => {
       return res.status(404).json({ error: "Cierre no encontrado." });
     }
 
-    // 2. Definir el rango de horas de ese día específico
-    const start = new Date(closure.closedAt);
-    start.setHours(0, 0, 0, 0);
+    // FIX: Blindaje de Zona Horaria (Colombia UTC-5)
+    // Extraemos la fecha restando 5 horas para asegurar que si se cierra
+    // a las 8PM o 11PM, no salte al día siguiente en el horario UTC.
+    const t = new Date(closure.closedAt);
+    t.setUTCHours(t.getUTCHours() - 5); 
     
-    const end = new Date(closure.closedAt);
-    end.setHours(23, 59, 59, 999);
+    const year = t.getUTCFullYear();
+    const month = t.getUTCMonth();
+    const day = t.getUTCDate();
 
-    // 3. Buscar todas las cuotas de esa ruta que tuvieron movimiento ese día
+    // Reconstruimos el inicio y fin del día en UTC, pero alineado estrictamente al día en Colombia
+    const start = new Date(Date.UTC(year, month, day, 5, 0, 0, 0));    // 00:00:00 Hora Col (05:00 UTC)
+    const end = new Date(Date.UTC(year, month, day, 28, 59, 59, 999)); // 23:59:59 Hora Col
+
+    // Buscamos las cuotas usando la misma lógica del arqueo principal
     const installments = await prisma.installment.findMany({
       where: {
-        loan: { client: { routeId: closure.routeId } },
+        loan: { 
+          client: { routeId: closure.routeId },
+          isActive: true
+        },
         OR: [
-          { dueDate: { gte: start, lte: end } }, // Las que tocaba cobrar hoy por cronograma
-          { paidAt: { gte: start, lte: end } }   // Las atrasadas que pagaron o abonaron hoy
+          { dueDate: { gte: start, lte: end } }, // 1. Las cuotas programadas para ese día exacto
+          { paidAt: { gte: start, lte: end } },  // 2. Las cuotas atrasadas que se pagaron ese día
+          { status: { in: ['OVERDUE', 'RENEGOTIATED'] } } // 3. El arrastre de morosos activos
         ]
       },
       include: {
@@ -256,11 +266,36 @@ export const getClosureDetails = async (req: any, res: any) => {
           include: { client: { select: { name: true, phone: true } } }
         }
       },
-      orderBy: { dueDate: 'desc' } // Ordenamos por fecha de vencimiento
+      orderBy: { dueDate: 'asc' } 
     });
 
-    // 4. Mapear y limpiar los datos para el frontend
-    const details = installments.map((inst: any) => ({
+    // Limpiamos duplicados: Si un cliente tiene una cuota renegociada y otra pendiente, priorizamos la renegociada.
+    const clientMap = new Map();
+
+    for (const inst of installments) {
+      const clientId = inst.loan.client.name; 
+      const current = clientMap.get(clientId);
+      
+      if (!current) {
+        clientMap.set(clientId, inst);
+      } else {
+        // Prioridad de visualización para la auditoría
+        const getWeight = (status: string) => {
+            if(status === 'RENEGOTIATED') return 5;
+            if(status === 'PAID') return 4;
+            if(status === 'PARTIAL') return 3;
+            if(status === 'OVERDUE') return 2;
+            return 1; // PENDING
+        };
+        if (getWeight(inst.status) > getWeight(current.status)) {
+            clientMap.set(clientId, inst);
+        }
+      }
+    }
+
+    const uniqueInstallments = Array.from(clientMap.values());
+
+    const details = uniqueInstallments.map((inst: any) => ({
       id: inst.id,
       clientName: inst.loan.client.name,
       status: inst.status,
