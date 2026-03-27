@@ -138,8 +138,9 @@ export const getClosureSummary = async (req: any, res: any) => {
   }
 };
 
+
 /**
- * 2. GUARDAR EL CIERRE DEFINITIVO EN BASE DE DATOS
+ * 2. GUARDAR EL CIERRE DEFINITIVO EN BASE DE DATOS Y BARRIDO DE MOROSOS
  */
 export const confirmDailyClosure = async (req: any, res: any) => {
   try {
@@ -150,6 +151,8 @@ export const confirmDailyClosure = async (req: any, res: any) => {
       return res.status(400).json({ error: "Faltan los datos del resumen de cierre." });
     }
 
+    const { end } = getTodayRange(); // Obtenemos el límite del día actual para saber quiénes ya se vencieron
+
     const result = await prisma.$transaction(async (tx) => {
       const route = await tx.route.findFirst({ 
         where: { assignedToId: userId } 
@@ -159,6 +162,35 @@ export const confirmDailyClosure = async (req: any, res: any) => {
         throw new Error("No tienes una ruta asignada.");
       }
 
+      // --- 1. BARRIDO AUTOMÁTICO DE MOROSOS (LOS QUE EL COBRADOR IGNORÓ) ---
+      // Buscamos cuotas en estado PENDING o PARTIAL cuya fecha de pago ya expiró
+      const unmanagedInstallments = await tx.installment.findMany({
+        where: {
+          loan: { 
+            client: { routeId: route.id },
+            isActive: true 
+          },
+          status: { in: ['PENDING', 'PARTIAL'] },
+          dueDate: { lte: end },
+          expectedAmount: { gt: 0 } // No castigamos las cuotas vacías/perdonadas
+        }
+      });
+
+      if (unmanagedInstallments.length > 0) {
+        // Marcamos a todos estos ignorados como OVERDUE y les ponemos la mancha (wasLate: true)
+        const unmanagedIds = unmanagedInstallments.map((inst: any) => inst.id);
+        
+        await tx.installment.updateMany({
+          where: { id: { in: unmanagedIds } },
+          data: {
+            status: 'OVERDUE',
+            wasLate: true,
+            actionDescription: 'Sistema: Reportado en mora automática por cierre de caja sin gestión.'
+          }
+        });
+      }
+
+      // --- 2. CREACIÓN DEL CIERRE HISTÓRICO ---
       const closure = await tx.dailyClosure.create({
         data: {
           routeId: route.id,
@@ -175,7 +207,7 @@ export const confirmDailyClosure = async (req: any, res: any) => {
         }
       });
 
-      return closure;
+      return { closure, unmanagedCount: unmanagedInstallments.length };
     }, {
       maxWait: 5000, 
       timeout: 20000
@@ -183,8 +215,8 @@ export const confirmDailyClosure = async (req: any, res: any) => {
 
     return res.status(201).json({ 
       success: true, 
-      message: "Cierre de ruta registrado exitosamente.", 
-      data: result 
+      message: `Cierre registrado. ${result.unmanagedCount > 0 ? `Se reportaron ${result.unmanagedCount} clientes a mora automáticamente.` : 'Todos los clientes fueron gestionados.'}`, 
+      data: result.closure 
     });
 
   } catch (error: any) {
@@ -192,6 +224,7 @@ export const confirmDailyClosure = async (req: any, res: any) => {
     return res.status(500).json({ error: error.message || "Error al procesar el cierre." });
   }
 };
+
 
 /**
  * 3. OBTENER HISTORIAL DE ARQUEOS (Para el Admin/Supervisor)
