@@ -125,6 +125,7 @@ export default function CarteraActiva() {
       const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase());
       if (!matchesSearch) return false;
 
+      // --- FILTRO CORREGIDO (Oculta las renegociadas de la ruta activa HOY) ---
       const cuotaActiva = loan?.installmentDetails?.find((i: any) => {
         if (i.status === 'PAID') return false;
 
@@ -135,7 +136,12 @@ export default function CarteraActiva() {
         const isPromisedToday = promiseDateStr && promiseDateStr <= deviceTodayStr;
         
         if (filter === 'HOY') {
+            // Si la cuota ya fue renegociada o gestionada, no la muestres en "Ruta"
+            if (i.status === 'RENEGOTIATED') return false; 
+            
+            // Si tiene promesa en el futuro, ocúltala de HOY
             if (promiseDateStr && promiseDateStr > deviceTodayStr) return false;
+            
             return isDueToday || isPromisedToday;
         }
 
@@ -417,7 +423,6 @@ export default function CarteraActiva() {
                           </div>
                         )}
 
-                        {/* RENDERIZADO DE LA DESCRIPCIÓN DE LA BITÁCORA (SI EXISTE) */}
                         {cuotaActiva.actionDescription && (
                           <div className="mb-2 text-[10px] font-medium text-slate-400 bg-black/20 p-1.5 rounded flex items-center gap-1.5 italic border border-white/5">
                             <FiInfo className="shrink-0 text-blue-400" size={12} />
@@ -463,7 +468,6 @@ export default function CarteraActiva() {
                                   e.stopPropagation(); 
                                   setOverdueModal({ open: true, inst: cuotaActiva, loan: loan }); 
                                   
-                                  // OCULTAR SOLO MORA SI ES DIARIO
                                   const isDiario = loan?.periodicity === 'DIARIO';
                                   setOverdueAction(isDiario ? 'PROXIMA_CUOTA' : 'SOLO_MORA'); 
                                 }}
@@ -584,7 +588,6 @@ export default function CarteraActiva() {
         const inst = overdueModal.inst;
         const faltante = Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount || 0));
         
-        // LOGICA DE OCULTAR PARA DIARIOS
         const isDiario = overdueModal.loan?.periodicity === 'DIARIO';
 
         const futureInstallmentsUI = overdueModal.loan?.installmentDetails?.filter(
@@ -608,7 +611,6 @@ export default function CarteraActiva() {
 
               <div className="p-6 bg-red-500/5 border-b border-white/5 space-y-2">
                 
-                {/* OPCIÓN 1: SOLO MORA / PROMESA (Oculta si es Diario) */}
                 {!isDiario && (
                   <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overdueAction === 'SOLO_MORA' ? 'bg-red-600/20 border-red-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
                     <input type="radio" name="overdueAction" checked={overdueAction === 'SOLO_MORA'} onChange={() => setOverdueAction('SOLO_MORA')} className="mt-1 shrink-0 accent-red-500" />
@@ -704,7 +706,6 @@ export default function CarteraActiva() {
                       if (promiseDate) {
                         actionData.promiseDate = promiseDate;
                         finalStatus = 'RENEGOTIATED'; 
-                        // Fix temporal de zona horaria para la visualización local en el mensaje
                         actionData.description = `Mora renegociada. Visita reagendada para el ${new Date(promiseDate + 'T12:00:00').toLocaleDateString('es-CO')}`;
                       } else {
                         actionData.description = "Reportado en mora sin reagendamiento.";
@@ -715,7 +716,6 @@ export default function CarteraActiva() {
                       actionData.amount = faltante;
                       actionData.targetInstallment = overdueTargetInst;
 
-                      // Creando las descripciones para las acciones
                       if (overdueAction === 'PROXIMA_CUOTA') actionData.description = "Deuda sumada a la siguiente cuota.";
                       if (overdueAction === 'DIFERIR') actionData.description = "Deuda diferida en cuotas restantes.";
                       if (overdueAction === 'CUOTA_ESPECIFICA') actionData.description = `Deuda sumada a la cuota #${overdueTargetInst}.`;
@@ -950,7 +950,6 @@ export default function CarteraActiva() {
                         </div>
                       </div>
 
-                      {/* ETIQUETA DESCRIPTIVA DEL HISTORIAL (Si tiene una acción registrada) */}
                       {inst.actionDescription && (
                         <div className="mt-1 text-[10px] font-medium text-slate-400 bg-white/5 p-2 rounded flex items-start gap-1.5 border border-white/5 italic">
                           <FiClock className="shrink-0 mt-0.5 text-blue-400" />

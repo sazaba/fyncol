@@ -473,7 +473,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
 
         if (status === 'PAID' || nuevoTotalPagado >= expected) {
           nuevoEstado = 'PAID';
-        } else if (nuevoTotalPagado > 0 && status !== 'OVERDUE') {
+        } else if (nuevoTotalPagado > 0 && status !== 'OVERDUE' && status !== 'RENEGOTIATED') {
           nuevoEstado = 'PARTIAL';
         }
 
@@ -483,7 +483,7 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
             status: nuevoEstado,
             paidAmount: nuevoTotalPagado,
             paidAt: nuevoEstado === 'PAID' ? new Date() : null,
-            wasLate: status === 'OVERDUE' ? true : undefined,
+            wasLate: (status === 'OVERDUE' || status === 'RENEGOTIATED') ? true : undefined,
             promiseDate: promiseDateObj,
             actionDescription: descripcionFrontend // Guardar nota
           }
@@ -520,8 +520,6 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
     res.status(400).json({ error: "Error al procesar la gestión." });
   }
 };
-
-
 
 export const consultarDatacredito = async (req: any, res: any) => {
   try {
