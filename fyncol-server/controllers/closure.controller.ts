@@ -218,3 +218,61 @@ export const getAllClosures = async (req: any, res: any) => {
     return res.status(500).json({ error: error.message || "Error al procesar la solicitud." });
   }
 };
+
+/**
+ * 4. OBTENER DETALLE DE UN CIERRE (Clientes y Observaciones del día)
+ */
+export const getClosureDetails = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    
+    // 1. Obtener la fecha del cierre y la ruta
+    const closure = await prisma.dailyClosure.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!closure) {
+      return res.status(404).json({ error: "Cierre no encontrado." });
+    }
+
+    // 2. Definir el rango de horas de ese día específico
+    const start = new Date(closure.closedAt);
+    start.setHours(0, 0, 0, 0);
+    
+    const end = new Date(closure.closedAt);
+    end.setHours(23, 59, 59, 999);
+
+    // 3. Buscar todas las cuotas de esa ruta que tuvieron movimiento ese día
+    const installments = await prisma.installment.findMany({
+      where: {
+        loan: { client: { routeId: closure.routeId } },
+        OR: [
+          { dueDate: { gte: start, lte: end } }, // Las que tocaba cobrar hoy por cronograma
+          { paidAt: { gte: start, lte: end } }   // Las atrasadas que pagaron o abonaron hoy
+        ]
+      },
+      include: {
+        loan: {
+          include: { client: { select: { name: true, phone: true } } }
+        }
+      },
+      orderBy: { dueDate: 'desc' } // Ordenamos por fecha de vencimiento
+    });
+
+    // 4. Mapear y limpiar los datos para el frontend
+    const details = installments.map((inst: any) => ({
+      id: inst.id,
+      clientName: inst.loan.client.name,
+      status: inst.status,
+      expectedAmount: inst.expectedAmount,
+      paidAmount: inst.paidAmount,
+      observation: inst.actionDescription || (inst.status === 'OVERDUE' ? 'Cliente no pagó, reportado en mora.' : 'Sin observaciones adicionales.')
+    }));
+
+    return res.json({ success: true, data: details });
+
+  } catch (error: any) {
+    console.error("Error al obtener detalles del cierre:", error);
+    return res.status(500).json({ error: "Error interno al obtener los detalles." });
+  }
+};
