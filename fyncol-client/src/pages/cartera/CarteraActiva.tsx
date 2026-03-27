@@ -423,6 +423,7 @@ export default function CarteraActiva() {
                           </div>
                         )}
 
+                        {/* RENDERIZADO DE LA DESCRIPCIÓN DE LA BITÁCORA (SI EXISTE) */}
                         {cuotaActiva.actionDescription && (
                           <div className="mb-2 text-[10px] font-medium text-slate-400 bg-black/20 p-1.5 rounded flex items-center gap-1.5 italic border border-white/5">
                             <FiInfo className="shrink-0 text-blue-400" size={12} />
@@ -468,6 +469,7 @@ export default function CarteraActiva() {
                                   e.stopPropagation(); 
                                   setOverdueModal({ open: true, inst: cuotaActiva, loan: loan }); 
                                   
+                                  // OCULTAR SOLO MORA SI ES DIARIO
                                   const isDiario = loan?.periodicity === 'DIARIO';
                                   setOverdueAction(isDiario ? 'PROXIMA_CUOTA' : 'SOLO_MORA'); 
                                 }}
@@ -1048,10 +1050,11 @@ export default function CarteraActiva() {
               </div>
             </div>
 
-            <div className="flex justify-between items-center mb-6 px-2 text-xs text-slate-400 font-medium bg-white/5 py-2 rounded-lg">
-              <span className="flex items-center gap-1"><FiMapPin /> Total: {closureSummary.totalClients}</span>
-              <span className="flex items-center gap-1 text-emerald-400/80"><FiCheckCircle /> Cobrados: {closureSummary.collectedClients}</span>
-              <span className="flex items-center gap-1 text-red-400/80"><FiAlertTriangle /> Mora: {closureSummary.overdueClients}</span>
+            <div className="flex justify-between items-center mb-6 px-3 text-[10px] sm:text-xs text-slate-400 font-medium bg-white/5 py-2.5 rounded-lg">
+              <span className="flex flex-col items-center gap-1"><FiMapPin size={14} /> Total: {closureSummary.totalClients}</span>
+              <span className="flex flex-col items-center gap-1 text-emerald-400/80"><FiCheckCircle size={14} /> Pagos: {closureSummary.collectedClients}</span>
+              <span className="flex flex-col items-center gap-1 text-orange-400/80"><FiClock size={14} /> Acuerdos: {closureSummary.renegotiatedClients || 0}</span>
+              <span className="flex flex-col items-center gap-1 text-red-400/80"><FiAlertTriangle size={14} /> Mora: {closureSummary.overdueClients || 0}</span>
             </div>
             
             <div className="flex gap-3">
