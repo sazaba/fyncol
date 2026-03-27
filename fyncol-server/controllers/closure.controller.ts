@@ -3,11 +3,21 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 // Helper para obtener el rango del día actual (Hora local)
+// Helper para obtener el rango del día actual blindado para Colombia (UTC-5)
 const getTodayRange = () => {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date();
-  end.setHours(23, 59, 59, 999);
+  const now = new Date();
+  // Restamos 5 horas para que el servidor siempre calcule el día basado en Colombia
+  now.setUTCHours(now.getUTCHours() - 5);
+  
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  const day = now.getUTCDate();
+
+  // 00:00:00 Hora Colombia (Equivale a las 05:00 UTC)
+  const start = new Date(Date.UTC(year, month, day, 5, 0, 0, 0)); 
+  // 23:59:59 Hora Colombia (Equivale a las 04:59:59 UTC del día siguiente)
+  const end = new Date(Date.UTC(year, month, day, 28, 59, 59, 999)); 
+
   return { start, end };
 };
 
