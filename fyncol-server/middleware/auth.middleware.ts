@@ -1,13 +1,13 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
-// Mejoramos la interfaz para incluir los datos exactos que vienen en tu nuevo token
+// Interfaz mejorada
 export interface AuthRequest extends Request {
   user?: {
     id: number;
     email: string;
     role: string;
-    companyId: number | null; // Puede ser null si es el SUPERADMIN dueño del SaaS
+    companyId: number | null;
     iat?: number;
     exp?: number;
   };
@@ -15,7 +15,8 @@ export interface AuthRequest extends Request {
 
 export const verifyToken = (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const token = req.header("Authorization")?.replace("Bearer ", "");
+    const authHeader = req.header("Authorization");
+    const token = authHeader?.replace("Bearer ", "");
 
     if (!token) {
       return res.status(401).json({
@@ -24,19 +25,28 @@ export const verifyToken = (req: AuthRequest, res: Response, next: NextFunction)
       });
     }
 
-    const JWT_SECRET = process.env.JWT_SECRET;
-    if (!JWT_SECRET) {
-      return res.status(500).json({
-        success: false,
-        message: "JWT_SECRET no está definido en variables de entorno.",
-      });
-    }
+    const JWT_SECRET = process.env.JWT_SECRET || 'fyncol_secret_key';
 
-    const decoded = jwt.verify(token, JWT_SECRET) as AuthRequest["user"];
-    req.user = decoded;
+    // Verificamos el token
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+
+    // --- LOG PARA DEPURACIÓN EN RENDER ---
+    // Revisa los "Logs" de tu Web Service en el dashboard de Render. 
+    // Ahí verás si el companyId viene o no.
+    console.log("LOG: Contenido del Token decodificado:", decoded);
+
+    // Asignamos el objeto decodificado al request
+    // Nos aseguramos de mapear el companyId explícitamente por si acaso
+    req.user = {
+      id: decoded.id,
+      email: decoded.email,
+      role: decoded.role,
+      companyId: decoded.companyId // <--- Vital que este nombre coincida con el del login
+    };
 
     return next();
   } catch (error) {
+    console.error("LOG: Error al verificar JWT:", error);
     return res.status(401).json({
       success: false,
       message: "Token inválido o expirado.",
