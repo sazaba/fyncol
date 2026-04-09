@@ -7,6 +7,43 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ==========================================
+// MODELOS SAAS (MULTI-TENANT)
+// ==========================================
+
+model Company {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(255)
+  email     String?  @unique
+  phone     String?  @db.VarChar(50)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  subscription Subscription?
+  users        User[]
+  routes       Route[]
+
+  @@map("companies")
+}
+
+model Subscription {
+  id        Int      @id @default(autoincrement())
+  plan      String   @default("BASIC") @db.VarChar(50)
+  status    String   @default("ACTIVE") @db.VarChar(50)
+  startDate DateTime @default(now()) @map("start_date")
+  endDate   DateTime? @map("end_date")
+  
+  companyId Int      @unique @map("company_id")
+  company   Company  @relation(fields: [companyId], references: [id])
+
+  @@map("subscriptions")
+}
+
+// ==========================================
+// MODELOS CORE
+// ==========================================
+
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
@@ -21,31 +58,34 @@ model User {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   imageUrl  String?  @db.VarChar(255)
 
-  // Relación (1:1): Un usuario solo puede tener MÁXIMO una ruta asignada a la vez.
-  route     Route?
+  companyId Int?     @map("company_id")
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  route         Route?
   dailyClosures DailyClosure[]
 
   @@map("users")
 }
 
 model Route {
-  id               Int      @id @default(autoincrement())
-  country          String   @db.VarChar(100)
-  city             String   @db.VarChar(100)
-  currency         String   @db.VarChar(10)
-  isActive         Boolean  @default(true)
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
+  id            Int      @id @default(autoincrement())
+  country       String   @db.VarChar(100)
+  city          String   @db.VarChar(100)
+  currency      String   @db.VarChar(10)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
   
-  assignedToId     Int?     @unique @map("assigned_to_id")
-  assignedTo       User?    @relation(fields: [assignedToId], references: [id])
+  assignedToId  Int?     @unique @map("assigned_to_id")
+  assignedTo    User?    @relation(fields: [assignedToId], references: [id])
 
-  // Campos de capital y movimientos
-  availableCapital Decimal  @default(0) @map("available_capital") // Dinero disponible
-  transactions     CapitalTransaction[] // Historial de movimientos
+  companyId     Int      @map("company_id")
+  company       Company  @relation(fields: [companyId], references: [id])
 
-  // Relación con los clientes de esta ruta
-  clients          Client[]
+  availableCapital Decimal @default(0) @map("available_capital")
+  transactions     CapitalTransaction[]
+
+  clients       Client[]
   dailyClosures DailyClosure[]
 
   @@map("routes")
@@ -56,10 +96,10 @@ model CapitalTransaction {
   routeId     Int      @map("route_id")
   route       Route    @relation(fields: [routeId], references: [id])
   type        TransactionType
-  amount      Decimal  // Monto de la inversión o el retiro
-  description String?  @db.VarChar(255) // Ej: "Inversión inicial" o "Retiro de utilidades"
+  amount      Decimal
+  description String?  @db.VarChar(255)
   createdAt   DateTime @default(now()) @map("created_at")
-  createdBy   Int      @map("created_by") // ID del ADMIN que hizo la operación
+  createdBy   Int      @map("created_by")
 
   @@map("capital_transactions")
 }
@@ -70,16 +110,14 @@ model Client {
   documentId  String?  @unique @db.VarChar(50)
   phone       String?  @db.VarChar(50)
   address     String   @db.VarChar(255)
-  latitude    Float?   // Para guardar la latitud del GPS
-  longitude   Float?   // Para guardar la longitud del GPS
-  documentUrl String?  @db.VarChar(255) // URL de la foto de la cédula
+  latitude    Float?
+  longitude   Float?
+  documentUrl String?  @db.VarChar(255)
   createdAt   DateTime @default(now()) @map("created_at")
   
-  // Relación con la ruta (Un cliente pertenece a una ruta)
   routeId     Int      @map("route_id")
   route       Route    @relation(fields: [routeId], references: [id])
 
-  // Relación con sus préstamos
   loans       Loan[]
 
   @@map("clients")
@@ -87,16 +125,15 @@ model Client {
 
 model Loan {
   id               Int      @id @default(autoincrement())
-  amount           Decimal  // Monto prestado
-  installments     Int      // Cantidad de cuotas
-  interestRate     Decimal  // Porcentaje de interés mensual
+  amount           Decimal
+  installments     Int
+  interestRate     Decimal
   
   periodicity      String   @default("DIARIO") @db.VarChar(20) 
   
-  // NUEVO CAMPO: Fecha en la que el cliente hará su primer pago
   firstPaymentDate DateTime @map("first_payment_date")
   
-  projectedTotal   Decimal  // Métrica proyectada
+  projectedTotal   Decimal
   isActive         Boolean  @default(true)
   createdAt        DateTime @default(now()) @map("created_at")
 
@@ -110,7 +147,7 @@ model Loan {
 
 model Payment {
   id        Int      @id @default(autoincrement())
-  amount    Decimal  // Monto pagado en este abono
+  amount    Decimal
   createdAt DateTime @default(now()) @map("created_at")
 
   loanId    Int      @map("loan_id")
@@ -120,20 +157,20 @@ model Payment {
 }
 
 model Installment {
-  id                Int      @id @default(autoincrement())
-  installmentNumber Int      @map("installment_number") // Cuota #1, #2, etc.
-  dueDate           DateTime @map("due_date")           // Fecha en la que toca pagar
-  expectedAmount    Decimal  @map("expected_amount")    // Lo que debería pagar
-  paidAmount        Decimal  @default(0) @map("paid_amount") // Lo que realmente pagó
+  id                Int       @id @default(autoincrement())
+  installmentNumber Int       @map("installment_number")
+  dueDate           DateTime  @map("due_date")
+  expectedAmount    Decimal   @map("expected_amount")
+  paidAmount        Decimal   @default(0) @map("paid_amount")
   
-  status            String   @default("PENDING") @db.VarChar(20) // PENDING, PAID, PARTIAL, OVERDUE
-  paidAt            DateTime? @map("paid_at")           // Cuándo lo pagó realmente
+  status            String    @default("PENDING") @db.VarChar(20)
+  paidAt            DateTime? @map("paid_at")
   wasLate           Boolean   @default(false) @map("was_late")
   promiseDate       DateTime? @map("promise_date")
   actionDescription String?   @map("action_description") @db.VarChar(255)
   
-  loanId            Int      @map("loan_id")
-  loan              Loan     @relation(fields: [loanId], references: [id])
+  loanId            Int       @map("loan_id")
+  loan              Loan      @relation(fields: [loanId], references: [id])
 
   @@map("installments")
 }
@@ -142,27 +179,26 @@ model DailyClosure {
   id               Int      @id @default(autoincrement())
   closedAt         DateTime @default(now()) @map("closed_at")
 
-  // Los 8 KPIs del Arqueo
-  availableCapital Decimal  @map("available_capital") // DISPONIBLE
-  totalPortfolio   Decimal  @map("total_portfolio")   // CARTERA
-  totalCollected   Decimal  @map("total_collected")   // RECAUDO
-  newSales         Decimal  @map("new_sales")         // VENTAS (CTES NUEVOS)
-  renewals         Decimal  @map("renewals")          // RENOVACIONES (CTES VIEJOS)
-  totalClients     Int      @map("total_clients")     // TOTAL RUTA
-  collectedClients Int      @map("collected_clients") // CLIENTES COBRADOS
-  overdueClients   Int      @map("overdue_clients")   // CLIENTES MORA
+  availableCapital Decimal  @map("available_capital")
+  totalPortfolio   Decimal  @map("total_portfolio")
+  totalCollected   Decimal  @map("total_collected")
+  newSales         Decimal  @map("new_sales")
+  renewals         Decimal  @map("renewals")
+  totalClients     Int      @map("total_clients")
+  collectedClients Int      @map("collected_clients")
+  overdueClients   Int      @map("overdue_clients")
 
-  // Relaciones
   routeId          Int      @map("route_id")
   route            Route    @relation(fields: [routeId], references: [id])
 
-  closedById       Int      @map("closed_by_id") // El cobrador que hizo el cierre
+  closedById       Int      @map("closed_by_id")
   closedBy         User     @relation(fields: [closedById], references: [id])
 
   @@map("daily_closures")
 }
 
 enum Role {
+  SUPERADMIN
   ADMIN
   SUPERVISOR
   COBRADOR

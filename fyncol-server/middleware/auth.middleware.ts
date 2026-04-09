@@ -1,10 +1,16 @@
-// fyncol-server/middleware/auth.middleware.ts
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
-// Extiende Request para incluir el usuario decodificado
+// Mejoramos la interfaz para incluir los datos exactos que vienen en tu nuevo token
 export interface AuthRequest extends Request {
-  user?: any;
+  user?: {
+    id: number;
+    email: string;
+    role: string;
+    companyId: number | null; // Puede ser null si es el SUPERADMIN dueño del SaaS
+    iat?: number;
+    exp?: number;
+  };
 }
 
 export const verifyToken = (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -26,7 +32,7 @@ export const verifyToken = (req: AuthRequest, res: Response, next: NextFunction)
       });
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET) as AuthRequest["user"];
     req.user = decoded;
 
     return next();

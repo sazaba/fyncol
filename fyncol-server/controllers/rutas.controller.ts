@@ -1,15 +1,24 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { AuthRequest } from '../middleware/auth.middleware'; 
 
 const prisma = new PrismaClient();
 
-export const crearRuta = async (req: Request, res: Response): Promise<void> => {
+export const crearRuta = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    const companyId = req.user?.companyId;
+    
+    // CLÁUSULA DE GUARDIA: Asegura los tipos de aquí en adelante
+    if (!companyId) {
+      res.status(403).json({ error: "Acceso denegado: No tienes empresa asignada." });
+      return;
+    }
+
     const { country, city, currency, assignedToId } = req.body;
     
     if (assignedToId) {
       const rutaExistente = await prisma.route.findFirst({
-        where: { assignedToId: Number(assignedToId) }
+        where: { assignedToId: Number(assignedToId), companyId } 
       });
 
       if (rutaExistente) {
@@ -20,10 +29,9 @@ export const crearRuta = async (req: Request, res: Response): Promise<void> => {
           }),
           prisma.route.create({
             data: {
-              country,
-              city,
-              currency,
+              country, city, currency,
               assignedToId: Number(assignedToId),
+              companyId 
             },
             include: { assignedTo: true }
           })
@@ -36,10 +44,9 @@ export const crearRuta = async (req: Request, res: Response): Promise<void> => {
 
     const nuevaRuta = await prisma.route.create({
       data: {
-        country,
-        city,
-        currency,
+        country, city, currency,
         assignedToId: assignedToId ? Number(assignedToId) : null,
+        companyId 
       },
       include: { assignedTo: true }
     });
@@ -50,21 +57,21 @@ export const crearRuta = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const obtenerRutas = async (req: Request, res: Response) => {
+export const obtenerRutas = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    const companyId = req.user?.companyId;
+    if (!companyId) {
+      res.status(403).json({ error: "Acceso denegado." });
+      return;
+    }
+
     const rutas = await prisma.route.findMany({
+      where: { companyId }, 
       include: {
-        assignedTo: {
-          select: { id: true, name: true, role: true }
-        },
+        assignedTo: { select: { id: true, name: true, role: true } },
         clients: {
           include: {
-            loans: {
-              // NUEVO: Incluimos los pagos para poder calcular cuánto han abonado
-              include: {
-                payments: true 
-              }
-            }
+            loans: { include: { payments: true } }
           }
         }
       }
@@ -75,14 +82,9 @@ export const obtenerRutas = async (req: Request, res: Response) => {
       
       ruta.clients.forEach(client => {
         client.loans.forEach(loan => {
-          // Solo sumamos el dinero de los préstamos que siguen vivos
           if(loan.isActive) {
             const metaTotal = Number(loan.projectedTotal || 0);
-            
-            // Calculamos todo lo que este cliente ya ha pagado
             const totalPagado = loan.payments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
-            
-            // El dinero que realmente falta por recoger en la calle
             const saldoPendiente = metaTotal - totalPagado;
 
             if (saldoPendiente > 0) {
@@ -92,12 +94,10 @@ export const obtenerRutas = async (req: Request, res: Response) => {
         });
       });
 
-      // Extraemos clients para no saturar la respuesta web
       const { clients, ...rutaData } = ruta;
       
       return {
         ...rutaData,
-        // Redondeamos para mantener la limpieza visual sin decimales
         totalCartera: Math.round(totalCartera) 
       };
     });
@@ -109,23 +109,37 @@ export const obtenerRutas = async (req: Request, res: Response) => {
   }
 };
 
-export const reasignarRuta = async (req: Request, res: Response): Promise<void> => {
+export const reasignarRuta = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    const companyId = req.user?.companyId;
+    if (!companyId) {
+      res.status(403).json({ error: "Acceso denegado." });
+      return;
+    }
+
     const targetRouteId = Number(req.params.id);
     const assignedToId = req.body.assignedToId ? Number(req.body.assignedToId) : null;
     const replacementId = req.body.replacementId ? Number(req.body.replacementId) : null;
 
+    const targetRouteExists = await prisma.route.findFirst({
+      where: { id: targetRouteId, companyId }
+    });
+
+    if (!targetRouteExists) {
+      res.status(404).json({ error: 'Ruta no encontrada o no autorizada.' });
+      return;
+    }
+
     if (assignedToId) {
-      // 1. Verificar si el cobrador que queremos asignar YA está en otra ruta
       const oldRoute = await prisma.route.findFirst({
         where: { 
           assignedToId: assignedToId,
-          id: { not: targetRouteId } 
+          id: { not: targetRouteId },
+          companyId 
         }
       });
 
       if (oldRoute) {
-        // 2. Exigir un reemplazo
         if (!replacementId) {
           res.status(400).json({ 
             code: 'REQUIRES_REPLACEMENT',
@@ -135,11 +149,11 @@ export const reasignarRuta = async (req: Request, res: Response): Promise<void> 
           return;
         }
 
-        // 3. Verificar que el reemplazo propuesto esté libre (Ignorando la ruta destino para permitir Swap)
         const replacementInUse = await prisma.route.findFirst({
           where: { 
             assignedToId: replacementId,
-            id: { not: targetRouteId } 
+            id: { not: targetRouteId },
+            companyId 
           }
         });
 
@@ -148,14 +162,11 @@ export const reasignarRuta = async (req: Request, res: Response): Promise<void> 
           return;
         }
 
-        // 4. Ejecutar el intercambio (Swap) en dos pasos seguros
-        // PASO A: Soltar ambas rutas temporalmente para evitar colisión de Unique Key en MySQL
         await prisma.$transaction([
           prisma.route.update({ where: { id: targetRouteId }, data: { assignedToId: null } }),
           prisma.route.update({ where: { id: oldRoute.id }, data: { assignedToId: null } })
         ]);
 
-        // PASO B: Cruzar los usuarios
         const [updatedTarget, updatedOld] = await prisma.$transaction([
           prisma.route.update({
             where: { id: targetRouteId },
@@ -174,7 +185,6 @@ export const reasignarRuta = async (req: Request, res: Response): Promise<void> 
       }
     }
 
-    // 5. Flujo normal: el cobrador estaba libre, o estamos vaciando la ruta
     const rutaActualizada = await prisma.route.update({
       where: { id: targetRouteId },
       data: { assignedToId: assignedToId },
@@ -188,12 +198,28 @@ export const reasignarRuta = async (req: Request, res: Response): Promise<void> 
   }
 };
 
-export const eliminarRuta = async (req: Request, res: Response) => {
+export const eliminarRuta = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    const companyId = req.user?.companyId;
+    if (!companyId) {
+      res.status(403).json({ error: "Acceso denegado." });
+      return;
+    }
+
+    const rutaExistente = await prisma.route.findFirst({
+      where: { id: Number(id), companyId }
+    });
+
+    if (!rutaExistente) {
+      res.status(404).json({ error: 'Ruta no encontrada o no autorizada.' });
+      return;
+    }
+
     await prisma.route.delete({
       where: { id: Number(id) }
     });
+    
     res.json({ success: true, message: "Ruta eliminada correctamente" });
   } catch (error) {
     res.status(500).json({ error: 'Error interno al eliminar la ruta' });

@@ -1,4 +1,6 @@
+import { Response } from "express";
 import { PrismaClient } from '@prisma/client';
+import { AuthRequest } from "../middleware/auth.middleware";
 
 const prisma = new PrismaClient();
 
@@ -16,8 +18,11 @@ interface InstallmentInput {
  * Crea el cliente, el préstamo inicial y genera automáticamente el plan de pagos (amortización)
  * Incluye validación de duplicados por documentId.
  */
-export const createClientAndLoan = async (req: any, res: any) => {
+export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
   try {
+    const companyId = req.user?.companyId; // SAAS-BLINDAJE
+    if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
+
     const {
       name, documentId, phone, address, latitude, longitude, documentUrl, routeId,
       amount, installments, interestRate, periodicity, firstPaymentDate
@@ -30,7 +35,7 @@ export const createClientAndLoan = async (req: any, res: any) => {
     const amountNum = parseFloat(amount);
     const interestNum = parseFloat(interestRate);
     const installmentsNum = parseInt(installments);
-    const routeIdInt = parseInt(routeId);
+    const routeIdInt = parseInt(routeId as string);
 
     let daysPerInstallment = 1; 
     if (periodicity === 'QUINCENAL') daysPerInstallment = 15;
@@ -76,9 +81,15 @@ export const createClientAndLoan = async (req: any, res: any) => {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      const route = await tx.route.findUnique({ where: { id: routeIdInt } });
+      // SAAS-BLINDAJE: Validar que la ruta le pertenezca a la empresa
+      const route = await tx.route.findFirst({ 
+        where: { 
+          id: routeIdInt, 
+          companyId 
+        } 
+      });
       
-      if (!route) throw new Error("La ruta especificada no existe");
+      if (!route) throw new Error("La ruta especificada no existe o no estás autorizado");
       if (Number(route.availableCapital) < amountNum) throw new Error("Capital insuficiente en esta ruta");
 
       const newClient = await tx.client.create({
@@ -145,12 +156,17 @@ export const createClientAndLoan = async (req: any, res: any) => {
 /**
  * 2. OBTENER CARTERA DEL COBRADOR
  */
-export const getCarteraDelCobrador = async (req: any, res: any) => {
+export const getCarteraDelCobrador = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user.id;
+    const companyId = req.user?.companyId; // SAAS-BLINDAJE
+    const userId = req.user?.id;
+    if (!companyId || !userId) return res.status(403).json({ error: "Acceso denegado." });
 
     const route = await prisma.route.findFirst({
-      where: { assignedToId: userId }
+      where: { 
+        assignedToId: userId, 
+        companyId // SAAS-BLINDAJE
+      }
     });
 
     if (!route) {
@@ -191,8 +207,11 @@ export const getCarteraDelCobrador = async (req: any, res: any) => {
 /**
  * 3. REGISTRAR PAGO (ABONO ANTIGUO - MANTENIDO POR COMPATIBILIDAD)
  */
-export const registrarPago = async (req: any, res: any) => {
+export const registrarPago = async (req: AuthRequest, res: Response) => {
   try {
+    const companyId = req.user?.companyId; // SAAS-BLINDAJE
+    if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
+
     const { loanId, amount } = req.body;
     const amountNum = parseFloat(amount);
 
@@ -201,13 +220,16 @@ export const registrarPago = async (req: any, res: any) => {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      const loan = await tx.loan.findUnique({
-        where: { id: parseInt(loanId) },
+      const loan = await tx.loan.findFirst({ // SAAS-BLINDAJE: findFirst en lugar de findUnique
+        where: { 
+          id: parseInt(loanId as string),
+          client: { route: { companyId } } // SAAS-BLINDAJE
+        },
         include: { payments: true, client: true }
       });
 
       if (!loan || !loan.isActive) {
-        throw new Error("El préstamo no existe o ya está cancelado.");
+        throw new Error("El préstamo no existe, no estás autorizado o ya está cancelado.");
       }
 
       const totalPaidSoFar = loan.payments.reduce((acc, p) => acc + Number(p.amount), 0);
@@ -249,19 +271,25 @@ export const registrarPago = async (req: any, res: any) => {
 /**
  * 4. ACTUALIZAR ESTADO DE CUOTA (AMORTIZACIÓN DINÁMICA INTELIGENTE)
  */
-export const updateInstallmentStatus = async (req: any, res: any) => {
+export const updateInstallmentStatus = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const companyId = req.user?.companyId; // SAAS-BLINDAJE
+    if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
+
+    const id = req.params.id as string; // CORRECCIÓN TIPADO TS
     const { status, paidAmount, actionParams } = req.body;
     const amountNum = parseFloat(paidAmount) || 0;
 
     const result = await prisma.$transaction(async (tx) => {
-      const installment = await tx.installment.findUnique({
-        where: { id: parseInt(id) },
+      const installment = await tx.installment.findFirst({ // SAAS-BLINDAJE
+        where: { 
+          id: parseInt(id),
+          loan: { client: { route: { companyId } } } // SAAS-BLINDAJE
+        },
         include: { loan: { include: { client: true } } }
       });
 
-      if (!installment) throw new Error("La cuota no existe.");
+      if (!installment) throw new Error("La cuota no existe o no estás autorizado.");
 
       const expected = Number(installment.expectedAmount);
       const totalPagadoHistorico = Number(installment.paidAmount || 0);
@@ -521,17 +549,23 @@ export const updateInstallmentStatus = async (req: any, res: any) => {
   }
 };
 
-export const consultarDatacredito = async (req: any, res: any) => {
+export const consultarDatacredito = async (req: AuthRequest, res: Response) => {
   try {
-    const { documentId } = req.params;
+    const companyId = req.user?.companyId; // SAAS-BLINDAJE
+    if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
+
+    const documentId = req.params.documentId as string; // CORRECCIÓN TIPADO TS
 
     if (!documentId) return res.status(400).json({ error: "Debe proveer un documento" });
 
     // Blindaje: Quitamos cualquier espacio en blanco al inicio o al final
     const cleanDocumentId = documentId.trim();
 
-    const client = await prisma.client.findFirst({ // Cambiamos a findFirst por si quedaron duplicados viejos
-      where: { documentId: cleanDocumentId },
+    const client = await prisma.client.findFirst({ 
+      where: { 
+        documentId: cleanDocumentId,
+        route: { companyId } // SAAS-BLINDAJE
+      },
       include: {
         loans: {
           select: {
@@ -582,11 +616,18 @@ export const consultarDatacredito = async (req: any, res: any) => {
 /**
  * OBTENER TODOS LOS CLIENTES DE UNA RUTA (Para el Popup de Reutilizar Cliente)
  */
-export const getClientsByRoute = async (req: any, res: any) => {
+export const getClientsByRoute = async (req: AuthRequest, res: Response) => {
   try {
-    const { routeId } = req.params;
+    const companyId = req.user?.companyId; // SAAS-BLINDAJE
+    if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
+
+    const routeId = req.params.routeId as string; // CORRECCIÓN TIPADO TS
+    
     const clients = await prisma.client.findMany({
-      where: { routeId: parseInt(routeId) },
+      where: { 
+        routeId: parseInt(routeId),
+        route: { companyId } // SAAS-BLINDAJE
+      },
       orderBy: { name: 'asc' }
     });
     return res.json({ success: true, data: clients });
@@ -598,9 +639,12 @@ export const getClientsByRoute = async (req: any, res: any) => {
 /**
  * AGREGAR UN NUEVO PRÉSTAMO A UN CLIENTE EXISTENTE
  */
-export const addLoanToExistingClient = async (req: any, res: any) => {
+export const addLoanToExistingClient = async (req: AuthRequest, res: Response) => {
   try {
-    const { clientId } = req.params;
+    const companyId = req.user?.companyId; // SAAS-BLINDAJE
+    if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
+
+    const clientId = req.params.clientId as string; // CORRECCIÓN TIPADO TS
     const { amount, installments, interestRate, periodicity, firstPaymentDate } = req.body;
 
     const amountNum = parseFloat(amount);
@@ -646,8 +690,13 @@ export const addLoanToExistingClient = async (req: any, res: any) => {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      const client = await tx.client.findUnique({ where: { id: parseInt(clientId) } });
-      if (!client) throw new Error("El cliente no existe.");
+      const client = await tx.client.findFirst({ 
+        where: { 
+          id: parseInt(clientId),
+          route: { companyId } // SAAS-BLINDAJE
+        } 
+      });
+      if (!client) throw new Error("El cliente no existe o no autorizado.");
 
       const route = await tx.route.findUnique({ where: { id: client.routeId } });
       if (Number(route?.availableCapital) < amountNum) throw new Error("Capital insuficiente en esta ruta.");

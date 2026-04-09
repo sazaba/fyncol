@@ -1,19 +1,20 @@
-// fyncol-server/controllers/auth.controller.ts
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { AuthRequest } from '../middleware/auth.middleware'; // Ajustado el nombre del archivo
+import { AuthRequest } from '../middleware/auth.middleware';
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'fyncol_secret_key';
 
-// fyncol-server/controllers/auth.controller.ts
-
 export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
   try {
-    const user = await prisma.user.findUnique({ where: { email } });
+    // INCLUIMOS la información de la empresa en la consulta
+    const user = await prisma.user.findUnique({ 
+      where: { email },
+      include: { company: true } 
+    });
     
     if (!user) return res.status(401).json({ success: false, message: 'Usuario no encontrado' });
 
@@ -21,15 +22,21 @@ export const login = async (req: Request, res: Response) => {
       return res.status(403).json({ success: false, message: 'Tu cuenta está desactivada.' });
     }
 
+    // NUEVA VALIDACIÓN: Revisar si la empresa está inactiva (SaaS)
+    if (user.company && !user.company.isActive) {
+      return res.status(403).json({ success: false, message: 'La cuenta de la empresa se encuentra suspendida.' });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ success: false, message: 'Contraseña incorrecta' });
 
-    // --- CAMBIO AQUÍ: Agregamos el role al token ---
+    // AÑADIMOS companyId al token
     const token = jwt.sign(
       { 
         id: user.id, 
         email: user.email, 
-        role: user.role // <--- ESTO FALTABA
+        role: user.role,
+        companyId: user.companyId 
       }, 
       JWT_SECRET, 
       { expiresIn: '12h' }
@@ -43,6 +50,7 @@ export const login = async (req: Request, res: Response) => {
         name: user.name, 
         email: user.email, 
         role: user.role,
+        companyId: user.companyId, // El frontend necesitará saber el ID de la empresa
         imageUrl: user.imageUrl 
       }
     });
@@ -54,7 +62,11 @@ export const login = async (req: Request, res: Response) => {
 
 export const getMe = async (req: AuthRequest, res: Response) => {
   try {
-    // req.user.id viene del middleware verifyToken
+    // Si req.user no existe por alguna razón, cortamos la ejecución
+    if (!req.user?.id) {
+      return res.status(401).json({ success: false, message: 'No autorizado' });
+    }
+
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
       select: { 
@@ -62,7 +74,8 @@ export const getMe = async (req: AuthRequest, res: Response) => {
         name: true, 
         email: true, 
         role: true, 
-        imageUrl: true // Agregado para el perfil del Dashboard
+        companyId: true, // Añadido
+        imageUrl: true 
       }
     });
 
@@ -71,7 +84,8 @@ export const getMe = async (req: AuthRequest, res: Response) => {
     res.json({
       success: true,
       user,
-      stats: { ingresos: "$12.4M", citas: 8, cartera: "$2.1M", pacientes: 14 }
+      // CORREGIDO: Datos de prueba acordes a un sistema de cobros, no de clínicas médicas
+      stats: { capital: "$12.4M", clientes: 145, cartera_activa: "$2.1M", mora: "12%" }
     });
   } catch (error) {
     console.error(error);
