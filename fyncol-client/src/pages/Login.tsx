@@ -1,6 +1,6 @@
 // src/pages/Login.tsx
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom"; // Importamos Link
 import logo from "@/assets/logo.png";
 
 export default function Login() {
@@ -52,7 +52,6 @@ export default function Login() {
   };
 
   return (
-    // Se quitó "font-inter" de aquí
     <div className="relative flex h-[100dvh] w-full items-center justify-center overflow-hidden bg-[#020408] px-4 selection:bg-blue-500/30">
       
       {/* Background Gradients */}
@@ -71,7 +70,6 @@ export default function Login() {
             alt="Fyncol" 
             className="mb-6 h-10 w-auto object-contain drop-shadow-[0_0_15px_rgba(59,130,246,0.5)] brightness-110" 
           />
-          {/* Se quitó "font-sora" de aquí */}
           <h1 className="text-2xl font-bold tracking-tight text-white">
             Bienvenido de nuevo
           </h1>
@@ -117,9 +115,9 @@ export default function Login() {
               <label className="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-slate-500">
                 Contraseña
               </label>
-              <a href="#" className="text-xs font-medium text-blue-400 transition-colors hover:text-blue-300">
+              <Link to="/recuperar-password" className="text-xs font-medium text-blue-400 transition-colors hover:text-blue-300">
                 ¿Olvidaste tu contraseña?
-              </a>
+              </Link>
             </div>
             <div className="group relative">
               <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-500 transition-colors group-focus-within:text-blue-400">
@@ -160,13 +158,15 @@ export default function Login() {
         <div className="mt-8 flex flex-col items-center gap-4 text-sm">
           <p className="text-slate-400">
             ¿Aún no tienes cuenta?{" "}
-            <a href="#" className="font-medium text-white underline-offset-4 hover:underline decoration-blue-500">
+            {/* AQUÍ ESTÁ EL CAMBIO */}
+            <Link to="/register" className="font-medium text-white underline-offset-4 hover:underline decoration-blue-500">
               Regístrate gratis
-            </a>
+            </Link>
           </p>
           
-          <a 
-            href="/"
+          {/* AQUÍ ESTÁ EL CAMBIO */}
+          <Link 
+            to="/"
             className="group flex items-center gap-2 text-slate-500 transition-colors hover:text-white"
           >
             <svg 
@@ -178,7 +178,7 @@ export default function Login() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
             Volver al inicio
-          </a>
+          </Link>
         </div>
 
       </div>
