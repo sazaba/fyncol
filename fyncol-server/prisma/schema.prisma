@@ -20,6 +20,9 @@ model Company {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
+  // ID de la empresa en la pasarela de pagos (ej. id de cliente en Stripe)
+  paymentProviderId String? @unique @map("payment_provider_id")
+
   subscription Subscription?
   users        User[]
   routes       Route[]
@@ -30,9 +33,14 @@ model Company {
 model Subscription {
   id        Int      @id @default(autoincrement())
   plan      String   @default("BASIC") @db.VarChar(50)
-  status    String   @default("ACTIVE") @db.VarChar(50)
+  
+  status    SubscriptionStatus @default(TRIAL)
+  
   startDate DateTime @default(now()) @map("start_date")
-  endDate   DateTime? @map("end_date")
+  endDate   DateTime? @map("end_date") // Fecha en la que expira el Trial o el pago
+  
+  // ID de la suscripción en la pasarela de pagos
+  providerSubscriptionId String? @unique @map("provider_subscription_id")
   
   companyId Int      @unique @map("company_id")
   company   Company  @relation(fields: [companyId], references: [id])
@@ -68,21 +76,21 @@ model User {
 }
 
 model Route {
-  id            Int      @id @default(autoincrement())
-  country       String   @db.VarChar(100)
-  city          String   @db.VarChar(100)
-  currency      String   @db.VarChar(10)
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
+  id               Int      @id @default(autoincrement())
+  country          String   @db.VarChar(100)
+  city             String   @db.VarChar(100)
+  currency         String   @db.VarChar(10)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
   
-  assignedToId  Int?     @unique @map("assigned_to_id")
-  assignedTo    User?    @relation(fields: [assignedToId], references: [id])
+  assignedToId     Int?     @unique @map("assigned_to_id")
+  assignedTo       User?    @relation(fields: [assignedToId], references: [id])
 
-  companyId     Int      @map("company_id")
-  company       Company  @relation(fields: [companyId], references: [id])
+  companyId        Int      @map("company_id")
+  company          Company  @relation(fields: [companyId], references: [id])
 
-  availableCapital Decimal @default(0) @map("available_capital")
+  availableCapital Decimal  @default(0) @map("available_capital")
   transactions     CapitalTransaction[]
 
   clients       Client[]
@@ -207,4 +215,11 @@ enum Role {
 enum TransactionType {
   INVERSION
   RETIRO
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELED
 }

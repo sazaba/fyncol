@@ -1,3 +1,4 @@
+// src/components/landing/Hero.tsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -42,15 +43,16 @@ export default function Hero() {
             con información precisa y al instante.
           </p>
 
-          <div className="reveal-on-scroll delay-300 mt-10 flex justify-center">
+          <div className="reveal-on-scroll delay-300 mt-10 flex justify-center gap-4 flex-col sm:flex-row items-center">
+            {/* Botón Principal: Modificado para llevar al Registro */}
             <button 
-              onClick={() => navigate(isAuthenticated ? "/dashboard" : "/login")}
-              className="group relative inline-flex h-14 items-center justify-center rounded-full bg-blue-600 px-8 text-base font-semibold text-white transition-all hover:bg-blue-500 hover:scale-[1.02] active:scale-95 shadow-[0_0_40px_-10px_rgba(37,99,235,0.4)] transform-gpu"
+              onClick={() => navigate(isAuthenticated ? "/dashboard" : "/register")}
+              className="group relative inline-flex h-14 items-center justify-center rounded-full bg-blue-600 px-8 text-base font-semibold text-white transition-all hover:bg-blue-500 hover:scale-[1.02] active:scale-95 shadow-[0_0_40px_-10px_rgba(37,99,235,0.4)] transform-gpu w-full sm:w-auto"
             >
               <div className="absolute inset-0 rounded-full ring-1 ring-white/20 group-hover:ring-white/30 transition-all" />
               
               <span className="mr-2">
-                {isAuthenticated ? "Ir a mi Dashboard" : "Iniciar sesión"}
+                {isAuthenticated ? "Ir a mi Dashboard" : "Empezar prueba gratis"}
               </span>
               
               <svg 
@@ -62,6 +64,16 @@ export default function Hero() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5-5 5M6 12h12" />
               </svg>
             </button>
+
+            {/* Botón Secundario Opcional: Solo si no está autenticado */}
+            {!isAuthenticated && (
+              <button 
+                onClick={() => navigate("/login")}
+                className="inline-flex h-14 items-center justify-center rounded-full border border-white/10 bg-transparent px-8 text-base font-semibold text-white transition-all hover:bg-white/5 active:scale-95 w-full sm:w-auto mt-3 sm:mt-0"
+              >
+                Ya tengo cuenta
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -13,6 +13,7 @@ import CierresDiarios from "./pages/admin/CierresDiarios";
 import NuevoCredito from "./pages/cartera/NuevoCredito";
 import CarteraActiva from "./pages/cartera/CarteraActiva";
 import DatacreditoConsulta from "./pages/cartera/DatacreditoConsulta"; // <-- Importamos el Buró
+import Register from "./pages/Register";
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
         <Route element={<ProtectedRoute />}>
           <Route element={<MainLayout />}>

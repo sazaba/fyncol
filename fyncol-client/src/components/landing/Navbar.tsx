@@ -5,16 +5,9 @@ import logo from "@/assets/logo.png";
 
 type NavbarProps = {
   brand?: string;
-  userLabel?: string;
-  primaryCtaLabel?: string;
-  onPrimaryCta?: () => void;
 };
 
-export default function Navbar({
-  brand = "Fyncol",
-  primaryCtaLabel = "Iniciar sesión",
-  onPrimaryCta,
-}: NavbarProps) {
+export default function Navbar({ brand = "Fyncol" }: NavbarProps) {
   const navigate = useNavigate();
 
   const [open, setOpen] = useState(false);
@@ -23,7 +16,6 @@ export default function Navbar({
   const [lastScrollY, setLastScrollY] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // 1. Manejo de Autenticación
   useEffect(() => {
     const syncAuth = () => setIsAuthenticated(!!localStorage.getItem("token"));
     syncAuth();
@@ -36,7 +28,6 @@ export default function Navbar({
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // 2. Lógica de Scroll Simple y Directa (Escuchando a window)
   useEffect(() => {
     let ticking = false;
 
@@ -45,19 +36,15 @@ export default function Navbar({
         window.requestAnimationFrame(() => {
           const currentScrollY = window.scrollY;
 
-          // Si estamos hasta arriba (o hay rebote en Safari), lo mostramos siempre
           if (currentScrollY <= 0) {
             setIsVisible(true);
             setIsScrolled(false);
           } else {
-            // Ponemos el fondo oscuro si bajamos más de 20px
             setIsScrolled(currentScrollY > 20);
 
-            // Si bajamos más de 80px Y estamos bajando, lo ocultamos
             if (currentScrollY > lastScrollY && currentScrollY > 80) {
               setIsVisible(false);
             } else {
-              // Si estamos subiendo, lo mostramos
               setIsVisible(true);
             }
           }
@@ -77,7 +64,6 @@ export default function Navbar({
     };
   }, [lastScrollY]);
 
-  // Cerrar menú móvil al hacer resize
   useEffect(() => {
     const onResize = () => {
       if (window.innerWidth >= 1024) setOpen(false);
@@ -86,13 +72,8 @@ export default function Navbar({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Bloquear scroll del body cuando el menú móvil está abierto
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "auto";
-    }
+    document.body.style.overflow = open ? "hidden" : "auto";
     return () => {
       document.body.style.overflow = "auto";
     };
@@ -129,7 +110,6 @@ export default function Navbar({
       >
         <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-5 md:px-6 h-16 md:h-20">
           
-          {/* Logo */}
           <a
             href="/"
             aria-label={brand}
@@ -165,13 +145,21 @@ export default function Navbar({
                 </button>
               </div>
             ) : (
-              <button onClick={onPrimaryCta} className={primaryButtonStyles}>
-                <span>{primaryCtaLabel}</span>
-              </button>
+              // NUEVO: Dos botones separados para usuarios no logueados en Desktop
+              <div className="flex items-center gap-5 animate-in fade-in duration-500">
+                <button 
+                  onClick={() => navigate("/login")} 
+                  className="text-sm font-semibold text-slate-300 hover:text-white transition-colors"
+                >
+                  Iniciar sesión
+                </button>
+                <button onClick={() => navigate("/register")} className={primaryButtonStyles}>
+                  Empezar gratis
+                </button>
+              </div>
             )}
           </div>
 
-          {/* Toggle Menú Móvil (Hamburguesa) */}
           <button
             className="relative z-50 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 active:scale-95 transition-all transform-gpu lg:hidden"
             onClick={() => setOpen(true)}
@@ -183,12 +171,7 @@ export default function Navbar({
           </button>
         </nav>
       </header>
-
-      {/* =========================================
-          NUEVO MENÚ MÓVIL (Estilo Drawer de Wasaaa)
-          ========================================= */}
       
-      {/* Overlay oscuro de fondo */}
       <div 
         className={[
           "fixed inset-0 bg-black/60 backdrop-blur-sm z-[105] lg:hidden transition-opacity duration-300",
@@ -197,7 +180,6 @@ export default function Navbar({
         onClick={() => setOpen(false)}
       />
 
-      {/* Panel lateral derecho */}
       <div
         className={[
           "fixed top-0 right-0 h-[100dvh] w-[85vw] max-w-[320px] bg-[#05050A]/95 backdrop-blur-2xl border-l border-white/10 z-[110] lg:hidden transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col transform-gpu",
@@ -214,7 +196,6 @@ export default function Navbar({
           <button
             onClick={() => setOpen(false)}
             className="p-2 rounded-full bg-white/5 border border-white/5 text-slate-400 hover:bg-white/10 hover:text-white transition-all active:scale-95"
-            aria-label="Cerrar menú"
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -227,21 +208,8 @@ export default function Navbar({
           <div className="flex flex-col gap-4 mt-8">
             {isAuthenticated ? (
               <>
-                <div className="flex items-center gap-3 p-3 mb-2 bg-white/5 rounded-2xl border border-white/5">
-                  <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold">
-                    U
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium text-white">Mi Cuenta</span>
-                    <span className="text-xs text-slate-500">Sesión iniciada</span>
-                  </div>
-                </div>
-
                 <button
-                  onClick={() => {
-                    setOpen(false);
-                    navigate("/dashboard");
-                  }}
+                  onClick={() => { setOpen(false); navigate("/dashboard"); }}
                   className={`${primaryButtonStyles} w-full py-3.5 text-base`}
                 >
                   Ir al Dashboard
@@ -251,22 +219,25 @@ export default function Navbar({
                   onClick={handleLogout}
                   className="w-full rounded-xl border border-red-900/30 bg-red-950/10 py-3.5 text-sm font-medium text-red-400 hover:bg-red-900/20 hover:text-red-300 active:scale-95 transition-all flex justify-center items-center gap-2"
                 >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
                   Cerrar Sesión
                 </button>
               </>
             ) : (
-              <button
-                onClick={() => {
-                  setOpen(false);
-                  if (onPrimaryCta) onPrimaryCta();
-                }}
-                className={`${primaryButtonStyles} w-full py-3.5 text-base`}
-              >
-                {primaryCtaLabel}
-              </button>
+              // NUEVO: Dos botones para la versión móvil
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => { setOpen(false); navigate("/login"); }}
+                  className="w-full rounded-xl border border-white/10 bg-transparent py-3.5 text-base font-semibold text-white hover:bg-white/5 transition-all"
+                >
+                  Iniciar sesión
+                </button>
+                <button
+                  onClick={() => { setOpen(false); navigate("/register"); }}
+                  className={`${primaryButtonStyles} w-full py-3.5 text-base`}
+                >
+                  Empezar prueba gratis
+                </button>
+              </div>
             )}
           </div>
         </div>

@@ -1,14 +1,12 @@
 // src/pages/Landing.tsx
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import Navbar from "../components/landing/Navbar";
 import Hero from "../components/landing/Hero";
 import Features from "@/components/landing/Features";
 import Footer from "../components/landing/Footer";
 
 export default function Landing() {
-  const navigate = useNavigate();
-
+  
   useEffect(() => {
     const observerCallback: IntersectionObserverCallback = (entries, observer) => {
       entries.forEach((entry) => {
@@ -34,14 +32,9 @@ export default function Landing() {
   }, []);
 
   return (
-    // Sin refs, sin altura fija. Un div normal.
     <div className="bg-[#020408] text-white selection:bg-blue-500/30 scroll-smooth">
-      <Navbar
-        brand="Fyncol"
-        primaryCtaLabel="Iniciar sesión"
-        onPrimaryCta={() => navigate("/login")}
-        // Ya no le pasamos el ref
-      />
+      {/* Navbar ahora gestiona sus propios botones y rutas */}
+      <Navbar brand="Fyncol" />
 
       <main className="flex flex-col relative overflow-hidden">
         <Hero />
