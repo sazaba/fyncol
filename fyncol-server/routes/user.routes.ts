@@ -3,12 +3,18 @@ import {
   createUser,
   getUsers,
   updateUser,
-  deleteUser,       // soft delete (desactivar)
-  hardDeleteUser,   // hard delete (borrar real)
-  toggleActiveUser, // activar/desactivar
+  deleteUser,       
+  hardDeleteUser,   
+  toggleActiveUser, 
 } from "../controllers/user.controller";
 
+// 1. Importar el middleware de autenticación
+import { verifyToken } from "../middleware/auth.middleware";
+
 const router = Router();
+
+// 2. Aplicar el middleware a todas las rutas de este módulo
+router.use(verifyToken);
 
 // Rutas base: /api/users
 router.post("/", createUser);

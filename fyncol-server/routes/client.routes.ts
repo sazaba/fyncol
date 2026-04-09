@@ -11,24 +11,15 @@ import { verifyToken } from '../middleware/auth.middleware';
 
 const router = Router();
 
-// ==========================================
-// RUTAS DE GESTIÓN DE CLIENTES Y CRÉDITOS
-// Todas estas rutas están protegidas (requieren sesión activa)
-// ==========================================
+// Aplicar el middleware a TODAS las rutas de este módulo
+router.use(verifyToken);
 
-// 1. Crear un cliente nuevo y asignarle su primer préstamo
-router.post('/create', verifyToken, createClientAndLoan); 
-
-// 2. Obtener todos los clientes con préstamos activos de la ruta del cobrador actual
-router.get('/cartera', verifyToken, getCarteraDelCobrador);
-
-// 3. Registrar un abono a un préstamo específico
-router.post('/pago', verifyToken, registrarPago);
-
-router.patch('/installment/:id', verifyToken, updateInstallmentStatus);
-
-router.get('/route/:routeId', verifyToken, getClientsByRoute);
-router.post('/:clientId/add-loan', verifyToken, addLoanToExistingClient);
-router.get('/datacredito/:documentId', verifyToken, consultarDatacredito);
+router.post('/create', createClientAndLoan); 
+router.get('/cartera', getCarteraDelCobrador);
+router.post('/pago', registrarPago);
+router.patch('/installment/:id', updateInstallmentStatus);
+router.get('/route/:routeId', getClientsByRoute);
+router.post('/:clientId/add-loan', addLoanToExistingClient);
+router.get('/datacredito/:documentId', consultarDatacredito);
 
 export default router;

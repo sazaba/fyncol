@@ -4,10 +4,12 @@ import { verifyToken } from '../middleware/auth.middleware';
 
 const router = Router();
 
-// Rutas protegidas para el cobrador/administrador
-router.get('/summary', verifyToken, getClosureSummary);
-router.post('/confirm', verifyToken, confirmDailyClosure);
-router.get('/history', verifyToken, getAllClosures);
-router.get('/history/:id/details', verifyToken, getClosureDetails);
+// Aplicar el middleware a TODAS las rutas de este módulo
+router.use(verifyToken);
+
+router.get('/summary', getClosureSummary);
+router.post('/confirm', confirmDailyClosure);
+router.get('/history', getAllClosures);
+router.get('/history/:id/details', getClosureDetails);
 
 export default router;
