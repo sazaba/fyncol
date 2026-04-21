@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   FiDollarSign, FiMapPin, FiSearch, 
   FiAlertTriangle, FiX, FiLoader, FiNavigation,
-  FiSun, FiMoon, FiCheckCircle, FiExternalLink, FiMap, FiCalendar, FiLock, FiClock, FiInfo
+  FiSun, FiMoon, FiCheckCircle, FiExternalLink, FiMap, FiCalendar, FiLock, FiClock, FiInfo,
+  FiList
 } from 'react-icons/fi';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
@@ -58,6 +59,9 @@ export default function CarteraActiva() {
   const [mapTheme, setMapTheme] = useState<'light' | 'dark'>('light');
   const [focusCoords, setFocusCoords] = useState<[number, number] | null>(null);
   
+  // NUEVO ESTADO: Controla qué vista se ve en móviles (Lista o Mapa)
+  const [mobileView, setMobileView] = useState<'LIST' | 'MAP'>('LIST');
+
   const [selectedClient, setSelectedClient] = useState<any>(null); 
   const [modalTab, setModalTab] = useState<'PLAN' | 'RECIBOS'>('PLAN');
   
@@ -82,31 +86,33 @@ export default function CarteraActiva() {
   const [isRouteClosed, setIsRouteClosed] = useState(false); 
 
   // ==========================================
-  // NUEVO: SISTEMA DE RASTREO GPS EN TIEMPO REAL
+  // SISTEMA DE RASTREO GPS EN TIEMPO REAL
   // ==========================================
   const latestCoords = useRef<{lat: number, lng: number} | null>(null);
+  const [gpsStatus, setGpsStatus] = useState<'SEARCHING' | 'ACTIVE' | 'ERROR'>('SEARCHING');
 
   useEffect(() => {
-    // 1. Iniciar la lectura constante del GPS
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
         latestCoords.current = {
           lat: position.coords.latitude,
           lng: position.coords.longitude
         };
+        setGpsStatus('ACTIVE');
       },
-      (error) => console.error("Error al obtener GPS:", error),
+      (error) => {
+        console.error("Error al obtener GPS:", error);
+        setGpsStatus('ERROR');
+      },
       { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
     );
 
-    // 2. Sincronizar con el backend cada 15 segundos
     const syncInterval = setInterval(() => {
       if (!latestCoords.current) return;
 
       const token = localStorage.getItem("token");
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
       
-      // Enviamos la ubicación de forma silenciosa para no interrumpir al cobrador
       fetch(`${baseUrl}/api/users/location`, {
         method: 'PATCH',
         headers: {
@@ -117,11 +123,10 @@ export default function CarteraActiva() {
           latitude: latestCoords.current.lat,
           longitude: latestCoords.current.lng
         })
-      }).catch((e) => console.warn("Fallo de sincronización GPS silencioso", e));
+      }).catch((e) => console.warn("Fallo de sincronización GPS silencioso"));
       
     }, 15000);
 
-    // Limpieza al desmontar el componente (cuando el cobrador cierra la pantalla)
     return () => {
       navigator.geolocation.clearWatch(watchId);
       clearInterval(syncInterval);
@@ -325,12 +330,42 @@ export default function CarteraActiva() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-[calc(100dvh-64px)] w-full bg-[#0B0B12] overflow-hidden">
+    <div className="flex flex-col md:flex-row h-[calc(100dvh-64px)] w-full bg-[#0B0B12] overflow-hidden relative">
       
-      {/* PANEL LATERAL IZQUIERDO */}
-      <div className="w-full md:w-[420px] lg:w-[480px] h-[50vh] md:h-full flex flex-col bg-[#05050A] border-r border-white/10 shrink-0 z-10 shadow-2xl">
+      {/* BOTONES DE CONTROL (SOLO MÓVIL) */}
+      <div className="md:hidden flex bg-[#05050A] p-2 shrink-0 border-b border-white/10 z-20">
+        <button 
+          onClick={() => setMobileView('LIST')}
+          className={`flex-1 py-2.5 rounded-lg flex items-center justify-center gap-2 font-bold text-sm transition-colors ${mobileView === 'LIST' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/5'}`}
+        >
+          <FiList size={16} /> Lista de Ruta
+        </button>
+        <button 
+          onClick={() => setMobileView('MAP')}
+          className={`flex-1 py-2.5 rounded-lg flex items-center justify-center gap-2 font-bold text-sm transition-colors ${mobileView === 'MAP' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/5'}`}
+        >
+          <FiMapPin size={16} /> Ver en Mapa
+        </button>
+      </div>
+
+      {/* PANEL LATERAL IZQUIERDO (Oculto en móvil si está el mapa activo) */}
+      <div className={`w-full md:w-[420px] lg:w-[480px] h-full flex flex-col bg-[#05050A] border-r border-white/10 shrink-0 z-10 shadow-2xl ${mobileView === 'MAP' ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-5 border-b border-white/5 shrink-0 bg-[#0B0B12]">
-          <h1 className="text-xl font-bold text-white mb-4">Sistema Logístico</h1>
+          <div className="flex justify-between items-start mb-4">
+            <h1 className="text-xl font-bold text-white">Sistema Logístico</h1>
+            
+            {/* INDICADOR DE GPS */}
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest border ${
+              gpsStatus === 'ACTIVE' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+              gpsStatus === 'ERROR' ? 'bg-red-500/10 border-red-500/20 text-red-400' :
+              'bg-amber-500/10 border-amber-500/20 text-amber-400'
+            }`}>
+              {gpsStatus === 'ACTIVE' && <FiNavigation size={10} className="animate-pulse" />}
+              {gpsStatus === 'ERROR' && <FiAlertTriangle size={10} />}
+              {gpsStatus === 'SEARCHING' && <FiLoader size={10} className="animate-spin" />}
+              {gpsStatus === 'ACTIVE' ? 'GPS Activo' : gpsStatus === 'ERROR' ? 'Sin Señal' : 'Buscando GPS'}
+            </div>
+          </div>
           
           {routeInfo && (
             <div className="mb-4">
@@ -384,7 +419,7 @@ export default function CarteraActiva() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-track]:bg-transparent">
+        <div className="flex-1 overflow-y-auto pb-20 md:pb-0 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-track]:bg-transparent">
           {isLoading ? (
             <div className="p-10 flex flex-col items-center justify-center gap-3 text-slate-400">
               <FiLoader className="animate-spin text-blue-500" size={24} />
@@ -412,7 +447,6 @@ export default function CarteraActiva() {
               const prestamoTerminado = loan?.installmentDetails?.every((i: any) => i.status === 'PAID');
               const hasPaidToday = loan?.installmentDetails?.some((i: any) => i.dueDate.startsWith(deviceTodayStr) && i.status === 'PAID');
 
-              // LÓGICA DE ALERTA RENEGOCIAR: Fecha inferior a hoy y no está pagada ni renegociada
               const dbDateActiva = cuotaActiva ? cuotaActiva.dueDate.split('T')[0] : null;
               const requiereRenegociar = cuotaActiva && dbDateActiva && dbDateActiva < deviceTodayStr && cuotaActiva.status !== 'PAID' && cuotaActiva.status !== 'RENEGOTIATED';
 
@@ -422,6 +456,9 @@ export default function CarteraActiva() {
                   onClick={() => {
                     if (client.latitude && client.longitude) {
                       setFocusCoords([client.latitude, client.longitude]);
+                      if (window.innerWidth < 768) {
+                         setMobileView('MAP'); // En móvil, si le da click, lo lleva al mapa para verlo
+                      }
                     }
                   }}
                   className={`flex p-4 border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer group ${cuotaActiva?.status === 'RENEGOTIATED' ? 'bg-orange-500/5' : ''}`}
@@ -459,13 +496,11 @@ export default function CarteraActiva() {
                            </span>
                         </div>
 
-                        {/* --- INICIO DE LA ALERTA RENEGOCIAR EN RUTA --- */}
                         {requiereRenegociar && (
                           <div className="mb-2 text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-1 rounded inline-flex items-center gap-1 uppercase border border-red-500/20">
                             <FiAlertTriangle size={10} /> RENEGOCIAR
                           </div>
                         )}
-                        {/* --- FIN DE LA ALERTA --- */}
 
                         {cuotaActiva.status === 'RENEGOTIATED' && (
                           <div className="mb-2 text-[10px] font-bold text-orange-400 bg-orange-500/10 px-2 py-1 rounded inline-block uppercase">
@@ -561,8 +596,8 @@ export default function CarteraActiva() {
         </div>
       </div>
 
-      {/* ÁREA DERECHA: MAPA */}
-      <div className="flex-1 h-[50vh] md:h-full relative z-0">
+      {/* ÁREA DERECHA: MAPA (Oculta en móvil si está la lista activa) */}
+      <div className={`flex-1 h-full relative z-0 ${mobileView === 'LIST' ? 'hidden md:block' : 'block'}`}>
         <button
           onClick={() => setMapTheme(prev => prev === 'light' ? 'dark' : 'light')}
           className="absolute top-4 right-4 z-[400] p-2.5 bg-[#05050A]/80 backdrop-blur-md text-white rounded-lg shadow-xl border border-white/10 hover:bg-white/5 transition-all"
@@ -1143,4 +1178,4 @@ export default function CarteraActiva() {
 
     </div>
   );
-}
+} 
