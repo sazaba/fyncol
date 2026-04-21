@@ -228,6 +228,8 @@ export const eliminarRuta = async (req: AuthRequest, res: Response): Promise<voi
 
 // fyncol-server/controllers/rutas.controller.ts
 
+// fyncol-server/controllers/rutas.controller.ts
+
 export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -238,9 +240,7 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    const hoyInicio = new Date();
-    hoyInicio.setHours(0, 0, 0, 0);
-
+    // Solo necesitamos el final del día de hoy para saber el límite de tiempo
     const hoyFin = new Date();
     hoyFin.setHours(23, 59, 59, 999);
 
@@ -255,16 +255,23 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // 2. Buscamos los clientes de esa ruta con cobros pendientes para hoy
+    // 2. Buscamos los clientes de esa ruta
     const clientesDeHoy = await prisma.client.findMany({
       where: {
         routeId: Number(id),
         loans: {
           some: {
+            isActive: true,
             installmentDetails: {
               some: {
-                dueDate: { gte: hoyInicio, lte: hoyFin },
-                status: { in: ['PENDING', 'PARTIAL'] }
+                // El estado NO debe ser PAID (traerá PENDING, PARTIAL, OVERDUE, RENEGOTIATED)
+                status: { not: 'PAID' }, 
+                OR: [
+                  // Cuotas vencidas o de hoy
+                  { dueDate: { lte: hoyFin } }, 
+                  // O cuotas con promesa de pago para hoy o antes
+                  { promiseDate: { lte: hoyFin } } 
+                ]
               }
             }
           }
