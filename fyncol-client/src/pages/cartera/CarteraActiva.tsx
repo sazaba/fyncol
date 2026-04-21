@@ -59,7 +59,7 @@ export default function CarteraActiva() {
   const [mapTheme, setMapTheme] = useState<'light' | 'dark'>('light');
   const [focusCoords, setFocusCoords] = useState<[number, number] | null>(null);
   
-  // NUEVO ESTADO: Controla qué vista se ve en móviles (Lista o Mapa)
+  // ESTADO MÓVIL
   const [mobileView, setMobileView] = useState<'LIST' | 'MAP'>('LIST');
 
   const [selectedClient, setSelectedClient] = useState<any>(null); 
@@ -330,26 +330,32 @@ export default function CarteraActiva() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-[calc(100dvh-64px)] w-full bg-[#0B0B12] overflow-hidden relative">
+    <div className="relative flex h-[calc(100vh-64px)] w-full bg-[#0B0B12] overflow-hidden">
       
-      {/* BOTONES DE CONTROL (SOLO MÓVIL) */}
-      <div className="md:hidden flex bg-[#05050A] p-2 shrink-0 border-b border-white/10 z-20">
+      {/* BOTONES FLOTANTES (SOLO MÓVIL) */}
+      <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-[400] flex bg-[#05050A]/95 backdrop-blur-xl p-1.5 rounded-2xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.5)] w-[85%] max-w-[320px]">
         <button 
           onClick={() => setMobileView('LIST')}
-          className={`flex-1 py-2.5 rounded-lg flex items-center justify-center gap-2 font-bold text-sm transition-colors ${mobileView === 'LIST' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/5'}`}
+          className={`flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 font-bold text-sm transition-all ${mobileView === 'LIST' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
         >
-          <FiList size={16} /> Lista de Ruta
+          <FiList size={16} /> Lista
         </button>
         <button 
           onClick={() => setMobileView('MAP')}
-          className={`flex-1 py-2.5 rounded-lg flex items-center justify-center gap-2 font-bold text-sm transition-colors ${mobileView === 'MAP' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/5'}`}
+          className={`flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 font-bold text-sm transition-all ${mobileView === 'MAP' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
         >
-          <FiMapPin size={16} /> Ver en Mapa
+          <FiMapPin size={16} /> Mapa
         </button>
       </div>
 
-      {/* PANEL LATERAL IZQUIERDO (Oculto en móvil si está el mapa activo) */}
-      <div className={`w-full md:w-[420px] lg:w-[480px] h-full flex flex-col bg-[#05050A] border-r border-white/10 shrink-0 z-10 shadow-2xl ${mobileView === 'MAP' ? 'hidden md:flex' : 'flex'}`}>
+      {/* PANEL LATERAL IZQUIERDO (Lista) - Ahora se desliza suavemente en móvil */}
+      <div className={`
+        absolute md:relative inset-0 md:inset-auto 
+        w-full md:w-[420px] lg:w-[480px] h-full 
+        flex flex-col bg-[#05050A] border-r border-white/10 shrink-0 
+        shadow-2xl transition-transform duration-300 ease-in-out z-[100] md:z-10
+        ${mobileView === 'MAP' ? '-translate-x-full md:translate-x-0' : 'translate-x-0'}
+      `}>
         <div className="p-5 border-b border-white/5 shrink-0 bg-[#0B0B12]">
           <div className="flex justify-between items-start mb-4">
             <h1 className="text-xl font-bold text-white">Sistema Logístico</h1>
@@ -363,7 +369,7 @@ export default function CarteraActiva() {
               {gpsStatus === 'ACTIVE' && <FiNavigation size={10} className="animate-pulse" />}
               {gpsStatus === 'ERROR' && <FiAlertTriangle size={10} />}
               {gpsStatus === 'SEARCHING' && <FiLoader size={10} className="animate-spin" />}
-              {gpsStatus === 'ACTIVE' ? 'GPS Activo' : gpsStatus === 'ERROR' ? 'Sin Señal' : 'Buscando GPS'}
+              {gpsStatus === 'ACTIVE' ? 'GPS Activo' : gpsStatus === 'ERROR' ? 'Sin Señal' : 'Buscando...'}
             </div>
           </div>
           
@@ -419,7 +425,7 @@ export default function CarteraActiva() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto pb-20 md:pb-0 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-track]:bg-transparent">
+        <div className="flex-1 overflow-y-auto pb-24 md:pb-0 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-track]:bg-transparent">
           {isLoading ? (
             <div className="p-10 flex flex-col items-center justify-center gap-3 text-slate-400">
               <FiLoader className="animate-spin text-blue-500" size={24} />
@@ -431,10 +437,12 @@ export default function CarteraActiva() {
             </div>
           ) : (
             filteredData.map((client, index) => {
-              const loan = client.loans[0];
+              const loan = client.loans?.[0];
+              if (!loan) return null;
+              
               const deviceTodayStr = getDeviceTodayStr();
               
-              const cuotaActiva = loan?.installmentDetails?.find((i: any) => {
+              const cuotaActiva = loan.installmentDetails?.find((i: any) => {
                 if (i.status === 'PAID') return false;
                 const dbDate = i.dueDate.split('T')[0];
                 const promiseDateStr = i.promiseDate ? i.promiseDate.split('T')[0] : null;
@@ -444,8 +452,8 @@ export default function CarteraActiva() {
                 return isDueToday || isPromisedToday || i.status === 'RENEGOTIATED' || i.status === 'OVERDUE';
               });
 
-              const prestamoTerminado = loan?.installmentDetails?.every((i: any) => i.status === 'PAID');
-              const hasPaidToday = loan?.installmentDetails?.some((i: any) => i.dueDate.startsWith(deviceTodayStr) && i.status === 'PAID');
+              const prestamoTerminado = loan.installmentDetails ? loan.installmentDetails.every((i: any) => i.status === 'PAID') : false;
+              const hasPaidToday = loan.installmentDetails ? loan.installmentDetails.some((i: any) => i.dueDate.startsWith(deviceTodayStr) && i.status === 'PAID') : false;
 
               const dbDateActiva = cuotaActiva ? cuotaActiva.dueDate.split('T')[0] : null;
               const requiereRenegociar = cuotaActiva && dbDateActiva && dbDateActiva < deviceTodayStr && cuotaActiva.status !== 'PAID' && cuotaActiva.status !== 'RENEGOTIATED';
@@ -457,7 +465,7 @@ export default function CarteraActiva() {
                     if (client.latitude && client.longitude) {
                       setFocusCoords([client.latitude, client.longitude]);
                       if (window.innerWidth < 768) {
-                         setMobileView('MAP'); // En móvil, si le da click, lo lleva al mapa para verlo
+                         setMobileView('MAP'); 
                       }
                     }
                   }}
@@ -530,7 +538,7 @@ export default function CarteraActiva() {
                               <button 
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  const faltante = Number(cuotaActiva.expectedAmount) - Number(cuotaActiva.paidAmount || 0);
+                                  const faltante = Math.round(Number(cuotaActiva.expectedAmount) - Number(cuotaActiva.paidAmount || 0));
                                   setConfirmPayModal({ open: true, inst: cuotaActiva, faltante });
                                 }} 
                                 className="flex-[2] bg-blue-600 hover:bg-blue-500 py-1.5 rounded text-white text-[10px] font-bold flex justify-center items-center transition-all"
@@ -543,7 +551,7 @@ export default function CarteraActiva() {
                                   setManualPayModal({ open: true, inst: cuotaActiva, loan }); 
                                   setManualAmount(""); 
                                   
-                                  const futureInstallmentsUI = loan?.installmentDetails?.filter(
+                                  const futureInstallmentsUI = loan.installmentDetails?.filter(
                                     (i: any) => i.installmentNumber > cuotaActiva.installmentNumber && i.status !== 'PAID'
                                   ) || [];
                                   setSaldoAction(futureInstallmentsUI.length > 0 ? 'PROXIMA_CUOTA' : 'PROXIMA_CUOTA');
@@ -558,7 +566,7 @@ export default function CarteraActiva() {
                                   e.stopPropagation(); 
                                   setOverdueModal({ open: true, inst: cuotaActiva, loan: loan }); 
                                   
-                                  const isDiario = loan?.periodicity === 'DIARIO';
+                                  const isDiario = loan.periodicity === 'DIARIO';
                                   setOverdueAction(isDiario ? 'PROXIMA_CUOTA' : 'SOLO_MORA'); 
                                 }}
                                 className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 py-1.5 rounded text-[10px] font-bold flex justify-center items-center transition-all"
@@ -596,8 +604,8 @@ export default function CarteraActiva() {
         </div>
       </div>
 
-      {/* ÁREA DERECHA: MAPA (Oculta en móvil si está la lista activa) */}
-      <div className={`flex-1 h-full relative z-0 ${mobileView === 'LIST' ? 'hidden md:block' : 'block'}`}>
+      {/* ÁREA DERECHA: MAPA - Ahora siempre existe pero se acomoda visualmente en móvil */}
+      <div className="flex-1 h-full relative z-0">
         <button
           onClick={() => setMapTheme(prev => prev === 'light' ? 'dark' : 'light')}
           className="absolute top-4 right-4 z-[400] p-2.5 bg-[#05050A]/80 backdrop-blur-md text-white rounded-lg shadow-xl border border-white/10 hover:bg-white/5 transition-all"
@@ -620,7 +628,8 @@ export default function CarteraActiva() {
           )}
           {filteredData.map(client => {
             const deviceTodayStr = getDeviceTodayStr();
-            const hasPaidToday = client.loans[0]?.installmentDetails?.some((i: any) => i.dueDate.startsWith(deviceTodayStr) && i.status === 'PAID');
+            const loan = client.loans?.[0];
+            const hasPaidToday = loan?.installmentDetails ? loan.installmentDetails.some((i: any) => i.dueDate.startsWith(deviceTodayStr) && i.status === 'PAID') : false;
             
             return client.latitude && (
               <Marker key={client.id} position={[client.latitude, client.longitude]} icon={hasPaidToday ? greenIcon : redIcon}>
@@ -1178,4 +1187,4 @@ export default function CarteraActiva() {
 
     </div>
   );
-} 
+}
