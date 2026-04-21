@@ -125,7 +125,6 @@ export default function CarteraActiva() {
       const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase());
       if (!matchesSearch) return false;
 
-      // --- FILTRO CORREGIDO (Oculta las renegociadas de la ruta activa HOY) ---
       const cuotaActiva = loan?.installmentDetails?.find((i: any) => {
         if (i.status === 'PAID') return false;
 
@@ -136,12 +135,8 @@ export default function CarteraActiva() {
         const isPromisedToday = promiseDateStr && promiseDateStr <= deviceTodayStr;
         
         if (filter === 'HOY') {
-            // Si la cuota ya fue renegociada o gestionada, no la muestres en "Ruta"
             if (i.status === 'RENEGOTIATED') return false; 
-            
-            // Si tiene promesa en el futuro, ocúltala de HOY
             if (promiseDateStr && promiseDateStr > deviceTodayStr) return false;
-            
             return isDueToday || isPromisedToday;
         }
 
@@ -369,6 +364,10 @@ export default function CarteraActiva() {
               const prestamoTerminado = loan?.installmentDetails?.every((i: any) => i.status === 'PAID');
               const hasPaidToday = loan?.installmentDetails?.some((i: any) => i.dueDate.startsWith(deviceTodayStr) && i.status === 'PAID');
 
+              // LÓGICA DE ALERTA RENEGOCIAR: Fecha inferior a hoy y no está pagada ni renegociada
+              const dbDateActiva = cuotaActiva ? cuotaActiva.dueDate.split('T')[0] : null;
+              const requiereRenegociar = cuotaActiva && dbDateActiva && dbDateActiva < deviceTodayStr && cuotaActiva.status !== 'PAID' && cuotaActiva.status !== 'RENEGOTIATED';
+
               return (
                 <div 
                   key={client.id}
@@ -412,6 +411,14 @@ export default function CarteraActiva() {
                            </span>
                         </div>
 
+                        {/* --- INICIO DE LA ALERTA RENEGOCIAR EN RUTA --- */}
+                        {requiereRenegociar && (
+                          <div className="mb-2 text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-1 rounded inline-flex items-center gap-1 uppercase border border-red-500/20">
+                            <FiAlertTriangle size={10} /> RENEGOCIAR
+                          </div>
+                        )}
+                        {/* --- FIN DE LA ALERTA --- */}
+
                         {cuotaActiva.status === 'RENEGOTIATED' && (
                           <div className="mb-2 text-[10px] font-bold text-orange-400 bg-orange-500/10 px-2 py-1 rounded inline-block uppercase">
                             MORA RENEGOCIADA
@@ -423,7 +430,6 @@ export default function CarteraActiva() {
                           </div>
                         )}
 
-                        {/* RENDERIZADO DE LA DESCRIPCIÓN DE LA BITÁCORA (SI EXISTE) */}
                         {cuotaActiva.actionDescription && (
                           <div className="mb-2 text-[10px] font-medium text-slate-400 bg-black/20 p-1.5 rounded flex items-center gap-1.5 italic border border-white/5">
                             <FiInfo className="shrink-0 text-blue-400" size={12} />
@@ -469,7 +475,6 @@ export default function CarteraActiva() {
                                   e.stopPropagation(); 
                                   setOverdueModal({ open: true, inst: cuotaActiva, loan: loan }); 
                                   
-                                  // OCULTAR SOLO MORA SI ES DIARIO
                                   const isDiario = loan?.periodicity === 'DIARIO';
                                   setOverdueAction(isDiario ? 'PROXIMA_CUOTA' : 'SOLO_MORA'); 
                                 }}
@@ -926,6 +931,12 @@ export default function CarteraActiva() {
               {modalTab === 'PLAN' && (
                 selectedClient.loans[0]?.installmentDetails?.map((inst: any) => {
                   
+                  // --- INICIO LÓGICA DE ALERTA RENEGOCIAR EN MODAL ---
+                  const instDbDate = inst.dueDate.split('T')[0];
+                  const deviceTodayStr = getDeviceTodayStr();
+                  const requiereRenegociarModal = instDbDate < deviceTodayStr && inst.status !== 'PAID' && inst.status !== 'RENEGOTIATED';
+                  // --- FIN LÓGICA ---
+
                   return (
                     <div key={inst.id} className={`flex flex-col gap-3 p-4 rounded-2xl border transition-colors ${inst.status === 'RENEGOTIATED' ? 'bg-orange-500/5 border-orange-500/10' : inst.status === 'PAID' ? 'bg-emerald-500/5 border-emerald-500/10' : inst.status === 'PARTIAL' ? 'bg-blue-500/5 border-blue-500/10' : 'bg-[#0B0B12] border-white/5 hover:border-white/10'}`}>
                       <div className="flex items-center justify-between">
@@ -942,13 +953,19 @@ export default function CarteraActiva() {
                              )}
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right flex flex-col items-end">
                            <p className={`font-bold text-base ${inst.status === 'RENEGOTIATED' ? 'text-orange-400' : inst.status === 'PAID' ? 'text-emerald-400' : inst.status === 'OVERDUE' ? 'text-red-400' : 'text-white'}`}>
                              ${Math.round(Number(inst.expectedAmount) || 0).toLocaleString('es-CO')}
                            </p>
                            <p className={`text-[10px] uppercase font-bold tracking-wider mt-1 ${inst.status === 'RENEGOTIATED' ? 'text-orange-400' : inst.status === 'PARTIAL' ? 'text-blue-400' : 'text-slate-500'}`}>
                              {inst.status === 'PARTIAL' ? `Faltan $${Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount)).toLocaleString('es-CO')}` : traducirEstado(inst.status)}
                            </p>
+                           {/* ETIQUETA RENEGOCIAR EN EL MODAL */}
+                           {requiereRenegociarModal && (
+                             <div className="mt-1.5 text-[9px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded flex items-center gap-1 uppercase border border-red-500/20">
+                               <FiAlertTriangle size={10} /> RENEGOCIAR
+                             </div>
+                           )}
                         </div>
                       </div>
 
