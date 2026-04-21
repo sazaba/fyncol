@@ -5,7 +5,7 @@ import logo from "@/assets/logo.png";
 import { 
   FiHome, FiSettings, FiUsers, FiLogOut, FiChevronDown, FiX, 
   FiGlobe, FiMap, FiDollarSign, FiBriefcase, FiUserPlus, FiCheckCircle, FiShield, FiActivity 
-} from "react-icons/fi"; // <-- Añadido FiActivity
+} from "react-icons/fi";
 
 export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (val: boolean) => void }) {
   const location = useLocation();
@@ -39,20 +39,20 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
 
   // Condiciones de renderizado según el rol
   const showCartera = userRole === 'COBRADOR';
-  const showAdministracion = userRole === 'ADMIN' || userRole === 'SUPERVISOR' || userRole === 'SUPERADMIN'; // Añadido SUPERADMIN por si acaso
+  const showAdministracion = userRole === 'ADMIN' || userRole === 'SUPERVISOR' || userRole === 'SUPERADMIN'; 
 
   return (
     <>
-      {/* Overlay oscuro para móvil cuando el menú está abierto */}
+      {/* Overlay oscuro para móvil - SOLUCIÓN Z-INDEX (z-[9998]) */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-sm"
+          className="fixed inset-0 bg-black/60 z-[9998] md:hidden backdrop-blur-sm"
           onClick={() => setIsOpen(false)}
         />
       )}
 
-      {/* Sidebar Principal */}
-      <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 flex flex-col border-r border-white/5 bg-[#05050A] transition-transform duration-300 ease-in-out font-inter ${isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}>
+      {/* Sidebar Principal - SOLUCIÓN Z-INDEX (z-[9999]) */}
+      <aside className={`fixed md:static inset-y-0 left-0 z-[9999] w-64 flex flex-col border-r border-white/5 bg-[#05050A] transition-transform duration-300 ease-in-out font-inter ${isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}>
         
         {/* Cabecera Sidebar (Logo Clickeable) */}
         <div className="flex h-16 items-center justify-between md:justify-center px-4 md:px-0 border-b border-white/5 shrink-0">
@@ -73,7 +73,7 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
           
           <NavItem label="Dashboard" path="/dashboard" icon={<FiHome size={20} />} active={isActive("/dashboard")} onClick={() => setIsOpen(false)} />
           
-          {/* NUEVO BOTÓN: BURÓ INTERNO PARA TODOS */}
+          {/* BURÓ INTERNO PARA TODOS */}
           <NavItem label="Buró Interno" path="/buro" icon={<FiShield size={20} />} active={isActive("/buro")} onClick={() => setIsOpen(false)} />
           
           {/* SECCIÓN: EMPRESA (Oculta para cobradores) */}
@@ -91,7 +91,7 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
                 <FiChevronDown className={`transition-transform duration-300 ${isAdminOpen ? "rotate-180 text-white" : ""}`} />
               </button>
 
-              <div className={`overflow-hidden transition-all duration-300 ${isAdminOpen ? "max-h-60 opacity-100" : "max-h-0 opacity-0"}`}> {/* Aumentado max-h a 60 para que quepa el nuevo link */}
+              <div className={`overflow-hidden transition-all duration-300 ${isAdminOpen ? "max-h-60 opacity-100" : "max-h-0 opacity-0"}`}> 
                 <div className="mt-1 ml-4 border-l border-white/10 pl-2 space-y-1">
                   <Link 
                     to="/admin/usuarios" 
@@ -122,7 +122,7 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
                     <FiCheckCircle size={16} /> Cierres Diarios
                   </Link>
                   
-                  {/* NUEVO BOTÓN: MONITOREO */}
+                  {/* BOTÓN: MONITOREO */}
                   <Link 
                     to="/admin/monitoreo" 
                     onClick={() => setIsOpen(false)} 

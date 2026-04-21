@@ -98,7 +98,7 @@ export default function CarteraActiva() {
           lat: position.coords.latitude,
           lng: position.coords.longitude
         };
-        setGpsStatus('ACTIVE');
+        setGpsStatus(prev => prev !== 'ACTIVE' ? 'ACTIVE' : prev);
       },
       (error) => {
         console.error("Error al obtener GPS:", error);
