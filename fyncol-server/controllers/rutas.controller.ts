@@ -303,7 +303,6 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
-
 export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const companyId = req.user?.companyId;
@@ -318,22 +317,26 @@ export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise
     const hoyFin = new Date();
     hoyFin.setHours(23, 59, 59, 999);
 
-    // Buscamos TODAS las rutas de la empresa con sus cobradores y las cuotas de hoy
+    // CORRECCIÓN: Estructura de consulta respetando la relación Route -> Client -> Loan
     const rutas = await prisma.route.findMany({
       where: { companyId, isActive: true },
       include: {
         assignedTo: true,
-        loans: {
-          where: { isActive: true },
+        clients: { // Primero incluimos a los clientes de la ruta
           include: {
-            installmentDetails: {
-              where: {
-                dueDate: { gte: hoyInicio, lte: hoyFin }
-              }
-            },
-            payments: {
-              where: {
-                createdAt: { gte: hoyInicio, lte: hoyFin }
+            loans: { // Luego incluimos los préstamos de esos clientes
+              where: { isActive: true },
+              include: {
+                installmentDetails: {
+                  where: {
+                    dueDate: { gte: hoyInicio, lte: hoyFin }
+                  }
+                },
+                payments: {
+                  where: {
+                    createdAt: { gte: hoyInicio, lte: hoyFin }
+                  }
+                }
               }
             }
           }
@@ -341,29 +344,33 @@ export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise
       }
     });
 
-    // SOLUCIÓN: Agregamos ": any" a ruta, loan y pago para satisfacer a TypeScript
+    // CORRECCIÓN: Mapeo de datos ajustado a la nueva estructura
     const summary = rutas.map((ruta: any) => {
       let clientesTotales = 0;
       let clientesCobrados = 0;
       let clientesMora = 0;
       let totalRecaudado = 0;
 
-      ruta.loans.forEach((loan: any) => {
-        // Asumiendo 1 préstamo activo = 1 cliente en la ruta de hoy
-        if (loan.installmentDetails.length > 0) {
-          clientesTotales++;
-          
-          const cuotaHoy = loan.installmentDetails[0];
-          if (cuotaHoy.status === 'PAID') {
-            clientesCobrados++;
-          } else if (cuotaHoy.status === 'OVERDUE') {
-            clientesMora++;
+      // Iteramos sobre los clientes de la ruta primero
+      ruta.clients.forEach((client: any) => {
+        // Luego iteramos sobre los préstamos del cliente
+        client.loans.forEach((loan: any) => {
+          // Asumiendo 1 préstamo activo = 1 cliente en la ruta de hoy
+          if (loan.installmentDetails.length > 0) {
+            clientesTotales++;
+            
+            const cuotaHoy = loan.installmentDetails[0];
+            if (cuotaHoy.status === 'PAID') {
+              clientesCobrados++;
+            } else if (cuotaHoy.status === 'OVERDUE') {
+              clientesMora++;
+            }
           }
-        }
 
-        // Sumar pagos hechos hoy a este préstamo
-        loan.payments.forEach((pago: any) => {
-          totalRecaudado += Number(pago.amount);
+          // Sumar pagos hechos hoy a este préstamo
+          loan.payments.forEach((pago: any) => {
+            totalRecaudado += Number(pago.amount);
+          });
         });
       });
 
