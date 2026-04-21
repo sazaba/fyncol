@@ -123,7 +123,7 @@ export default function CarteraActiva() {
           latitude: latestCoords.current.lat,
           longitude: latestCoords.current.lng
         })
-      }).catch((e) => console.warn("Fallo de sincronización GPS silencioso"));
+      }).catch(() => console.warn("Fallo de sincronización GPS silencioso"));
       
     }, 15000);
 
