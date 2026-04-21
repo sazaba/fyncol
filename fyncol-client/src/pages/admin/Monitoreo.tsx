@@ -23,11 +23,53 @@ interface DashboardData {
 
 export default function Monitoreo() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [routesList, setRoutesList] = useState<any[]>([]); // Para guardar las rutas reales
   const [isLoading, setIsLoading] = useState(true);
-  const [routeId, setRouteId] = useState<number>(1); // Por defecto ruta 1, puedes dinamizarlo
+  const [routeId, setRouteId] = useState<number | null>(null); // Inicia nulo
   const [error, setError] = useState<string | null>(null);
 
+  // 1. OBTENER LAS RUTAS REALES DE LA EMPRESA
+  const fetchRoutes = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      
+      // Apuntamos al endpoint que maneja la información del capital y las rutas
+      const res = await fetch(`${baseUrl}/api/capital`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      const result = await res.json();
+      if (res.ok && result.success) {
+        // Asumimos que la data viene en result.data según tu controlador de capital
+        const rutasArray = result.data || [];
+        
+        if (rutasArray.length > 0) {
+          setRoutesList(rutasArray);
+          setRouteId(rutasArray[0].id); // Auto-selecciona la primera ruta real
+        } else {
+          setError("No tienes rutas creadas en tu empresa.");
+          setIsLoading(false);
+        }
+      } else {
+        setError("Error al obtener la lista de rutas.");
+        setIsLoading(false);
+      }
+    } catch (err) {
+      setError("Error de conexión al cargar rutas.");
+      setIsLoading(false);
+    }
+  };
+
+  // 2. CARGAR RUTAS AL INICIAR
+  useEffect(() => {
+    fetchRoutes();
+  }, []);
+
+  // 3. CARGAR DATOS DEL DASHBOARD CADA VEZ QUE CAMBIE LA RUTA SELECCIONADA
   const fetchDashboardData = async () => {
+    if (!routeId) return; // Si no hay ruta seleccionada, no hace nada
+    
     setIsLoading(true);
     setError(null);
     try {
@@ -42,7 +84,7 @@ export default function Monitoreo() {
       if (res.ok && result.success) {
         setData(result.data);
       } else {
-        setError(result.error || "Error al cargar los datos");
+        setError(result.error || "Error al cargar los datos del monitoreo");
       }
     } catch (err) {
       setError("Error de conexión con el servidor");
@@ -54,7 +96,7 @@ export default function Monitoreo() {
   useEffect(() => {
     fetchDashboardData();
     
-    // Opcional: Actualizar automáticamente cada 5 minutos
+    // Actualizar automáticamente cada 5 minutos
     const interval = setInterval(fetchDashboardData, 300000);
     return () => clearInterval(interval);
   }, [routeId]);
@@ -91,23 +133,28 @@ export default function Monitoreo() {
         </div>
         
         <div className="flex items-center gap-3">
-          <div className="bg-[#05050A] border border-white/10 rounded-xl px-4 py-2 flex items-center gap-2">
-            <FiMap className="text-slate-400" size={16} />
-            <select 
-              value={routeId}
-              onChange={(e) => setRouteId(Number(e.target.value))}
-              className="bg-transparent text-white text-sm font-semibold outline-none appearance-none pr-4 cursor-pointer"
-            >
-              {/* Aquí podrías mapear tus rutas reales. Por ahora dejo 3 de ejemplo */}
-              <option value={1} className="bg-[#0B0B12]">Ruta Principal (1)</option>
-              <option value={2} className="bg-[#0B0B12]">Ruta Norte (2)</option>
-              <option value={3} className="bg-[#0B0B12]">Ruta Sur (3)</option>
-            </select>
-          </div>
+          {routesList.length > 0 && (
+            <div className="bg-[#05050A] border border-white/10 rounded-xl px-4 py-2 flex items-center gap-2">
+              <FiMap className="text-slate-400" size={16} />
+              <select 
+                value={routeId || ''}
+                onChange={(e) => setRouteId(Number(e.target.value))}
+                className="bg-transparent text-white text-sm font-semibold outline-none appearance-none pr-4 cursor-pointer"
+              >
+                {/* MAPEO DINÁMICO DE TUS RUTAS REALES */}
+                {routesList.map(ruta => (
+                  <option key={ruta.id} value={ruta.id} className="bg-[#0B0B12]">
+                    {ruta.city || ruta.name || `Ruta ${ruta.id}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           
           <button 
             onClick={fetchDashboardData}
-            className="p-2.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-500/30 rounded-xl transition-all"
+            disabled={!routeId || isLoading}
+            className="p-2.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-500/30 rounded-xl transition-all disabled:opacity-50"
             title="Actualizar datos"
           >
             <FiRefreshCw size={18} className={isLoading ? "animate-spin" : ""} />
