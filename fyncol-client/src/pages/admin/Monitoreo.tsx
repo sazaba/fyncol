@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { 
   FiDollarSign, FiTrendingUp, FiUsers, FiAlertTriangle, 
   FiPieChart, FiActivity, FiRefreshCw, FiTarget, FiLoader, FiMap,
-  FiChevronRight, FiUser, FiArrowLeft
+  FiChevronRight, FiUser, FiArrowLeft, FiMapPin, FiChevronDown
 } from 'react-icons/fi';
 
 import TodayRouteCard from "@/components/admin/TodayRouteCard";
@@ -48,6 +48,9 @@ export default function Monitoreo() {
   const [view, setView] = useState<'LIST' | 'DETAIL'>('LIST');
   const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
   const [selectedRouteName, setSelectedRouteName] = useState<string>("");
+  
+  // NUEVO: Estado para expandir/colapsar el mapa
+  const [isMapExpanded, setIsMapExpanded] = useState<boolean>(false);
 
   // Estados de Datos
   const [routesSummary, setRoutesSummary] = useState<RouteSummary[]>([]);
@@ -130,6 +133,7 @@ export default function Monitoreo() {
   const handleSelectRoute = (routeId: number, routeName: string) => {
     setSelectedRouteId(routeId);
     setSelectedRouteName(routeName);
+    setIsMapExpanded(false); // Reinicia el acordeón del mapa al entrar a una nueva ruta
     setView('DETAIL');
   };
 
@@ -137,6 +141,7 @@ export default function Monitoreo() {
     setView('LIST');
     setSelectedRouteId(null);
     setDashboardData(null);
+    setIsMapExpanded(false); // Cierra el mapa al salir
   };
 
   // Tarjeta reutilizable para el Dashboard
@@ -165,7 +170,7 @@ export default function Monitoreo() {
           {view === 'DETAIL' && (
             <button 
               onClick={handleBackToList}
-              className="p-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-all active:scale-95"
+              className="p-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-all active:scale-95 shrink-0"
             >
               <FiArrowLeft size={20} />
             </button>
@@ -183,7 +188,7 @@ export default function Monitoreo() {
         <button 
           onClick={() => view === 'LIST' ? fetchRoutesSummary() : fetchDashboardData(selectedRouteId!)}
           disabled={isLoading}
-          className="p-2.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-500/30 rounded-xl transition-all disabled:opacity-50 flex items-center gap-2 text-sm font-semibold"
+          className="p-2.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-500/30 rounded-xl transition-all disabled:opacity-50 flex items-center gap-2 text-sm font-semibold shrink-0"
         >
           <FiRefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
           Actualizar
@@ -205,7 +210,7 @@ export default function Monitoreo() {
       ) : (
         <>
           {/* ========================================== */}
-          {/* VISTA 1: LISTA DE RUTAS (Estilo de la foto) */}
+          {/* VISTA 1: LISTA DE RUTAS */}
           {/* ========================================== */}
           {view === 'LIST' && (
             <div className="space-y-3 animate-[fadeIn_0.2s_ease-out]">
@@ -255,7 +260,6 @@ export default function Monitoreo() {
 
                       {/* 3. Círculo de Cumplimiento y Stats Textuales */}
                       <div className="flex items-center gap-4 flex-1 w-full">
-                        {/* Círculo SVG */}
                         <div className="relative h-12 w-12 flex items-center justify-center shrink-0">
                           <svg className="transform -rotate-90 w-12 h-12">
                             <circle cx="24" cy="24" r={circleRadius} stroke="currentColor" strokeWidth="3" fill="transparent" className="text-white/10" />
@@ -269,7 +273,6 @@ export default function Monitoreo() {
                           </span>
                         </div>
                         
-                        {/* Stats en Texto */}
                         <div>
                           <p className="text-[10px] font-bold tracking-widest text-slate-500 uppercase">Progreso</p>
                           <p className="text-xs text-slate-300 font-medium flex gap-2 mt-0.5">
@@ -309,12 +312,9 @@ export default function Monitoreo() {
           {/* VISTA 2: DASHBOARD DETALLADO DE UNA RUTA */}
           {/* ========================================== */}
           {view === 'DETAIL' && dashboardData && (
-            <div className="space-y-6 animate-[fadeIn_0.2s_ease-out]">
+            <div className="space-y-6 animate-[fadeIn_0.2s_ease-out] pb-10">
               
-              {/* SECCIÓN 1: MAPA Y LISTA DE HOY (Ocupa el tope ahora para mayor relevancia) */}
-              <TodayRouteCard routeId={selectedRouteId!} />
-
-              {/* SECCIÓN 2: RENDIMIENTO Y PROYECCIÓN */}
+              {/* Rendimiento */}
               <div className="bg-[#05050A] border border-white/5 rounded-3xl p-6 relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-white/5">
                    <div 
@@ -345,14 +345,14 @@ export default function Monitoreo() {
                 </div>
               </div>
 
-              {/* SECCIÓN 3: CAJA Y LIQUIDEZ */}
+              {/* Caja, Liquidez y Recaudo */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <StatCard title="Caja Inicial" value={formatCurrency(dashboardData.cajaInicial)} icon={FiDollarSign} colorClass="text-white" />
                 <StatCard title="Saldo Disponible" value={formatCurrency(dashboardData.saldoDisponible)} icon={FiPieChart} colorClass="text-blue-400" subtitle="Capital actual en la calle" />
                 <StatCard title="Recaudo del Día" value={formatCurrency(dashboardData.recaudoDia)} icon={FiTrendingUp} colorClass="text-emerald-400" />
               </div>
 
-              {/* SECCIÓN 4: VENTAS Y CARTERA */}
+              {/* Ventas y Cartera */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard title="Ventas (Nuevos)" value={formatCurrency(dashboardData.nuevosCreditosAmount)} icon={FiActivity} colorClass="text-purple-400" />
                 <StatCard title="Renovaciones" value={formatCurrency(dashboardData.renovacionesAmount)} icon={FiRefreshCw} colorClass="text-indigo-400" />
@@ -360,7 +360,7 @@ export default function Monitoreo() {
                 <StatCard title="Cartera Final" value={formatCurrency(dashboardData.carteraFinal)} icon={FiPieChart} colorClass="text-white" />
               </div>
 
-              {/* SECCIÓN 5: CLIENTES */}
+              {/* Conteo de Clientes */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-[#05050A] border border-white/5 rounded-2xl p-5 flex items-center justify-between">
                   <div className="flex items-center gap-4">
@@ -383,6 +383,42 @@ export default function Monitoreo() {
                   </div>
                   <h3 className="text-3xl font-bold text-red-400">{dashboardData.clientesEnMora}</h3>
                 </div>
+              </div>
+
+              {/* ========================================== */}
+              {/* NUEVO: ACORDEÓN / BOTÓN PARA RUTA DE HOY   */}
+              {/* ========================================== */}
+              <div className="mt-8 border-t border-white/5 pt-6">
+                
+                {/* Botón de la Tarjeta */}
+                <div 
+                  onClick={() => setIsMapExpanded(!isMapExpanded)}
+                  className="bg-[#05050A] border border-white/5 rounded-2xl p-5 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 cursor-pointer hover:bg-[#0A0F1C] hover:border-white/10 transition-all group shadow-lg"
+                >
+                  <div className="flex items-center gap-5">
+                    <div className="p-4 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/20 group-hover:scale-110 transition-transform">
+                      <FiMapPin size={28} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-white mb-1">Ruta de Hoy</h3>
+                      <p className="text-sm text-slate-400">Ver mapa de geolocalización, cobrador en vivo y lista interactiva</p>
+                    </div>
+                  </div>
+                  
+                  <div className="h-10 w-10 md:h-12 md:w-12 rounded-full bg-white/5 flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-colors self-end md:self-auto shrink-0">
+                    <FiChevronDown className={`transition-transform duration-300 ${isMapExpanded ? 'rotate-180' : ''}`} size={24} />
+                  </div>
+                </div>
+
+                {/* Contenido Expandible (Mapa) */}
+                <div 
+                  className={`transition-all duration-500 ease-in-out overflow-hidden ${
+                    isMapExpanded ? 'max-h-[800px] opacity-100 mt-6' : 'max-h-0 opacity-0 mt-0'
+                  }`}
+                >
+                  <TodayRouteCard routeId={selectedRouteId!} />
+                </div>
+                
               </div>
 
             </div>
