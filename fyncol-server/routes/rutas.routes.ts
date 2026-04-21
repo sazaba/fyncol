@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { crearRuta, obtenerRutas, reasignarRuta, eliminarRuta, getMonitoreoHoy } from '../controllers/rutas.controller';
+import { crearRuta, obtenerRutas, reasignarRuta, eliminarRuta, getMonitoreoHoy, getRoutesSummary } from '../controllers/rutas.controller';
 // 1. Importar el middleware
 import { verifyToken } from '../middleware/auth.middleware';
 
@@ -7,6 +7,8 @@ const router = Router();
 
 // 2. Aplicar el middleware a todas las rutas de este bloque
 router.use(verifyToken);
+
+router.get('/summary/all', getRoutesSummary);
 
 router.post('/', crearRuta);
 router.get('/', obtenerRutas);

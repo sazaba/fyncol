@@ -296,3 +296,88 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
+
+export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const companyId = req.user?.companyId;
+    if (!companyId) {
+      res.status(403).json({ error: "Acceso denegado." });
+      return;
+    }
+
+    const hoyInicio = new Date();
+    hoyInicio.setHours(0, 0, 0, 0);
+
+    const hoyFin = new Date();
+    hoyFin.setHours(23, 59, 59, 999);
+
+    // Buscamos TODAS las rutas de la empresa con sus cobradores y las cuotas de hoy
+    const rutas = await prisma.route.findMany({
+      where: { companyId, isActive: true },
+      include: {
+        assignedTo: true,
+        loans: {
+          where: { isActive: true },
+          include: {
+            installmentDetails: {
+              where: {
+                dueDate: { gte: hoyInicio, lte: hoyFin }
+              }
+            },
+            payments: {
+              where: {
+                createdAt: { gte: hoyInicio, lte: hoyFin }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // SOLUCIÓN: Agregamos ": any" a ruta, loan y pago para satisfacer a TypeScript
+    const summary = rutas.map((ruta: any) => {
+      let clientesTotales = 0;
+      let clientesCobrados = 0;
+      let clientesMora = 0;
+      let totalRecaudado = 0;
+
+      ruta.loans.forEach((loan: any) => {
+        // Asumiendo 1 préstamo activo = 1 cliente en la ruta de hoy
+        if (loan.installmentDetails.length > 0) {
+          clientesTotales++;
+          
+          const cuotaHoy = loan.installmentDetails[0];
+          if (cuotaHoy.status === 'PAID') {
+            clientesCobrados++;
+          } else if (cuotaHoy.status === 'OVERDUE') {
+            clientesMora++;
+          }
+        }
+
+        // Sumar pagos hechos hoy a este préstamo
+        loan.payments.forEach((pago: any) => {
+          totalRecaudado += Number(pago.amount);
+        });
+      });
+
+      const porcentaje = clientesTotales === 0 ? 0 : Math.round((clientesCobrados / clientesTotales) * 100);
+
+      return {
+        id: ruta.id,
+        zona: ruta.city,
+        cobrador: ruta.assignedTo?.name || 'Sin Asignar',
+        disponible: Number(ruta.availableCapital),
+        recaudado: totalRecaudado,
+        clientesTotales,
+        clientesCobrados,
+        clientesMora,
+        porcentaje
+      };
+    });
+
+    res.json({ success: true, data: summary });
+  } catch (error) {
+    console.error("Error en getRoutesSummary:", error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
