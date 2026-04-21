@@ -230,7 +230,7 @@ export const eliminarRuta = async (req: AuthRequest, res: Response): Promise<voi
 
 export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params; // ID de la ruta
+    const { id } = req.params;
     const companyId = req.user?.companyId;
 
     if (!companyId) {
@@ -238,23 +238,33 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // Configurar el rango de hoy según el servidor
     const hoyInicio = new Date();
     hoyInicio.setHours(0, 0, 0, 0);
 
     const hoyFin = new Date();
     hoyFin.setHours(23, 59, 59, 999);
 
+    // 1. Buscamos la ruta y el usuario cobrador asignado a ella
+    const ruta = await prisma.route.findUnique({
+      where: { id: Number(id), companyId },
+      include: { assignedTo: true }
+    });
+
+    if (!ruta) {
+      res.status(404).json({ error: "Ruta no encontrada" });
+      return;
+    }
+
+    // 2. Buscamos los clientes de esa ruta con cobros pendientes para hoy
     const clientesDeHoy = await prisma.client.findMany({
       where: {
         routeId: Number(id),
-        route: { companyId }, // Seguridad Multitenant
         loans: {
           some: {
             installmentDetails: {
               some: {
                 dueDate: { gte: hoyInicio, lte: hoyFin },
-                status: { in: ['PENDING', 'PARTIAL'] } // Clientes que aún deben pagar hoy
+                status: { in: ['PENDING', 'PARTIAL'] }
               }
             }
           }
@@ -269,10 +279,18 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
       }
     });
 
-    // En el futuro, aquí también buscarías la última coordenada del usuario cobrador 
-    // const cobrador = await prisma.user.findUnique({ where: { id: ruta.assignedToId }, select: { lastLat, lastLng } });
-
-    res.json({ success: true, clientes: clientesDeHoy });
+    // 3. Enviamos ambas cosas al frontend
+    res.json({ 
+      success: true, 
+      clientes: clientesDeHoy,
+      cobrador: ruta.assignedTo ? {
+        id: ruta.assignedTo.id,
+        name: ruta.assignedTo.name,
+        latitude: ruta.assignedTo.lastLatitude,
+        longitude: ruta.assignedTo.lastLongitude,
+        lastUpdate: ruta.assignedTo.lastLocationUpdate
+      } : null
+    });
   } catch (error) {
     console.error("Error al obtener monitoreo de hoy:", error);
     res.status(500).json({ error: 'Error interno del servidor' });
