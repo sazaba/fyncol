@@ -110,6 +110,7 @@ export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
               periodicity: periodicity,
               firstPaymentDate: firstPayment,
               projectedTotal: Number(projectedTotal.toFixed(2)),
+              isRenewal: false,
               installmentDetails: {
                 create: installmentsArray 
               }
@@ -710,6 +711,7 @@ export const addLoanToExistingClient = async (req: AuthRequest, res: Response) =
           periodicity: periodicity,
           firstPaymentDate: firstPayment,
           projectedTotal: Number(projectedTotal.toFixed(2)),
+          isRenewal: true,
           installmentDetails: { create: installmentsArray }
         }
       });

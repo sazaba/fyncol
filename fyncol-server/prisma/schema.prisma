@@ -149,7 +149,7 @@ model Loan {
   client           Client   @relation(fields: [clientId], references: [id])
   payments         Payment[]
   installmentDetails Installment[]
-
+isRenewal       Boolean  @default(false) @map("is_renewal")
   @@map("loans")
 }
 
