@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   FiDollarSign, FiMapPin, FiSearch, 
   FiAlertTriangle, FiX, FiLoader, FiNavigation,
@@ -80,6 +80,54 @@ export default function CarteraActiva() {
   const [closureSummary, setClosureSummary] = useState<any>(null);
   const [isClosing, setIsClosing] = useState(false);
   const [isRouteClosed, setIsRouteClosed] = useState(false); 
+
+  // ==========================================
+  // NUEVO: SISTEMA DE RASTREO GPS EN TIEMPO REAL
+  // ==========================================
+  const latestCoords = useRef<{lat: number, lng: number} | null>(null);
+
+  useEffect(() => {
+    // 1. Iniciar la lectura constante del GPS
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        latestCoords.current = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+      },
+      (error) => console.error("Error al obtener GPS:", error),
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
+    );
+
+    // 2. Sincronizar con el backend cada 15 segundos
+    const syncInterval = setInterval(() => {
+      if (!latestCoords.current) return;
+
+      const token = localStorage.getItem("token");
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      
+      // Enviamos la ubicación de forma silenciosa para no interrumpir al cobrador
+      fetch(`${baseUrl}/api/users/location`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          latitude: latestCoords.current.lat,
+          longitude: latestCoords.current.lng
+        })
+      }).catch((e) => console.warn("Fallo de sincronización GPS silencioso", e));
+      
+    }, 15000);
+
+    // Limpieza al desmontar el componente (cuando el cobrador cierra la pantalla)
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      clearInterval(syncInterval);
+    };
+  }, []);
+  // ==========================================
 
   const fetchCartera = async () => {
     setIsLoading(true);

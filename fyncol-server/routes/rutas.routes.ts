@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { crearRuta, obtenerRutas, reasignarRuta, eliminarRuta } from '../controllers/rutas.controller';
+import { crearRuta, obtenerRutas, reasignarRuta, eliminarRuta, getMonitoreoHoy } from '../controllers/rutas.controller';
 // 1. Importar el middleware
 import { verifyToken } from '../middleware/auth.middleware';
 
@@ -10,6 +10,7 @@ router.use(verifyToken);
 
 router.post('/', crearRuta);
 router.get('/', obtenerRutas);
+router.get('/:id/monitoreo-hoy', getMonitoreoHoy);
 router.patch('/:id/reasignar', reasignarRuta);
 router.delete('/:id', eliminarRuta); 
 

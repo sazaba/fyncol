@@ -225,3 +225,56 @@ export const eliminarRuta = async (req: AuthRequest, res: Response): Promise<voi
     res.status(500).json({ error: 'Error interno al eliminar la ruta' });
   }
 };
+
+// fyncol-server/controllers/rutas.controller.ts
+
+export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params; // ID de la ruta
+    const companyId = req.user?.companyId;
+
+    if (!companyId) {
+      res.status(403).json({ error: "Acceso denegado." });
+      return;
+    }
+
+    // Configurar el rango de hoy según el servidor
+    const hoyInicio = new Date();
+    hoyInicio.setHours(0, 0, 0, 0);
+
+    const hoyFin = new Date();
+    hoyFin.setHours(23, 59, 59, 999);
+
+    const clientesDeHoy = await prisma.client.findMany({
+      where: {
+        routeId: Number(id),
+        route: { companyId }, // Seguridad Multitenant
+        loans: {
+          some: {
+            installmentDetails: {
+              some: {
+                dueDate: { gte: hoyInicio, lte: hoyFin },
+                status: { in: ['PENDING', 'PARTIAL'] } // Clientes que aún deben pagar hoy
+              }
+            }
+          }
+        }
+      },
+      select: {
+        id: true,
+        name: true,
+        latitude: true,
+        longitude: true,
+        address: true,
+      }
+    });
+
+    // En el futuro, aquí también buscarías la última coordenada del usuario cobrador 
+    // const cobrador = await prisma.user.findUnique({ where: { id: ruta.assignedToId }, select: { lastLat, lastLng } });
+
+    res.json({ success: true, clientes: clientesDeHoy });
+  } catch (error) {
+    console.error("Error al obtener monitoreo de hoy:", error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};

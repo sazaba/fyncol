@@ -65,6 +65,9 @@ model User {
   isActive  Boolean  @default(true)
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   imageUrl  String?  @db.VarChar(255)
+  lastLatitude       Float?
+  lastLongitude      Float?
+  lastLocationUpdate DateTime? @map("last_location_update")
 
   companyId Int?     @map("company_id")
   company   Company? @relation(fields: [companyId], references: [id])

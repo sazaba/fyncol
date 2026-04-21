@@ -12,7 +12,6 @@ export const createUser = async (req: AuthRequest, res: Response) => {
   try {
     const companyId = req.user?.companyId;
     
-    // CLÁUSULA DE GUARDIA: Esto elimina el error de tipado
     if (!companyId) {
       return res.status(403).json({ success: false, message: "Acceso denegado: No tienes empresa asignada." });
     }
@@ -221,5 +220,34 @@ export const hardDeleteUser = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error("Error en hardDeleteUser:", error);
     return res.status(500).json({ success: false, message: "Error al eliminar definitivamente" });
+  }
+};
+
+// ==========================================
+// 7. ACTUALIZAR GPS EN TIEMPO REAL
+// ==========================================
+export const updateLocation = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    const { latitude, longitude } = req.body;
+
+    if (!userId || !latitude || !longitude) {
+      res.status(400).json({ error: "Datos de ubicación incompletos" });
+      return;
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        lastLatitude: latitude,
+        lastLongitude: longitude,
+        lastLocationUpdate: new Date()
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error actualizando GPS:", error);
+    res.status(500).json({ error: "Error interno al actualizar GPS" });
   }
 };

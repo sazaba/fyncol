@@ -1,8 +1,12 @@
+// src/pages/admin/Monitoreo.tsx
 import { useState, useEffect } from 'react';
 import { 
   FiDollarSign, FiTrendingUp, FiUsers, FiAlertTriangle, 
   FiPieChart, FiActivity, FiRefreshCw, FiTarget, FiLoader, FiMap 
 } from 'react-icons/fi';
+
+// Importamos el nuevo componente del mapa y la lista de clientes de hoy
+import TodayRouteCard from "@/components/admin/TodayRouteCard";
 
 interface DashboardData {
   cajaInicial: number;
@@ -23,9 +27,9 @@ interface DashboardData {
 
 export default function Monitoreo() {
   const [data, setData] = useState<DashboardData | null>(null);
-  const [routesList, setRoutesList] = useState<any[]>([]); // Para guardar las rutas reales
+  const [routesList, setRoutesList] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [routeId, setRouteId] = useState<number | null>(null); // Inicia nulo
+  const [routeId, setRouteId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // 1. OBTENER LAS RUTAS REALES DE LA EMPRESA
@@ -34,19 +38,17 @@ export default function Monitoreo() {
       const token = localStorage.getItem("token");
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
       
-      // Apuntamos al endpoint que maneja la información del capital y las rutas
       const res = await fetch(`${baseUrl}/api/capital`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
       const result = await res.json();
       if (res.ok && result.success) {
-        // Asumimos que la data viene en result.data según tu controlador de capital
         const rutasArray = result.data || [];
         
         if (rutasArray.length > 0) {
           setRoutesList(rutasArray);
-          setRouteId(rutasArray[0].id); // Auto-selecciona la primera ruta real
+          setRouteId(rutasArray[0].id);
         } else {
           setError("No tienes rutas creadas en tu empresa.");
           setIsLoading(false);
@@ -68,7 +70,7 @@ export default function Monitoreo() {
 
   // 3. CARGAR DATOS DEL DASHBOARD CADA VEZ QUE CAMBIE LA RUTA SELECCIONADA
   const fetchDashboardData = async () => {
-    if (!routeId) return; // Si no hay ruta seleccionada, no hace nada
+    if (!routeId) return; 
     
     setIsLoading(true);
     setError(null);
@@ -96,7 +98,6 @@ export default function Monitoreo() {
   useEffect(() => {
     fetchDashboardData();
     
-    // Actualizar automáticamente cada 5 minutos
     const interval = setInterval(fetchDashboardData, 300000);
     return () => clearInterval(interval);
   }, [routeId]);
@@ -105,7 +106,6 @@ export default function Monitoreo() {
     return `$${Math.round(value || 0).toLocaleString('es-CO')}`;
   };
 
-  // Componente de Tarjeta Premium
   const StatCard = ({ title, value, icon: Icon, colorClass, subtitle = "" }: any) => (
     <div className="bg-[#05050A] border border-white/5 rounded-2xl p-5 relative overflow-hidden group hover:border-white/10 transition-colors">
       <div className={`absolute -right-6 -top-6 w-24 h-24 bg-${colorClass.split('-')[1]}-500/10 rounded-full blur-2xl group-hover:bg-${colorClass.split('-')[1]}-500/20 transition-all`}></div>
@@ -141,7 +141,6 @@ export default function Monitoreo() {
                 onChange={(e) => setRouteId(Number(e.target.value))}
                 className="bg-transparent text-white text-sm font-semibold outline-none appearance-none pr-4 cursor-pointer"
               >
-                {/* MAPEO DINÁMICO DE TUS RUTAS REALES */}
                 {routesList.map(ruta => (
                   <option key={ruta.id} value={ruta.id} className="bg-[#0B0B12]">
                     {ruta.city || ruta.name || `Ruta ${ruta.id}`}
@@ -260,7 +259,10 @@ export default function Monitoreo() {
             />
           </div>
 
-          {/* SECCIÓN 4: CLIENTES */}
+          {/* SECCIÓN 4: MAPA Y LISTA DE HOY (NUEVO) */}
+          {routeId && <TodayRouteCard routeId={routeId} />}
+
+          {/* SECCIÓN 5: CLIENTES */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-[#05050A] border border-white/5 rounded-2xl p-5 flex items-center justify-between">
               <div className="flex items-center gap-4">
