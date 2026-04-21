@@ -4,8 +4,8 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png"; 
 import { 
   FiHome, FiSettings, FiUsers, FiLogOut, FiChevronDown, FiX, 
-  FiGlobe, FiMap, FiDollarSign, FiBriefcase, FiUserPlus, FiCheckCircle, FiShield 
-} from "react-icons/fi";
+  FiGlobe, FiMap, FiDollarSign, FiBriefcase, FiUserPlus, FiCheckCircle, FiShield, FiActivity 
+} from "react-icons/fi"; // <-- Añadido FiActivity
 
 export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (val: boolean) => void }) {
   const location = useLocation();
@@ -39,7 +39,7 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
 
   // Condiciones de renderizado según el rol
   const showCartera = userRole === 'COBRADOR';
-  const showAdministracion = userRole === 'ADMIN' || userRole === 'SUPERVISOR';
+  const showAdministracion = userRole === 'ADMIN' || userRole === 'SUPERVISOR' || userRole === 'SUPERADMIN'; // Añadido SUPERADMIN por si acaso
 
   return (
     <>
@@ -91,7 +91,7 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
                 <FiChevronDown className={`transition-transform duration-300 ${isAdminOpen ? "rotate-180 text-white" : ""}`} />
               </button>
 
-              <div className={`overflow-hidden transition-all duration-300 ${isAdminOpen ? "max-h-40 opacity-100" : "max-h-0 opacity-0"}`}>
+              <div className={`overflow-hidden transition-all duration-300 ${isAdminOpen ? "max-h-60 opacity-100" : "max-h-0 opacity-0"}`}> {/* Aumentado max-h a 60 para que quepa el nuevo link */}
                 <div className="mt-1 ml-4 border-l border-white/10 pl-2 space-y-1">
                   <Link 
                     to="/admin/usuarios" 
@@ -121,6 +121,16 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
                   >
                     <FiCheckCircle size={16} /> Cierres Diarios
                   </Link>
+                  
+                  {/* NUEVO BOTÓN: MONITOREO */}
+                  <Link 
+                    to="/admin/monitoreo" 
+                    onClick={() => setIsOpen(false)} 
+                    className={`flex items-center gap-2 w-full text-left rounded-lg px-3 py-2 text-sm ${isActive("/admin/monitoreo") ? "text-emerald-400 bg-emerald-500/10 font-medium" : "text-slate-500 hover:text-white hover:bg-white/5 transition-colors"}`}
+                  >
+                    <FiActivity size={16} /> Monitoreo
+                  </Link>
+
                 </div>
               </div>
             </div>
