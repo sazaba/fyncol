@@ -35,17 +35,31 @@ function MapFocusController({ coords }: { coords: [number, number] | null }) {
   return null;
 }
 
-// Componente para forzar el redibujado de Leaflet al cambiar display:none
-function MapResizer({ mobileView }: { mobileView: 'LIST' | 'MAP' }) {
+// CORRECCIÓN DEFINITIVA: Observador de redimensionamiento nativo
+function MapResizer() {
   const map = useMap();
+  
   useEffect(() => {
-    if (mobileView === 'MAP') {
-      const timeout = setTimeout(() => {
-        map.invalidateSize();
-      }, 150); // Retraso crítico para asegurar que el contenedor ya está visible en el DOM
-      return () => clearTimeout(timeout);
+    // 1. Forzar un redibujado inicial de seguridad
+    map.invalidateSize();
+
+    // 2. Crear un observador que escuche cambios físicos en el contenedor
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    
+    const container = map.getContainer();
+    if (container) {
+      observer.observe(container);
     }
-  }, [mobileView, map]);
+
+    // Limpieza al desmontar
+    return () => {
+      if (container) observer.unobserve(container);
+      observer.disconnect();
+    };
+  }, [map]);
+  
   return null;
 }
 
@@ -218,7 +232,9 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
             />
 
             <MapFocusController coords={focusCoords} />
-            <MapResizer mobileView={mobileView} />
+            
+            {/* Componente que asegura el dibujado en dispositivos móviles */}
+            <MapResizer />
 
             {clients.map((client) => (
                client.latitude && client.longitude && (
