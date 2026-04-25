@@ -44,27 +44,19 @@ interface DashboardData {
 // COMPONENTE PRINCIPAL
 // ==========================================
 export default function Monitoreo() {
-  // Estados de Vista
   const [view, setView] = useState<'LIST' | 'DETAIL'>('LIST');
   const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
   const [selectedRouteName, setSelectedRouteName] = useState<string>("");
-  
-  // Estado para expandir/colapsar el mapa
   const [isMapExpanded, setIsMapExpanded] = useState<boolean>(false);
 
-  // Estados de Datos
   const [routesSummary, setRoutesSummary] = useState<RouteSummary[]>([]);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   
-  // Estados de Carga
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const formatCurrency = (value: number) => `$${Math.round(value || 0).toLocaleString('es-CO')}`;
 
-  // ==========================================
-  // FETCH 1: LISTA GENERAL DE RUTAS
-  // ==========================================
   const fetchRoutesSummary = async () => {
     setIsLoading(true);
     setError(null);
@@ -89,9 +81,6 @@ export default function Monitoreo() {
     }
   };
 
-  // ==========================================
-  // FETCH 2: DASHBOARD DETALLADO DE UNA RUTA
-  // ==========================================
   const fetchDashboardData = async (routeId: number) => {
     setIsLoading(true);
     setError(null);
@@ -142,26 +131,34 @@ export default function Monitoreo() {
     setIsMapExpanded(false);
   };
 
-  const StatCard = ({ title, value, icon: Icon, colorClass, subtitle = "" }: any) => (
-    <div className="bg-[#05050A] border border-white/5 rounded-2xl p-5 relative overflow-hidden group hover:border-white/10 transition-colors w-full">
-      <div className={`absolute -right-6 -top-6 w-24 h-24 bg-${colorClass.split('-')[1]}-500/10 rounded-full blur-2xl group-hover:bg-${colorClass.split('-')[1]}-500/20 transition-all`}></div>
-      <div className="flex justify-between items-start mb-4 relative z-10">
-        <div className={`p-2.5 rounded-xl bg-${colorClass.split('-')[1]}-500/10 border border-${colorClass.split('-')[1]}-500/20 text-${colorClass.split('-')[1]}-400`}>
-          <Icon size={20} />
+  const StatCard = ({ title, value, icon: Icon, colorClass, subtitle = "" }: any) => {
+    const colorName = colorClass.split('-')[1];
+    const isWhite = colorName === 'white' || colorName === 'slate';
+    const bgHoverClass = isWhite ? 'bg-white/10' : `bg-${colorName}-500/10`;
+    const bgBlurClass = isWhite ? 'bg-white/5' : `bg-${colorName}-500/20`;
+    const borderClass = isWhite ? 'border-white/20' : `border-${colorName}-500/20`;
+    const textClass = isWhite ? 'text-white' : `text-${colorName}-400`;
+
+    return (
+      <div className="bg-[#05050A] border border-white/5 rounded-2xl p-5 relative overflow-hidden group hover:border-white/10 transition-colors w-full">
+        <div className={`absolute -right-6 -top-6 w-24 h-24 ${bgHoverClass} rounded-full blur-2xl group-hover:${bgBlurClass} transition-all`}></div>
+        <div className="flex justify-between items-start mb-4 relative z-10">
+          <div className={`p-2.5 rounded-xl ${bgHoverClass} border ${borderClass} ${textClass}`}>
+            <Icon size={20} />
+          </div>
+        </div>
+        <div className="relative z-10">
+          <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1 line-clamp-1">{title}</p>
+          <h3 className={`text-2xl md:text-3xl font-bold ${colorClass} break-words`}>{value}</h3>
+          {subtitle && <p className="text-[10px] text-slate-500 mt-1 line-clamp-2">{subtitle}</p>}
         </div>
       </div>
-      <div className="relative z-10">
-        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1 line-clamp-1">{title}</p>
-        <h3 className={`text-2xl md:text-3xl font-bold ${colorClass} break-words`}>{value}</h3>
-        {subtitle && <p className="text-[10px] text-slate-500 mt-1 line-clamp-2">{subtitle}</p>}
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
-    <div className="min-h-[calc(100dvh-64px)] w-full max-w-[100vw] overflow-x-hidden bg-[#0B0B12] p-4 md:p-6 lg:p-8 overflow-y-auto">
+    <div className="min-h-[calc(100dvh-64px)] w-full bg-[#0B0B12] p-4 md:p-6 lg:p-8 overflow-y-auto">
       
-      {/* HEADER DINÁMICO */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 w-full">
         <div className="flex items-center gap-3 w-full md:w-auto">
           {view === 'DETAIL' && (
@@ -192,7 +189,6 @@ export default function Monitoreo() {
         </button>
       </div>
 
-      {/* MANEJO DE ERRORES / LOADING GLOBAL */}
       {isLoading && view === 'LIST' && routesSummary.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 text-slate-400">
           <FiLoader className="animate-spin mb-3 text-blue-500" size={32} />
@@ -206,7 +202,6 @@ export default function Monitoreo() {
         </div>
       ) : (
         <>
-          {/* VISTA 1: LISTA DE RUTAS */}
           {view === 'LIST' && (
             <div className="space-y-4 animate-[fadeIn_0.2s_ease-out] w-full">
               {routesSummary.length === 0 ? (
@@ -226,7 +221,6 @@ export default function Monitoreo() {
                       onClick={() => handleSelectRoute(route.id, route.zona)}
                       className="bg-[#05050A] hover:bg-[#0A0F1C] border border-white/5 hover:border-white/10 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 cursor-pointer transition-all shadow-sm group w-full overflow-hidden"
                     >
-                      {/* Zona y Ruta */}
                       <div className="flex flex-row md:flex-col md:w-[200px] shrink-0 gap-3 md:gap-1 w-full items-center md:items-start border-b md:border-b-0 border-white/5 pb-3 md:pb-0">
                          <div className="h-10 w-10 md:hidden bg-blue-500/10 text-blue-400 rounded-lg flex items-center justify-center shrink-0">
                            <FiMap size={20} />
@@ -240,7 +234,6 @@ export default function Monitoreo() {
                          </div>
                       </div>
 
-                      {/* Cobrador */}
                       <div className="flex items-center gap-3 md:w-[220px] shrink-0 w-full">
                         <div className="h-8 w-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 shrink-0">
                           <FiUser size={14} />
@@ -253,7 +246,6 @@ export default function Monitoreo() {
                         </div>
                       </div>
 
-                      {/* Círculo de Cumplimiento */}
                       <div className="flex items-center gap-4 flex-1 w-full min-w-0">
                         <div className="relative h-12 w-12 flex items-center justify-center shrink-0">
                           <svg className="transform -rotate-90 w-12 h-12">
@@ -280,7 +272,6 @@ export default function Monitoreo() {
                         </div>
                       </div>
 
-                      {/* Valores Económicos */}
                       <div className="flex flex-row md:flex-col gap-6 md:gap-1 items-center md:items-end w-full md:w-[150px] shrink-0 justify-between md:justify-center border-t md:border-t-0 border-white/5 pt-3 md:pt-0">
                         <div className="text-left md:text-right flex-1 md:flex-none">
                           <p className="text-[10px] font-bold tracking-widest text-slate-500 uppercase flex items-center gap-1 md:justify-end">
@@ -296,7 +287,6 @@ export default function Monitoreo() {
                         </div>
                       </div>
 
-                      {/* Icono entrar */}
                       <div className="hidden md:flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
                         <FiChevronRight size={18} />
                       </div>
@@ -307,11 +297,9 @@ export default function Monitoreo() {
             </div>
           )}
 
-          {/* VISTA 2: DASHBOARD DETALLADO DE UNA RUTA */}
           {view === 'DETAIL' && dashboardData && (
-            <div className="space-y-6 animate-[fadeIn_0.2s_ease-out] pb-10 w-full">
+            <div className="space-y-6 animate-[fadeIn_0.2s_ease-out] pb-10 w-full overflow-x-hidden">
               
-              {/* Rendimiento */}
               <div className="bg-[#05050A] border border-white/5 rounded-3xl p-5 md:p-6 relative overflow-hidden w-full">
                 <div className="absolute top-0 left-0 w-full h-1 bg-white/5">
                    <div 
@@ -342,14 +330,12 @@ export default function Monitoreo() {
                 </div>
               </div>
 
-              {/* Caja, Liquidez y Recaudo */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
                 <StatCard title="Caja Inicial" value={formatCurrency(dashboardData.cajaInicial)} icon={FiDollarSign} colorClass="text-white" />
                 <StatCard title="Saldo Disponible" value={formatCurrency(dashboardData.saldoDisponible)} icon={FiPieChart} colorClass="text-blue-400" subtitle="Capital actual en la calle" />
                 <StatCard title="Recaudo del Día" value={formatCurrency(dashboardData.recaudoDia)} icon={FiTrendingUp} colorClass="text-emerald-400" />
               </div>
 
-              {/* Ventas y Cartera */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
                 <StatCard title="Ventas (Nuevos)" value={formatCurrency(dashboardData.nuevosCreditosAmount)} icon={FiActivity} colorClass="text-purple-400" />
                 <StatCard title="Renovaciones" value={formatCurrency(dashboardData.renovacionesAmount)} icon={FiRefreshCw} colorClass="text-indigo-400" />
@@ -357,7 +343,6 @@ export default function Monitoreo() {
                 <StatCard title="Cartera Final" value={formatCurrency(dashboardData.carteraFinal)} icon={FiPieChart} colorClass="text-white" />
               </div>
 
-              {/* Conteo de Clientes */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
                 <div className="bg-[#05050A] border border-white/5 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-4 w-full sm:w-auto">
@@ -382,10 +367,7 @@ export default function Monitoreo() {
                 </div>
               </div>
 
-              {/* ACORDEÓN / BOTÓN PARA RUTA DE HOY */}
               <div className="mt-8 border-t border-white/5 pt-6 w-full">
-                
-                {/* Botón de la Tarjeta */}
                 <div 
                   onClick={() => setIsMapExpanded(!isMapExpanded)}
                   className="bg-[#05050A] border border-white/5 rounded-2xl p-4 md:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 cursor-pointer hover:bg-[#0A0F1C] hover:border-white/10 transition-all group shadow-lg w-full"
@@ -405,7 +387,6 @@ export default function Monitoreo() {
                   </div>
                 </div>
 
-                {/* Contenido Expandible (Mapa) - Uso de CSS Grid para animar altura */}
                 <div 
                   className={`grid transition-all duration-500 ease-in-out w-full ${
                     isMapExpanded ? 'grid-rows-[1fr] opacity-100 mt-4 sm:mt-6' : 'grid-rows-[0fr] opacity-0 mt-0'
