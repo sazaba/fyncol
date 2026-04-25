@@ -35,6 +35,20 @@ function MapFocusController({ coords }: { coords: [number, number] | null }) {
   return null;
 }
 
+// Componente para forzar el redibujado de Leaflet al cambiar display:none
+function MapResizer({ mobileView }: { mobileView: 'LIST' | 'MAP' }) {
+  const map = useMap();
+  useEffect(() => {
+    if (mobileView === 'MAP') {
+      const timeout = setTimeout(() => {
+        map.invalidateSize();
+      }, 150); // Retraso crítico para asegurar que el contenedor ya está visible en el DOM
+      return () => clearTimeout(timeout);
+    }
+  }, [mobileView, map]);
+  return null;
+}
+
 export default function TodayRouteCard({ routeId }: { routeId: number }) {
   const [clients, setClients] = useState<any[]>([]);
   const [cobradorData, setCobradorData] = useState<any>(null);
@@ -110,10 +124,10 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
   const mapCenter: [number, number] = focusCoords || [4.5709, -74.2973];
 
   return (
-    <div className="bg-[#0B1020]/60 border border-white/10 rounded-3xl shadow-2xl backdrop-blur-xl flex flex-col mb-8 overflow-hidden">
+    <div className="bg-[#0B1020]/60 border border-white/10 rounded-3xl shadow-2xl backdrop-blur-xl flex flex-col mb-8 overflow-hidden w-full">
       
       {/* TABS PARA MÓVIL */}
-      <div className="flex lg:hidden bg-white/5 border-b border-white/10">
+      <div className="flex lg:hidden bg-white/5 border-b border-white/10 w-full">
         <button 
           onClick={() => setMobileView('LIST')}
           className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider transition-colors ${mobileView === 'LIST' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-400'}`}
@@ -128,10 +142,10 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
         </button>
       </div>
 
-      <div className="flex flex-col lg:flex-row h-[500px]">
+      <div className="flex flex-col lg:flex-row h-[70vh] min-h-[400px] lg:h-[500px] w-full">
         
         {/* SECCIÓN IZQUIERDA: LISTA */}
-        <div className={`w-full lg:w-1/3 flex flex-col border-r border-white/10 p-5 ${mobileView === 'MAP' ? 'hidden lg:flex' : 'flex'}`}>
+        <div className={`w-full lg:w-1/3 flex-col border-r border-white/10 p-5 ${mobileView === 'MAP' ? 'hidden lg:flex' : 'flex'} h-full`}>
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 shrink-0">
             <FiMapPin className="text-blue-400" />
             Ruta de Hoy
@@ -156,8 +170,8 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
                   }}
                   className="bg-white/5 border border-white/5 rounded-2xl p-4 hover:bg-white/10 transition-colors cursor-pointer group"
                 >
-                  <div className="flex justify-between items-start">
-                    <p className="font-semibold text-sm text-white flex items-center gap-2">
+                  <div className="flex justify-between items-start gap-2">
+                    <p className="font-semibold text-sm text-white flex items-center gap-2 overflow-hidden">
                       <FiUser className="text-slate-400 group-hover:text-blue-400 transition-colors shrink-0" size={14} />
                       <span className="truncate">{client.name}</span>
                     </p>
@@ -176,16 +190,16 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
         <div className={`w-full lg:w-2/3 h-full relative z-0 ${mobileView === 'LIST' ? 'hidden lg:block' : 'block'}`}>
           
           {cobradorData && (
-            <div className="absolute top-4 right-4 z-[400] bg-[#05050A]/90 backdrop-blur-md border border-white/10 rounded-lg px-3 py-2 shadow-xl flex items-center gap-2">
-              <span className="relative flex h-2.5 w-2.5">
+            <div className="absolute top-4 right-4 z-[400] bg-[#05050A]/90 backdrop-blur-md border border-white/10 rounded-lg px-3 py-2 shadow-xl flex items-center gap-2 max-w-[calc(100%-2rem)] overflow-hidden">
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
               </span>
-              <div className="flex flex-col">
-                <span className="text-xs font-semibold text-white leading-none">
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs font-semibold text-white leading-none truncate">
                   {cobradorData.name}
                 </span>
-                <span className="text-[9px] text-slate-400 mt-0.5">
+                <span className="text-[9px] text-slate-400 mt-0.5 truncate">
                   Actualizado: {new Date(cobradorData.lastUpdate).toLocaleTimeString('es-CO', {hour: '2-digit', minute:'2-digit'})}
                 </span>
               </div>
@@ -204,6 +218,7 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
             />
 
             <MapFocusController coords={focusCoords} />
+            <MapResizer mobileView={mobileView} />
 
             {clients.map((client) => (
                client.latitude && client.longitude && (

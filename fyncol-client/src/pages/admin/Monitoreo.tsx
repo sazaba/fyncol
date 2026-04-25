@@ -157,7 +157,7 @@ export default function Monitoreo() {
   };
 
   return (
-    <div className="min-h-[calc(100dvh-64px)] w-full bg-[#0B0B12] p-4 md:p-6 lg:p-8 overflow-y-auto">
+    <div className="min-h-[calc(100dvh-64px)] w-full bg-[#0B0B12] p-4 md:p-6 lg:p-8 overflow-x-hidden overflow-y-auto">
       
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 w-full">
         <div className="flex items-center gap-3 w-full md:w-auto">
@@ -367,6 +367,7 @@ export default function Monitoreo() {
                 </div>
               </div>
 
+              {/* RENDERIZADO CONDICIONAL DEL MAPA */}
               <div className="mt-8 border-t border-white/5 pt-6 w-full">
                 <div 
                   onClick={() => setIsMapExpanded(!isMapExpanded)}
@@ -387,15 +388,13 @@ export default function Monitoreo() {
                   </div>
                 </div>
 
-                <div 
-                  className={`grid transition-all duration-500 ease-in-out w-full ${
-                    isMapExpanded ? 'grid-rows-[1fr] opacity-100 mt-4 sm:mt-6' : 'grid-rows-[0fr] opacity-0 mt-0'
-                  }`}
-                >
-                  <div className="overflow-hidden w-full">
-                    <TodayRouteCard routeId={selectedRouteId!} />
+                {isMapExpanded && (
+                  <div className="mt-4 sm:mt-6 w-full animate-[fadeIn_0.3s_ease-out]">
+                    <div className="w-full h-auto overflow-hidden relative">
+                      <TodayRouteCard routeId={selectedRouteId!} />
+                    </div>
                   </div>
-                </div>
+                )}
                 
               </div>
 
