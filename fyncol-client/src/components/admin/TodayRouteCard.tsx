@@ -5,7 +5,6 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { FiMapPin, FiUser, FiNavigation, FiLoader } from "react-icons/fi";
 
-// Iconos personalizados de Leaflet
 const clientIcon = new L.Icon({
   iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
@@ -24,7 +23,6 @@ const cobradorIcon = new L.Icon({
   shadowSize: [41, 41]
 });
 
-// Componente para animar la cámara del mapa
 function MapFocusController({ coords }: { coords: [number, number] | null }) {
   const map = useMap();
   useEffect(() => {
@@ -40,9 +38,18 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
   const [cobradorData, setCobradorData] = useState<any>(null);
   const [focusCoords, setFocusCoords] = useState<[number, number] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Control de vista móvil para alternar entre lista y mapa
   const [mobileView, setMobileView] = useState<'LIST' | 'MAP'>('LIST');
+  
+  // Estado para garantizar que el DOM y las animaciones del padre finalizaron
+  const [isLayoutReady, setIsLayoutReady] = useState(false);
+
+  // Retraso de montaje para evadir el conflicto con animate-[fadeIn] del padre Monitoreo.tsx
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLayoutReady(true);
+    }, 350); 
+    return () => clearTimeout(timer);
+  }, []);
 
   const fetchRealTimeData = async () => {
     try {
@@ -104,11 +111,13 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
   }, [routeId]);
 
   const mapCenter: [number, number] = focusCoords || [4.5709, -74.2973];
+  
+  // Condición lógica de visibilidad estricta
+  const isMapVisible = mobileView === 'MAP' || (typeof window !== 'undefined' && window.innerWidth >= 1024);
 
   return (
     <div className="bg-[#0B1020]/60 border border-white/10 rounded-3xl shadow-2xl backdrop-blur-xl flex flex-col mb-8 overflow-hidden w-full">
       
-      {/* TABS PARA MÓVIL */}
       <div className="flex lg:hidden bg-white/5 border-b border-white/10 w-full">
         <button 
           onClick={() => setMobileView('LIST')}
@@ -124,10 +133,10 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
         </button>
       </div>
 
-      <div className="flex flex-col lg:flex-row h-[70vh] min-h-[400px] lg:h-[500px] w-full">
+      <div className="flex flex-col lg:flex-row h-[70vh] min-h-[400px] lg:min-h-[500px] w-full items-stretch">
         
-        {/* SECCIÓN IZQUIERDA: LISTA */}
-        <div className={`w-full lg:w-1/3 flex-col border-r border-white/10 p-5 ${mobileView === 'MAP' ? 'hidden lg:flex' : 'flex'} h-full`}>
+        {/* SECCIÓN IZQUIERDA */}
+        <div className={`w-full lg:w-1/3 flex-col border-r border-white/10 p-5 flex-shrink-0 ${mobileView === 'MAP' ? 'hidden lg:flex' : 'flex'} h-full`}>
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 shrink-0">
             <FiMapPin className="text-blue-400" />
             Ruta de Hoy
@@ -168,8 +177,8 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
           </div>
         </div>
 
-        {/* SECCIÓN DERECHA: MAPA */}
-        <div className={`w-full lg:w-2/3 h-full relative z-0 ${mobileView === 'LIST' ? 'hidden lg:block' : 'block'}`}>
+        {/* SECCIÓN DERECHA: Corrección Flexbox (flex-1) */}
+        <div className={`w-full lg:w-2/3 flex flex-col flex-1 relative z-0 ${mobileView === 'LIST' ? 'hidden lg:flex' : 'flex'} min-h-full`}>
           
           {cobradorData && (
             <div className="absolute top-4 right-4 z-[400] bg-[#05050A]/90 backdrop-blur-md border border-white/10 rounded-lg px-3 py-2 shadow-xl flex items-center gap-2 max-w-[calc(100%-2rem)] overflow-hidden">
@@ -188,55 +197,56 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
             </div>
           )}
 
-          {/* CORRECCIÓN DEFINITIVA: key={mobileView} fuerza el remonte en Safari */}
-          <MapContainer 
-            key={mobileView} 
-            center={mapCenter} 
-            zoom={13} 
-            style={{ height: "100%", width: "100%", zIndex: 1 }}
-            zoomControl={false} 
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-            />
+          {/* Renderizado condicional estricto: Leaflet no tocará el DOM hasta que la estructura del contenedor esté resuelta y la vista activa lo demande */}
+          {isLayoutReady && isMapVisible && (
+            <MapContainer 
+              center={mapCenter} 
+              zoom={13} 
+              style={{ flexGrow: 1, height: "100%", width: "100%", zIndex: 1 }}
+              zoomControl={false} 
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+                url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+              />
 
-            <MapFocusController coords={focusCoords} />
+              <MapFocusController coords={focusCoords} />
 
-            {clients.map((client) => (
-               client.latitude && client.longitude && (
+              {clients.map((client) => (
+                 client.latitude && client.longitude && (
+                  <Marker 
+                    key={client.id} 
+                    position={[client.latitude, client.longitude]} 
+                    icon={clientIcon}
+                  >
+                    <Popup>
+                      <strong className="text-[#0B1020]">{client.name}</strong><br/>
+                      <span className="text-slate-600 text-xs">{client.address}</span>
+                    </Popup>
+                  </Marker>
+                )
+              ))}
+
+              {cobradorData && cobradorData.latitude && cobradorData.longitude && (
                 <Marker 
-                  key={client.id} 
-                  position={[client.latitude, client.longitude]} 
-                  icon={clientIcon}
+                  position={[cobradorData.latitude, cobradorData.longitude]} 
+                  icon={cobradorIcon}
                 >
                   <Popup>
-                    <strong className="text-[#0B1020]">{client.name}</strong><br/>
-                    <span className="text-slate-600 text-xs">{client.address}</span>
+                    <div className="flex flex-col text-[#0B1020]">
+                      <span className="font-bold text-sm flex items-center gap-1 text-emerald-700">
+                        <FiNavigation />
+                        {cobradorData.name}
+                      </span>
+                      <span className="text-xs text-slate-500 mt-1">
+                        En ruta (GPS Activo)
+                      </span>
+                    </div>
                   </Popup>
                 </Marker>
-              )
-            ))}
-
-            {cobradorData && cobradorData.latitude && cobradorData.longitude && (
-              <Marker 
-                position={[cobradorData.latitude, cobradorData.longitude]} 
-                icon={cobradorIcon}
-              >
-                <Popup>
-                  <div className="flex flex-col text-[#0B1020]">
-                    <span className="font-bold text-sm flex items-center gap-1 text-emerald-700">
-                      <FiNavigation />
-                      {cobradorData.name}
-                    </span>
-                    <span className="text-xs text-slate-500 mt-1">
-                      En ruta (GPS Activo)
-                    </span>
-                  </div>
-                </Popup>
-              </Marker>
-            )}
-          </MapContainer>
+              )}
+            </MapContainer>
+          )}
         </div>
 
       </div>
