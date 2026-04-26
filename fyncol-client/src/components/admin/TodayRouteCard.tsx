@@ -35,15 +35,22 @@ function MapFocusController({ coords }: { coords: [number, number] | null }) {
   return null;
 }
 
-// CORRECCIÓN DEFINITIVA: Observador de redimensionamiento nativo
-function MapResizer() {
+/**
+ * CORRECCIÓN PARA EL ERROR DE PANTALLA AZUL / TAMAÑO EN MÓVILES
+ * Este componente fuerza a Leaflet a recalcular su tamaño después de que 
+ * el contenedor cambia de 'hidden' a 'block'.
+ */
+function MapResizer({ mobileView }: { mobileView: 'LIST' | 'MAP' }) {
   const map = useMap();
   
   useEffect(() => {
-    // 1. Forzar un redibujado inicial de seguridad
-    map.invalidateSize();
+    // Usamos un pequeño retraso para permitir que el navegador termine de
+    // aplicar los estilos CSS de visibilidad antes de recalcular el mapa.
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 200);
 
-    // 2. Crear un observador que escuche cambios físicos en el contenedor
+    // También configuramos un ResizeObserver para cambios de orientación o resize de ventana
     const observer = new ResizeObserver(() => {
       map.invalidateSize();
     });
@@ -53,12 +60,12 @@ function MapResizer() {
       observer.observe(container);
     }
 
-    // Limpieza al desmontar
     return () => {
+      clearTimeout(timer);
       if (container) observer.unobserve(container);
       observer.disconnect();
     };
-  }, [map]);
+  }, [map, mobileView]);
   
   return null;
 }
@@ -86,14 +93,12 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
       if (data.success) {
         setClients(data.clientes || []);
         
-        // Verificamos si el backend envió datos válidos del cobrador
         if (data.cobrador && data.cobrador.latitude && data.cobrador.longitude) {
             setCobradorData(data.cobrador);
         } else {
             setCobradorData(null);
         }
 
-        // Auto-enfoque inicial
         setFocusCoords(prev => {
           if (!prev) {
             if (data.cobrador?.latitude && data.cobrador?.longitude) {
@@ -117,11 +122,9 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
     let isMounted = true;
     let timer: ReturnType<typeof setTimeout>;
 
-    // En lugar de setInterval, usamos un polling recursivo para evitar que las llamadas se acumulen
     const pollData = async () => {
       if (!isMounted) return;
       await fetchRealTimeData();
-      
       if (isMounted) {
         timer = setTimeout(pollData, 15000);
       }
@@ -233,8 +236,8 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
 
             <MapFocusController coords={focusCoords} />
             
-            {/* Componente que asegura el dibujado en dispositivos móviles */}
-            <MapResizer />
+            {/* Componente que asegura el dibujado al cambiar de pestaña */}
+            <MapResizer mobileView={mobileView} />
 
             {clients.map((client) => (
                client.latitude && client.longitude && (
