@@ -35,41 +35,6 @@ function MapFocusController({ coords }: { coords: [number, number] | null }) {
   return null;
 }
 
-/**
- * CORRECCIÓN PARA EL ERROR DE PANTALLA AZUL / TAMAÑO EN MÓVILES
- * Este componente fuerza a Leaflet a recalcular su tamaño después de que 
- * el contenedor cambia de 'hidden' a 'block'.
- */
-function MapResizer({ mobileView }: { mobileView: 'LIST' | 'MAP' }) {
-  const map = useMap();
-  
-  useEffect(() => {
-    // Usamos un pequeño retraso para permitir que el navegador termine de
-    // aplicar los estilos CSS de visibilidad antes de recalcular el mapa.
-    const timer = setTimeout(() => {
-      map.invalidateSize();
-    }, 200);
-
-    // También configuramos un ResizeObserver para cambios de orientación o resize de ventana
-    const observer = new ResizeObserver(() => {
-      map.invalidateSize();
-    });
-    
-    const container = map.getContainer();
-    if (container) {
-      observer.observe(container);
-    }
-
-    return () => {
-      clearTimeout(timer);
-      if (container) observer.unobserve(container);
-      observer.disconnect();
-    };
-  }, [map, mobileView]);
-  
-  return null;
-}
-
 export default function TodayRouteCard({ routeId }: { routeId: number }) {
   const [clients, setClients] = useState<any[]>([]);
   const [cobradorData, setCobradorData] = useState<any>(null);
@@ -223,7 +188,9 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
             </div>
           )}
 
+          {/* CORRECCIÓN DEFINITIVA: key={mobileView} fuerza el remonte en Safari */}
           <MapContainer 
+            key={mobileView} 
             center={mapCenter} 
             zoom={13} 
             style={{ height: "100%", width: "100%", zIndex: 1 }}
@@ -235,9 +202,6 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
             />
 
             <MapFocusController coords={focusCoords} />
-            
-            {/* Componente que asegura el dibujado al cambiar de pestaña */}
-            <MapResizer mobileView={mobileView} />
 
             {clients.map((client) => (
                client.latitude && client.longitude && (
