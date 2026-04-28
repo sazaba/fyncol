@@ -18,11 +18,6 @@ interface InstallmentInput {
  * Crea el cliente, el préstamo inicial y genera automáticamente el plan de pagos (amortización)
  * Incluye validación de duplicados por documentId.
  */
-/**
- * 1. CREAR CLIENTE Y PRÉSTAMO
- * Crea el cliente, el préstamo inicial y genera automáticamente el plan de pagos (amortización)
- * Incluye validación de duplicados por documentId.
- */
 export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
   try {
     const companyId = req.user?.companyId; // SAAS-BLINDAJE
@@ -165,8 +160,6 @@ export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
     return res.status(400).json({ error: error.message || "Error interno del servidor" });
   }
 };
-
-
 
 /**
  * 2. OBTENER CARTERA DEL COBRADOR
@@ -334,9 +327,6 @@ export const updateInstallmentStatus = async (req: AuthRequest, res: Response) =
         const diffAmount = Number(actionParams.amount);
 
         // --- CORRECCIÓN CRÍTICA DE DUPLICACIÓN DE DEUDA ---
-        // Al mover dinero a cuotas futuras (diffAmount), debemos liquidar esta cuota actual.
-        // Se le asigna como "expectedAmount" únicamente lo que realmente se logró pagar.
-        // Esto evita que el sistema siga cobrando este saldo en la cuota vieja.
         await tx.installment.update({
           where: { id: parseInt(id) },
           data: {
@@ -466,7 +456,6 @@ export const updateInstallmentStatus = async (req: AuthRequest, res: Response) =
             });
             await Promise.all(updatePromises);
           }
-          // LÓGICA NUEVA: Descontar un saldo a favor de una cuota en específico (RESTA)
           else if (actionParams.action === 'ABONO_CUOTA_ESPECIFICA') {
             const targetNum = Number(actionParams.targetInstallment);
             const targetInst = futureInstallments.find((i: any) => i.installmentNumber === targetNum);
@@ -574,22 +563,25 @@ export const updateInstallmentStatus = async (req: AuthRequest, res: Response) =
   }
 };
 
+/**
+ * 5. BURÓ INTERNO (MODIFICADO PARA BÚSQUEDA GLOBAL)
+ */
 export const consultarDatacredito = async (req: AuthRequest, res: Response) => {
   try {
-    const companyId = req.user?.companyId; // SAAS-BLINDAJE
-    if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
+    // Ya no requerimos que la búsqueda esté restringida a la empresa que consulta
+    // Permitiendo el comportamiento de "Datacrédito global"
 
-    const documentId = req.params.documentId as string; // CORRECCIÓN TIPADO TS
+    const documentId = req.params.documentId as string;
 
     if (!documentId) return res.status(400).json({ error: "Debe proveer un documento" });
 
-    // Blindaje: Quitamos cualquier espacio en blanco al inicio o al final
+    // Blindaje: Quitamos cualquier espacio en blanco
     const cleanDocumentId = documentId.trim();
 
+    // AQUÍ ESTÁ LA MODIFICACIÓN: Buscamos a nivel de toda la BD (sin route: { companyId })
     const client = await prisma.client.findFirst({ 
       where: { 
-        documentId: cleanDocumentId,
-        route: { companyId } // SAAS-BLINDAJE
+        documentId: cleanDocumentId
       },
       include: {
         loans: {
@@ -624,7 +616,7 @@ export const consultarDatacredito = async (req: AuthRequest, res: Response) => {
       success: true,
       exists: true,
       data: {
-        name: client.name,
+        name: client.name, // Retornamos el nombre real
         phone: client.phone,
         fallasTotales,
         prestamosActivos,
@@ -646,7 +638,7 @@ export const getClientsByRoute = async (req: AuthRequest, res: Response) => {
     const companyId = req.user?.companyId; // SAAS-BLINDAJE
     if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
 
-    const routeId = req.params.routeId as string; // CORRECCIÓN TIPADO TS
+    const routeId = req.params.routeId as string; 
     
     const clients = await prisma.client.findMany({
       where: { 
@@ -669,7 +661,7 @@ export const addLoanToExistingClient = async (req: AuthRequest, res: Response) =
     const companyId = req.user?.companyId; // SAAS-BLINDAJE
     if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
 
-    const clientId = req.params.clientId as string; // CORRECCIÓN TIPADO TS
+    const clientId = req.params.clientId as string; 
     const { amount, installments, interestRate, periodicity, firstPaymentDate } = req.body;
 
     const amountNum = parseFloat(amount);
@@ -754,8 +746,6 @@ export const addLoanToExistingClient = async (req: AuthRequest, res: Response) =
   }
 };
 
-
-
 export const getCapitalByRoute = async (req: AuthRequest, res: Response) => {
   try {
     const companyId = req.user?.companyId; // SAAS-BLINDAJE
@@ -797,7 +787,6 @@ export const addCapital = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ success: false, message: "Ruta y monto válido (mayor a 0) son requeridos." });
     }
 
-    // SAAS-BLINDAJE: Cambiamos findUnique por findFirst para poder validar el companyId
     const route = await prisma.route.findFirst({ 
       where: { id: Number(routeId), companyId } 
     });
@@ -848,7 +837,6 @@ export const withdrawCapital = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ success: false, message: "Ruta y monto válido (mayor a 0) son requeridos." });
     }
 
-    // SAAS-BLINDAJE
     const route = await prisma.route.findFirst({ 
       where: { id: Number(routeId), companyId } 
     });
