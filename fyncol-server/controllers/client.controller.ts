@@ -452,6 +452,24 @@ export const updateInstallmentStatus = async (req: AuthRequest, res: Response) =
             });
             await Promise.all(updatePromises);
           }
+          // LÓGICA NUEVA: Descontar un saldo a favor de una cuota en específico
+          else if (actionParams.action === 'ABONO_CUOTA_ESPECIFICA') {
+            const targetNum = Number(actionParams.targetInstallment);
+            const targetInst = futureInstallments.find((i: any) => i.installmentNumber === targetNum);
+            
+            if (targetInst) {
+              const metaFutura = Number(targetInst.expectedAmount);
+              const nuevoValor = Math.max(0, metaFutura - diffAmount); 
+              await tx.installment.update({
+                where: { id: targetInst.id },
+                data: { 
+                    expectedAmount: Number(nuevoValor.toFixed(2)),
+                    status: nuevoValor === 0 ? 'PAID' : targetInst.status,
+                    paidAt: nuevoValor === 0 ? new Date() : null
+                }
+              });
+            }
+          }
         }
 
         if (actionParams.action === 'CUOTA_EXTRA') {
