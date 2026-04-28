@@ -394,11 +394,12 @@ export default function CarteraActiva() {
 
               const dbDateActiva = cuotaActiva ? cuotaActiva.dueDate.split('T')[0] : null;
               
-              // BLINDAJE: Solo requiere renegociar si debe plata (faltante > 0)
+              // BLINDAJE: Calculamos faltante real y gestionamos botones
               const faltanteActual = cuotaActiva ? Math.round(Number(cuotaActiva.expectedAmount) - Number(cuotaActiva.paidAmount || 0)) : 0;
               const requiereRenegociar = cuotaActiva && dbDateActiva && dbDateActiva < deviceTodayStr && cuotaActiva.status !== 'PAID' && cuotaActiva.status !== 'RENEGOTIATED' && faltanteActual > 0;
-              const isRenegociadaFutura = cuotaActiva && cuotaActiva.status === 'RENEGOTIATED' && cuotaActiva.promiseDate && cuotaActiva.promiseDate.split('T')[0] > deviceTodayStr;
-              const mostrarBotones = cuotaActiva && (cuotaActiva.status === 'PENDING' || cuotaActiva.status === 'PARTIAL' || cuotaActiva.status === 'OVERDUE' || (cuotaActiva.status === 'RENEGOTIATED' && faltanteActual > 0)) && !isRenegociadaFutura;
+              
+              // Se muestran los botones de acción si está activa o si está renegociada pero aún tiene deuda pendiente.
+              const mostrarContainerBotones = cuotaActiva && (cuotaActiva.status === 'PENDING' || cuotaActiva.status === 'PARTIAL' || cuotaActiva.status === 'OVERDUE' || cuotaActiva.status === 'RENEGOTIATED') && faltanteActual > 0;
 
               return (
                 <div 
@@ -431,7 +432,8 @@ export default function CarteraActiva() {
                     {cuotaActiva && !prestamoTerminado && (
                       <div className={`mt-2 rounded-lg p-2.5 border ${cuotaActiva.status === 'RENEGOTIATED' ? 'bg-orange-500/10 border-orange-500/20' : 'bg-[#0B0B12] border-white/5'}`}>
                         <div className="flex justify-between items-center mb-2">
-                           <span className={`text-xs font-bold ${cuotaActiva.status === 'RENEGOTIATED' ? 'text-orange-400' : 'text-white'}`}>${Math.round(Number(cuotaActiva.expectedAmount) || 0).toLocaleString('es-CO')}</span>
+                           {/* MUESTRA EL SALDO FALTANTE REAL SIEMPRE */}
+                           <span className={`text-xs font-bold ${cuotaActiva.status === 'RENEGOTIATED' ? 'text-orange-400' : 'text-white'}`}>${faltanteActual.toLocaleString('es-CO')}</span>
                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded text-blue-400 bg-blue-500/10 uppercase">Cuota {cuotaActiva.installmentNumber}</span>
                         </div>
 
@@ -453,11 +455,12 @@ export default function CarteraActiva() {
                           </div>
                         )}
                         
-                        {mostrarBotones && (
+                        {mostrarContainerBotones && (
                           isRouteClosed ? (
                             <div className="py-2 text-center border border-white/5 bg-white/5 rounded-lg text-slate-500 text-xs font-semibold flex items-center justify-center gap-1.5 mt-1"><FiLock size={12} /> Pagos bloqueados por cierre</div>
                           ) : (
                             <div className="flex gap-1.5 mt-2">
+                              {/* NO MUESTRA PAGAR NI MORA SI ESTA RENEGOCIADA */}
                               {cuotaActiva.status !== 'RENEGOTIATED' && (
                                 <button 
                                   onClick={(e) => {
@@ -469,6 +472,7 @@ export default function CarteraActiva() {
                                   PAGAR
                                 </button>
                               )}
+                              {/* ABONO APARECE SIEMPRE QUE HAYA SALDO PENDIENTE */}
                               <button 
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
@@ -778,7 +782,6 @@ export default function CarteraActiva() {
                       </div>
                     </label>
 
-                    {/* ESTA ES LA OPCIÓN QUE NO TE SALÍA PORQUE FALTABA EN EL ARCHIVO QUE TENÍAS */}
                     {futureInstallmentsUI.length > 0 && (
                         <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overpaymentAction === 'ABONO_CUOTA_ESPECIFICA' ? 'bg-emerald-600/20 border-emerald-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
                           <input type="radio" name="overpaymentAction" checked={overpaymentAction === 'ABONO_CUOTA_ESPECIFICA'} onChange={() => { setOverpaymentAction('ABONO_CUOTA_ESPECIFICA'); setTargetInstallmentNum(futureInstallmentsUI[0]?.installmentNumber); }} className="mt-1 shrink-0 accent-emerald-500" />
@@ -890,10 +893,10 @@ export default function CarteraActiva() {
                         </div>
                         <div className="text-right flex flex-col items-end">
                            <p className={`font-bold text-base ${inst.status === 'RENEGOTIATED' ? 'text-orange-400' : inst.status === 'PAID' ? 'text-emerald-400' : inst.status === 'OVERDUE' ? 'text-red-400' : 'text-white'}`}>
-                             ${Math.round(Number(inst.expectedAmount) || 0).toLocaleString('es-CO')}
+                             ${inst.status === 'PAID' ? Math.round(Number(inst.expectedAmount) || 0).toLocaleString('es-CO') : faltanteActual.toLocaleString('es-CO')}
                            </p>
                            <p className={`text-[10px] uppercase font-bold tracking-wider mt-1 ${inst.status === 'RENEGOTIATED' ? 'text-orange-400' : inst.status === 'PARTIAL' ? 'text-blue-400' : 'text-slate-500'}`}>
-                             {inst.status === 'PARTIAL' ? `Faltan $${faltanteActual.toLocaleString('es-CO')}` : traducirEstado(inst.status)}
+                             {traducirEstado(inst.status)}
                            </p>
                            {requiereRenegociarModal && (
                              <div className="mt-1.5 text-[9px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded flex items-center gap-1 uppercase border border-red-500/20">
