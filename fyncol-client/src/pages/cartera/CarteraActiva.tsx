@@ -180,7 +180,6 @@ export default function CarteraActiva() {
 
       const cuotaActiva = loan?.installmentDetails?.find((i: any) => {
         if (i.status === 'PAID') return false;
-
         const dbDate = i.dueDate.split('T')[0];
         const promiseDateStr = i.promiseDate ? i.promiseDate.split('T')[0] : null;
 
@@ -533,6 +532,7 @@ export default function CarteraActiva() {
                           </div>
                         )}
                         
+                        {/* AQUI SE OCULTAN LOS BOTONES DE PAGAR Y MORA SI YA ESTÁ RENEGOCIADA */}
                         {(cuotaActiva.status === 'PENDING' || cuotaActiva.status === 'PARTIAL' || cuotaActiva.status === 'OVERDUE' || cuotaActiva.status === 'RENEGOTIATED') && !isRenegociadaFutura && (
                           isRouteClosed ? (
                             <div className="py-2 text-center border border-white/5 bg-white/5 rounded-lg text-slate-500 text-xs font-semibold flex items-center justify-center gap-1.5 mt-1">
@@ -540,16 +540,18 @@ export default function CarteraActiva() {
                             </div>
                           ) : (
                             <div className="flex gap-1.5 mt-2">
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const faltante = Math.round(Number(cuotaActiva.expectedAmount) - Number(cuotaActiva.paidAmount || 0));
-                                  setConfirmPayModal({ open: true, inst: cuotaActiva, faltante });
-                                }} 
-                                className="flex-[2] bg-blue-600 hover:bg-blue-500 py-1.5 rounded text-white text-[10px] font-bold flex justify-center items-center transition-all"
-                              >
-                                PAGAR
-                              </button>
+                              {cuotaActiva.status !== 'RENEGOTIATED' && (
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const faltante = Math.round(Number(cuotaActiva.expectedAmount) - Number(cuotaActiva.paidAmount || 0));
+                                    setConfirmPayModal({ open: true, inst: cuotaActiva, faltante });
+                                  }} 
+                                  className="flex-[2] bg-blue-600 hover:bg-blue-500 py-1.5 rounded text-white text-[10px] font-bold flex justify-center items-center transition-all"
+                                >
+                                  PAGAR
+                                </button>
+                              )}
                               <button 
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
@@ -566,18 +568,20 @@ export default function CarteraActiva() {
                               >
                                 ABONO
                               </button>
-                              <button 
-                                onClick={(e) => { 
-                                  e.stopPropagation(); 
-                                  setOverdueModal({ open: true, inst: cuotaActiva, loan: loan }); 
-                                  
-                                  const isDiario = loan.periodicity === 'DIARIO';
-                                  setOverdueAction(isDiario ? 'PROXIMA_CUOTA' : 'SOLO_MORA'); 
-                                }}
-                                className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 py-1.5 rounded text-[10px] font-bold flex justify-center items-center transition-all"
-                              >
-                                MORA
-                              </button>
+                              {cuotaActiva.status !== 'RENEGOTIATED' && (
+                                <button 
+                                  onClick={(e) => { 
+                                    e.stopPropagation(); 
+                                    setOverdueModal({ open: true, inst: cuotaActiva, loan: loan }); 
+                                    
+                                    const isDiario = loan.periodicity === 'DIARIO';
+                                    setOverdueAction(isDiario ? 'PROXIMA_CUOTA' : 'SOLO_MORA'); 
+                                  }}
+                                  className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 py-1.5 rounded text-[10px] font-bold flex justify-center items-center transition-all"
+                                >
+                                  MORA
+                                </button>
+                              )}
                             </div>
                           )
                         )}
@@ -1073,20 +1077,23 @@ export default function CarteraActiva() {
                         </div>
                       )}
                       
-                      {inst.status !== 'PAID' && inst.status !== 'RENEGOTIATED' && (
+                      {/* AQUI SE OCULTAN LOS BOTONES DE PAGAR Y MORA EN EL MODAL SI ESTA RENEGOCIADA */}
+                      {inst.status !== 'PAID' && (
                         isRouteClosed ? (
                           <div className="mt-2 pt-3 border-t border-white/5 text-center">
                             <span className="text-xs text-slate-500 font-semibold flex items-center justify-center gap-1"><FiLock size={12} /> Caja cerrada hoy</span>
                           </div>
                         ) : (
                           <div className="flex gap-2 mt-2 pt-3 border-t border-white/5">
-                            <button 
-                              onClick={() => setConfirmPayModal({ open: true, inst: inst, faltante: Number(inst.expectedAmount) - Number(inst.paidAmount || 0) })} 
-                              disabled={updatingInstId === inst.id} 
-                              className="flex-[2] bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 py-2.5 rounded-xl text-blue-400 text-xs font-semibold transition-all flex items-center justify-center"
-                            >
-                              {updatingInstId === inst.id ? <FiLoader className="animate-spin" /> : 'Liquidar Cuota'}
-                            </button>
+                            {inst.status !== 'RENEGOTIATED' && (
+                              <button 
+                                onClick={() => setConfirmPayModal({ open: true, inst: inst, faltante: Number(inst.expectedAmount) - Number(inst.paidAmount || 0) })} 
+                                disabled={updatingInstId === inst.id} 
+                                className="flex-[2] bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 py-2.5 rounded-xl text-blue-400 text-xs font-semibold transition-all flex items-center justify-center"
+                              >
+                                {updatingInstId === inst.id ? <FiLoader className="animate-spin" /> : 'Liquidar Cuota'}
+                              </button>
+                            )}
                             <button 
                               onClick={() => { setManualPayModal({ open: true, inst: inst, loan: selectedClient.loans[0] }); setManualAmount(""); setSaldoAction('PROXIMA_CUOTA'); setOverpaymentAction('NEXT_QUOTA'); }} 
                               className="flex-1 bg-white/5 hover:bg-white/10 py-2.5 rounded-xl text-slate-300 flex items-center justify-center transition-colors border border-white/5"
