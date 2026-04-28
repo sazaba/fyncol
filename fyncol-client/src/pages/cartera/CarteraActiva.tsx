@@ -183,13 +183,14 @@ export default function CarteraActiva() {
 
         const dbDate = i.dueDate.split('T')[0];
         const promiseDateStr = i.promiseDate ? i.promiseDate.split('T')[0] : null;
-        
+
         const isDueToday = dbDate <= deviceTodayStr;
         const isPromisedToday = promiseDateStr && promiseDateStr <= deviceTodayStr;
+        const isFuturePromise = promiseDateStr && promiseDateStr > deviceTodayStr;
         
         if (filter === 'HOY') {
-            if (i.status === 'RENEGOTIATED') return false; 
-            if (promiseDateStr && promiseDateStr > deviceTodayStr) return false;
+            if (isFuturePromise) return false;
+            if (i.status === 'RENEGOTIATED') return isPromisedToday;
             return isDueToday || isPromisedToday;
         }
 
@@ -201,7 +202,7 @@ export default function CarteraActiva() {
       if (filter === 'PENDIENTES') {
          return loan?.installmentDetails?.some((i: any) => 
            i.status === 'OVERDUE' || 
-           i.status === 'RENEGOTIATED' || 
+           (i.status === 'RENEGOTIATED' && i.promiseDate && i.promiseDate.split('T')[0] <= deviceTodayStr) || 
            (i.status === 'PENDING' && i.dueDate.split('T')[0] < deviceTodayStr)
          );
       }
@@ -448,8 +449,11 @@ export default function CarteraActiva() {
                 const promiseDateStr = i.promiseDate ? i.promiseDate.split('T')[0] : null;
                 const isDueToday = dbDate <= deviceTodayStr;
                 const isPromisedToday = promiseDateStr && promiseDateStr <= deviceTodayStr;
-                
-                return isDueToday || isPromisedToday || i.status === 'RENEGOTIATED' || i.status === 'OVERDUE';
+                const isFuturePromise = promiseDateStr && promiseDateStr > deviceTodayStr;
+
+                if (filter === 'HOY' && isFuturePromise) return false;
+
+                return isDueToday || isPromisedToday || i.status === 'RENEGOTIATED' || i.status === 'OVERDUE' || i.status === 'PENDING' || i.status === 'PARTIAL';
               });
 
               const prestamoTerminado = loan.installmentDetails ? loan.installmentDetails.every((i: any) => i.status === 'PAID') : false;
@@ -457,6 +461,7 @@ export default function CarteraActiva() {
 
               const dbDateActiva = cuotaActiva ? cuotaActiva.dueDate.split('T')[0] : null;
               const requiereRenegociar = cuotaActiva && dbDateActiva && dbDateActiva < deviceTodayStr && cuotaActiva.status !== 'PAID' && cuotaActiva.status !== 'RENEGOTIATED';
+              const isRenegociadaFutura = cuotaActiva && cuotaActiva.status === 'RENEGOTIATED' && cuotaActiva.promiseDate && cuotaActiva.promiseDate.split('T')[0] > deviceTodayStr;
 
               return (
                 <div 
@@ -528,7 +533,7 @@ export default function CarteraActiva() {
                           </div>
                         )}
                         
-                        {(cuotaActiva.status === 'PENDING' || cuotaActiva.status === 'PARTIAL' || cuotaActiva.status === 'OVERDUE' || cuotaActiva.status === 'RENEGOTIATED') && (
+                        {(cuotaActiva.status === 'PENDING' || cuotaActiva.status === 'PARTIAL' || cuotaActiva.status === 'OVERDUE' || cuotaActiva.status === 'RENEGOTIATED') && !isRenegociadaFutura && (
                           isRouteClosed ? (
                             <div className="py-2 text-center border border-white/5 bg-white/5 rounded-lg text-slate-500 text-xs font-semibold flex items-center justify-center gap-1.5 mt-1">
                                <FiLock size={12} /> Pagos bloqueados por cierre
