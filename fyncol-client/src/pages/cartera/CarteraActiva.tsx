@@ -70,7 +70,10 @@ export default function CarteraActiva() {
   const [confirmPayModal, setConfirmPayModal] = useState<{open: boolean, inst: any, faltante: number}>({ open: false, inst: null, faltante: 0 });
   const [manualPayModal, setManualPayModal] = useState<{open: boolean, inst: any, loan: any}>({ open: false, inst: null, loan: null });
   const [manualAmount, setManualAmount] = useState("");
-  const [saldoAction, setSaldoAction] = useState<'PROXIMA_CUOTA' | 'DIFERIR' | 'CUOTA_ESPECIFICA'>('PROXIMA_CUOTA');
+  
+  // NUEVO ESTADO: 'MANTENER' es el predeterminado para abonos parciales lógicos.
+  const [saldoAction, setSaldoAction] = useState<'MANTENER' | 'PROXIMA_CUOTA' | 'DIFERIR' | 'CUOTA_ESPECIFICA'>('MANTENER');
+  
   const [overpaymentAction, setOverpaymentAction] = useState<'NEXT_QUOTA' | 'REDUCE_TIME' | 'REDUCE_QUOTA'>('NEXT_QUOTA');
   const [targetInstallmentNum, setTargetInstallmentNum] = useState<number>(0);
 
@@ -244,7 +247,7 @@ export default function CarteraActiva() {
         setManualPayModal({ open: false, inst: null, loan: null });
         setOverdueModal({ open: false, inst: null, loan: null });
         setManualAmount("");
-        setSaldoAction('PROXIMA_CUOTA');
+        setSaldoAction('MANTENER');
         setOverpaymentAction('NEXT_QUOTA');
         setOverdueAction('SOLO_MORA');
         setPromiseDate(''); 
@@ -348,7 +351,7 @@ export default function CarteraActiva() {
         </button>
       </div>
 
-      {/* PANEL LATERAL IZQUIERDO (Lista) - Ahora se desliza suavemente en móvil */}
+      {/* PANEL LATERAL IZQUIERDO (Lista) */}
       <div className={`
         absolute md:relative inset-0 md:inset-auto 
         w-full md:w-[420px] lg:w-[480px] h-full 
@@ -532,7 +535,6 @@ export default function CarteraActiva() {
                           </div>
                         )}
                         
-                        {/* AQUI SE OCULTAN LOS BOTONES DE PAGAR Y MORA SI YA ESTÁ RENEGOCIADA */}
                         {(cuotaActiva.status === 'PENDING' || cuotaActiva.status === 'PARTIAL' || cuotaActiva.status === 'OVERDUE' || cuotaActiva.status === 'RENEGOTIATED') && !isRenegociadaFutura && (
                           isRouteClosed ? (
                             <div className="py-2 text-center border border-white/5 bg-white/5 rounded-lg text-slate-500 text-xs font-semibold flex items-center justify-center gap-1.5 mt-1">
@@ -557,11 +559,7 @@ export default function CarteraActiva() {
                                   e.stopPropagation(); 
                                   setManualPayModal({ open: true, inst: cuotaActiva, loan }); 
                                   setManualAmount(""); 
-                                  
-                                  const futureInstallmentsUI = loan.installmentDetails?.filter(
-                                    (i: any) => i.installmentNumber > cuotaActiva.installmentNumber && i.status !== 'PAID'
-                                  ) || [];
-                                  setSaldoAction(futureInstallmentsUI.length > 0 ? 'PROXIMA_CUOTA' : 'PROXIMA_CUOTA');
+                                  setSaldoAction('MANTENER'); // <-- Reseteado al comportamiento correcto
                                   setOverpaymentAction('NEXT_QUOTA'); 
                                 }}
                                 className="flex-1 bg-white/10 hover:bg-white/20 py-1.5 rounded text-white text-[10px] font-bold flex justify-center items-center transition-all"
@@ -613,7 +611,7 @@ export default function CarteraActiva() {
         </div>
       </div>
 
-      {/* ÁREA DERECHA: MAPA - Ahora siempre existe pero se acomoda visualmente en móvil */}
+      {/* ÁREA DERECHA: MAPA */}
       <div className="flex-1 h-full relative z-0">
         <button
           onClick={() => setMapTheme(prev => prev === 'light' ? 'dark' : 'light')}
@@ -885,12 +883,22 @@ export default function CarteraActiva() {
                   </p>
                   
                   <div className="space-y-2">
-                    {futureInstallmentsUI.length > 0 ? (
+                    
+                    {/* OPCIÓN CORREGIDA: Dejar el abono en esta misma cuota sin liquidarla */}
+                    <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${saldoAction === 'MANTENER' ? 'bg-blue-600/20 border-blue-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
+                      <input type="radio" name="saldoAction" checked={saldoAction === 'MANTENER'} onChange={() => setSaldoAction('MANTENER')} className="mt-1 shrink-0 accent-blue-500" />
+                      <div>
+                        <p className="text-sm font-semibold text-white">Mantener en esta misma cuota</p>
+                        <p className="text-xs text-slate-400 mt-0.5">La cuota quedará como Abono Parcial y seguirá debiendo el resto.</p>
+                      </div>
+                    </label>
+
+                    {futureInstallmentsUI.length > 0 && (
                       <>
                         <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${saldoAction === 'PROXIMA_CUOTA' ? 'bg-blue-600/20 border-blue-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
                           <input type="radio" name="saldoAction" checked={saldoAction === 'PROXIMA_CUOTA'} onChange={() => setSaldoAction('PROXIMA_CUOTA')} className="mt-1 shrink-0 accent-blue-500" />
                           <div>
-                            <p className="text-sm font-semibold text-white">Sumarlo a la próxima cuota</p>
+                            <p className="text-sm font-semibold text-white">Moverlo a la próxima cuota</p>
                             <p className="text-xs text-slate-400 mt-0.5">Liquida la cuota de hoy. La próxima será más costosa.</p>
                           </div>
                         </label>
@@ -915,7 +923,7 @@ export default function CarteraActiva() {
                           />
                           <div className="w-full">
                             <p className="text-sm font-semibold text-white">Cargar a una cuota específica</p>
-                            <p className="text-xs text-slate-400 mt-0.5 mb-2">El cliente elige qué cuota futura asume esta deuda.</p>
+                            <p className="text-xs text-slate-400 mt-0.5 mb-2">Mueve la deuda a otra cuota futura elegida a mano.</p>
                             
                             {saldoAction === 'CUOTA_ESPECIFICA' && (
                               <select 
@@ -933,8 +941,6 @@ export default function CarteraActiva() {
                           </div>
                         </label>
                       </>
-                    ) : (
-                      <p className="text-xs text-slate-400 text-center italic py-2">No hay cuotas futuras para reestructurar.</p>
                     )}
                   </div>
                 </div>
@@ -975,24 +981,29 @@ export default function CarteraActiva() {
               )}
               
               <div className="p-6 flex gap-3 shrink-0">
-                <button onClick={() => { setManualPayModal({ open: false, inst: null, loan: null }); setSaldoAction('PROXIMA_CUOTA'); setOverpaymentAction('NEXT_QUOTA'); }} className="flex-1 py-3.5 border border-white/5 text-slate-300 font-medium text-sm bg-[#0B0B12] hover:bg-white/5 rounded-xl transition-colors">Cancelar</button>
+                <button onClick={() => { setManualPayModal({ open: false, inst: null, loan: null }); setSaldoAction('MANTENER'); setOverpaymentAction('NEXT_QUOTA'); }} className="flex-1 py-3.5 border border-white/5 text-slate-300 font-medium text-sm bg-[#0B0B12] hover:bg-white/5 rounded-xl transition-colors">Cancelar</button>
                 <button 
                   onClick={() => {
                     let finalStatus = 'PAID'; 
                     let actionData: any = { action: 'NONE', amount: 0, targetInstallment: 0, description: '' };
 
-                    if (esParcial && futureInstallmentsUI.length > 0) {
-                       actionData = { action: saldoAction, amount: diferencia, targetInstallment: targetInstallmentNum };
-                       if (saldoAction === 'PROXIMA_CUOTA') actionData.description = `Faltante de $${diferencia.toLocaleString('es-CO')} sumado a la siguiente cuota.`;
-                       if (saldoAction === 'DIFERIR') actionData.description = `Faltante de $${diferencia.toLocaleString('es-CO')} diferido en cuotas restantes.`;
-                       if (saldoAction === 'CUOTA_ESPECIFICA') actionData.description = `Faltante de $${diferencia.toLocaleString('es-CO')} sumado a cuota #${targetInstallmentNum}.`;
+                    if (esParcial) {
+                       if (saldoAction === 'MANTENER') {
+                           finalStatus = 'PARTIAL';
+                           actionData.description = `Abono parcial de $${abonoValue.toLocaleString('es-CO')}. Queda un saldo de $${diferencia.toLocaleString('es-CO')}.`;
+                       } else if (futureInstallmentsUI.length > 0) {
+                           actionData = { action: saldoAction, amount: diferencia, targetInstallment: targetInstallmentNum };
+                           if (saldoAction === 'PROXIMA_CUOTA') actionData.description = `Faltante de $${diferencia.toLocaleString('es-CO')} sumado a la siguiente cuota.`;
+                           if (saldoAction === 'DIFERIR') actionData.description = `Faltante de $${diferencia.toLocaleString('es-CO')} diferido en cuotas restantes.`;
+                           if (saldoAction === 'CUOTA_ESPECIFICA') actionData.description = `Faltante de $${diferencia.toLocaleString('es-CO')} sumado a cuota #${targetInstallmentNum}.`;
+                       }
                     } else if (esExcedente) {
                        actionData = { action: overpaymentAction, amount: diferencia, targetInstallment: 0 };
                        if (overpaymentAction === 'NEXT_QUOTA') actionData.description = `Excedente de $${diferencia.toLocaleString('es-CO')} abonado a la siguiente cuota.`;
                        if (overpaymentAction === 'REDUCE_TIME') actionData.description = `Excedente de $${diferencia.toLocaleString('es-CO')} usado para reducir tiempo (atrás hacia adelante).`;
                        if (overpaymentAction === 'REDUCE_QUOTA') actionData.description = `Excedente de $${diferencia.toLocaleString('es-CO')} usado para reducir cuotas restantes.`;
                     } else {
-                       actionData.description = "Pago parcial registrado sin reestructuración.";
+                       actionData.description = "Pago liquidado exactamente.";
                     }
 
                     handleUpdateStatus(inst.id, finalStatus, abonoValue, actionData);
@@ -1032,11 +1043,9 @@ export default function CarteraActiva() {
               {modalTab === 'PLAN' && (
                 selectedClient.loans[0]?.installmentDetails?.map((inst: any) => {
                   
-                  // --- INICIO LÓGICA DE ALERTA RENEGOCIAR EN MODAL ---
                   const instDbDate = inst.dueDate.split('T')[0];
                   const deviceTodayStr = getDeviceTodayStr();
                   const requiereRenegociarModal = instDbDate < deviceTodayStr && inst.status !== 'PAID' && inst.status !== 'RENEGOTIATED';
-                  // --- FIN LÓGICA ---
 
                   return (
                     <div key={inst.id} className={`flex flex-col gap-3 p-4 rounded-2xl border transition-colors ${inst.status === 'RENEGOTIATED' ? 'bg-orange-500/5 border-orange-500/10' : inst.status === 'PAID' ? 'bg-emerald-500/5 border-emerald-500/10' : inst.status === 'PARTIAL' ? 'bg-blue-500/5 border-blue-500/10' : 'bg-[#0B0B12] border-white/5 hover:border-white/10'}`}>
@@ -1061,7 +1070,6 @@ export default function CarteraActiva() {
                            <p className={`text-[10px] uppercase font-bold tracking-wider mt-1 ${inst.status === 'RENEGOTIATED' ? 'text-orange-400' : inst.status === 'PARTIAL' ? 'text-blue-400' : 'text-slate-500'}`}>
                              {inst.status === 'PARTIAL' ? `Faltan $${Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount)).toLocaleString('es-CO')}` : traducirEstado(inst.status)}
                            </p>
-                           {/* ETIQUETA RENEGOCIAR EN EL MODAL */}
                            {requiereRenegociarModal && (
                              <div className="mt-1.5 text-[9px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded flex items-center gap-1 uppercase border border-red-500/20">
                                <FiAlertTriangle size={10} /> RENEGOCIAR
@@ -1077,7 +1085,6 @@ export default function CarteraActiva() {
                         </div>
                       )}
                       
-                      {/* AQUI SE OCULTAN LOS BOTONES DE PAGAR Y MORA EN EL MODAL SI ESTA RENEGOCIADA */}
                       {inst.status !== 'PAID' && (
                         isRouteClosed ? (
                           <div className="mt-2 pt-3 border-t border-white/5 text-center">
@@ -1095,7 +1102,7 @@ export default function CarteraActiva() {
                               </button>
                             )}
                             <button 
-                              onClick={() => { setManualPayModal({ open: true, inst: inst, loan: selectedClient.loans[0] }); setManualAmount(""); setSaldoAction('PROXIMA_CUOTA'); setOverpaymentAction('NEXT_QUOTA'); }} 
+                              onClick={() => { setManualPayModal({ open: true, inst: inst, loan: selectedClient.loans[0] }); setManualAmount(""); setSaldoAction('MANTENER'); setOverpaymentAction('NEXT_QUOTA'); }} 
                               className="flex-1 bg-white/5 hover:bg-white/10 py-2.5 rounded-xl text-slate-300 flex items-center justify-center transition-colors border border-white/5"
                             >
                               <FiDollarSign size={14} /> Abono Especial
