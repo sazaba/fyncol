@@ -71,8 +71,6 @@ export default function CarteraActiva() {
   const [manualAmount, setManualAmount] = useState("");
   
   const [saldoAction, setSaldoAction] = useState<'MANTENER' | 'PROXIMA_CUOTA' | 'DIFERIR' | 'CUOTA_ESPECIFICA'>('MANTENER');
-  
-  // AGREGADO: 'ABONO_CUOTA_ESPECIFICA' para manejar saldos a favor
   const [overpaymentAction, setOverpaymentAction] = useState<'NEXT_QUOTA' | 'REDUCE_TIME' | 'REDUCE_QUOTA' | 'ABONO_CUOTA_ESPECIFICA'>('NEXT_QUOTA');
   const [targetInstallmentNum, setTargetInstallmentNum] = useState<number>(0);
 
@@ -159,12 +157,7 @@ export default function CarteraActiva() {
       const deviceTodayStr = getDeviceTodayStr();
       const storageKey = `closed_route_${routeInfo.id}_${deviceTodayStr}`;
       const isClosed = localStorage.getItem(storageKey);
-      
-      if (isClosed === 'true') {
-        setIsRouteClosed(true);
-      } else {
-        setIsRouteClosed(false); 
-      }
+      setIsRouteClosed(isClosed === 'true');
     }
   }, [routeInfo]);
 
@@ -190,7 +183,6 @@ export default function CarteraActiva() {
             if (i.status === 'RENEGOTIATED') return isPromisedToday;
             return isDueToday || isPromisedToday;
         }
-
         return true; 
       });
 
@@ -203,15 +195,12 @@ export default function CarteraActiva() {
            (i.status === 'PENDING' && i.dueDate.split('T')[0] < deviceTodayStr)
          );
       }
-
       return true;
     });
   }, [clients, searchTerm, filter]);
 
   const routePolylineCoords = useMemo(() => {
-    return filteredData
-      .filter(c => c.latitude && c.longitude)
-      .map(c => [c.latitude, c.longitude] as [number, number]);
+    return filteredData.filter(c => c.latitude && c.longitude).map(c => [c.latitude, c.longitude] as [number, number]);
   }, [filteredData]);
 
   useEffect(() => {
@@ -222,7 +211,6 @@ export default function CarteraActiva() {
 
   const handleUpdateStatus = async (instId: number, status: string, amount: number, actionData?: any) => {
     if(isRouteClosed) return; 
-
     setUpdatingInstId(instId);
     try {
       const token = localStorage.getItem("token");
@@ -288,7 +276,6 @@ export default function CarteraActiva() {
         alert("Error al calcular el arqueo: " + (data.error || "Desconocido"));
       }
     } catch (error) {
-      console.error("Error al obtener el resumen de cierre");
       alert("Hubo un problema de conexión con el servidor.");
     } finally {
       setIsLoading(false);
@@ -329,39 +316,16 @@ export default function CarteraActiva() {
 
   return (
     <div className="relative flex h-[calc(100vh-64px)] w-full bg-[#0B0B12] overflow-hidden">
-      
-      {/* BOTONES FLOTANTES (SOLO MÓVIL) */}
       <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-[400] flex bg-[#05050A]/95 backdrop-blur-xl p-1.5 rounded-2xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.5)] w-[85%] max-w-[320px]">
-        <button 
-          onClick={() => setMobileView('LIST')}
-          className={`flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 font-bold text-sm transition-all ${mobileView === 'LIST' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-        >
-          <FiList size={16} /> Lista
-        </button>
-        <button 
-          onClick={() => setMobileView('MAP')}
-          className={`flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 font-bold text-sm transition-all ${mobileView === 'MAP' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-        >
-          <FiMapPin size={16} /> Mapa
-        </button>
+        <button onClick={() => setMobileView('LIST')} className={`flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 font-bold text-sm transition-all ${mobileView === 'LIST' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}><FiList size={16} /> Lista</button>
+        <button onClick={() => setMobileView('MAP')} className={`flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 font-bold text-sm transition-all ${mobileView === 'MAP' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}><FiMapPin size={16} /> Mapa</button>
       </div>
 
-      {/* PANEL LATERAL IZQUIERDO */}
-      <div className={`
-        absolute md:relative inset-0 md:inset-auto 
-        w-full md:w-[420px] lg:w-[480px] h-full 
-        flex flex-col bg-[#05050A] border-r border-white/10 shrink-0 
-        shadow-2xl transition-transform duration-300 ease-in-out z-[100] md:z-10
-        ${mobileView === 'MAP' ? '-translate-x-full md:translate-x-0' : 'translate-x-0'}
-      `}>
+      <div className={`absolute md:relative inset-0 md:inset-auto w-full md:w-[420px] lg:w-[480px] h-full flex flex-col bg-[#05050A] border-r border-white/10 shrink-0 shadow-2xl transition-transform duration-300 ease-in-out z-[100] md:z-10 ${mobileView === 'MAP' ? '-translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
         <div className="p-5 border-b border-white/5 shrink-0 bg-[#0B0B12]">
           <div className="flex justify-between items-start mb-4">
             <h1 className="text-xl font-bold text-white">Sistema Logístico</h1>
-            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest border ${
-              gpsStatus === 'ACTIVE' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
-              gpsStatus === 'ERROR' ? 'bg-red-500/10 border-red-500/20 text-red-400' :
-              'bg-amber-500/10 border-amber-500/20 text-amber-400'
-            }`}>
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest border ${gpsStatus === 'ACTIVE' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : gpsStatus === 'ERROR' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`}>
               {gpsStatus === 'ACTIVE' && <FiNavigation size={10} className="animate-pulse" />}
               {gpsStatus === 'ERROR' && <FiAlertTriangle size={10} />}
               {gpsStatus === 'SEARCHING' && <FiLoader size={10} className="animate-spin" />}
@@ -429,8 +393,12 @@ export default function CarteraActiva() {
               const hasPaidToday = loan.installmentDetails ? loan.installmentDetails.some((i: any) => i.dueDate.startsWith(deviceTodayStr) && i.status === 'PAID') : false;
 
               const dbDateActiva = cuotaActiva ? cuotaActiva.dueDate.split('T')[0] : null;
-              const requiereRenegociar = cuotaActiva && dbDateActiva && dbDateActiva < deviceTodayStr && cuotaActiva.status !== 'PAID' && cuotaActiva.status !== 'RENEGOTIATED';
+              
+              // BLINDAJE: Solo requiere renegociar si debe plata (faltante > 0)
+              const faltanteActual = cuotaActiva ? Math.round(Number(cuotaActiva.expectedAmount) - Number(cuotaActiva.paidAmount || 0)) : 0;
+              const requiereRenegociar = cuotaActiva && dbDateActiva && dbDateActiva < deviceTodayStr && cuotaActiva.status !== 'PAID' && cuotaActiva.status !== 'RENEGOTIATED' && faltanteActual > 0;
               const isRenegociadaFutura = cuotaActiva && cuotaActiva.status === 'RENEGOTIATED' && cuotaActiva.promiseDate && cuotaActiva.promiseDate.split('T')[0] > deviceTodayStr;
+              const mostrarBotones = cuotaActiva && (cuotaActiva.status === 'PENDING' || cuotaActiva.status === 'PARTIAL' || cuotaActiva.status === 'OVERDUE' || (cuotaActiva.status === 'RENEGOTIATED' && faltanteActual > 0)) && !isRenegociadaFutura;
 
               return (
                 <div 
@@ -485,7 +453,7 @@ export default function CarteraActiva() {
                           </div>
                         )}
                         
-                        {(cuotaActiva.status === 'PENDING' || cuotaActiva.status === 'PARTIAL' || cuotaActiva.status === 'OVERDUE' || cuotaActiva.status === 'RENEGOTIATED') && !isRenegociadaFutura && (
+                        {mostrarBotones && (
                           isRouteClosed ? (
                             <div className="py-2 text-center border border-white/5 bg-white/5 rounded-lg text-slate-500 text-xs font-semibold flex items-center justify-center gap-1.5 mt-1"><FiLock size={12} /> Pagos bloqueados por cierre</div>
                           ) : (
@@ -494,8 +462,7 @@ export default function CarteraActiva() {
                                 <button 
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    const faltante = Math.round(Number(cuotaActiva.expectedAmount) - Number(cuotaActiva.paidAmount || 0));
-                                    setConfirmPayModal({ open: true, inst: cuotaActiva, faltante });
+                                    setConfirmPayModal({ open: true, inst: cuotaActiva, faltante: faltanteActual });
                                   }} 
                                   className="flex-[2] bg-blue-600 hover:bg-blue-500 py-1.5 rounded text-white text-[10px] font-bold flex justify-center items-center transition-all"
                                 >
@@ -507,7 +474,6 @@ export default function CarteraActiva() {
                                   e.stopPropagation(); 
                                   setManualPayModal({ open: true, inst: cuotaActiva, loan }); 
                                   setManualAmount(""); 
-                          
                                   setSaldoAction('MANTENER'); 
                                   setOverpaymentAction('NEXT_QUOTA'); 
                                 }}
@@ -540,7 +506,6 @@ export default function CarteraActiva() {
                         <button onClick={(e) => { e.stopPropagation(); openNavigationApp(client.latitude, client.longitude); }} className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-blue-500/10 px-2 py-1 rounded"><FiNavigation size={10} /> GPS</button>
                       )}
                     </div>
-
                   </div>
                 </div>
               );
@@ -549,29 +514,17 @@ export default function CarteraActiva() {
         </div>
       </div>
 
-      {/* ÁREA DERECHA: MAPA */}
       <div className="flex-1 h-full relative z-0">
-        <button
-          onClick={() => setMapTheme(prev => prev === 'light' ? 'dark' : 'light')}
-          className="absolute top-4 right-4 z-[400] p-2.5 bg-[#05050A]/80 backdrop-blur-md text-white rounded-lg shadow-xl border border-white/10 hover:bg-white/5 transition-all"
-          title="Alternar estilo de mapa"
-        >
+        <button onClick={() => setMapTheme(prev => prev === 'light' ? 'dark' : 'light')} className="absolute top-4 right-4 z-[400] p-2.5 bg-[#05050A]/80 backdrop-blur-md text-white rounded-lg shadow-xl border border-white/10 hover:bg-white/5 transition-all" title="Alternar estilo de mapa">
           {mapTheme === 'light' ? <FiMoon size={18} className="text-blue-400" /> : <FiSun size={18} className="text-yellow-400" />}
         </button>
-
         <MapContainer center={[6.2442, -75.5812]} zoom={13} style={{ height: '100%', width: '100%', zIndex: 1 }} zoomControl={false}>
-          <TileLayer 
-            key={mapTheme}
-            url={mapTheme === 'light' ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"} 
-          />
-          {filter !== 'TODOS' && routePolylineCoords.length > 1 && (
-             <Polyline positions={routePolylineCoords} pathOptions={{ color: '#3b82f6', weight: 4, opacity: 0.6, dashArray: '10, 10' }} />
-          )}
+          <TileLayer key={mapTheme} url={mapTheme === 'light' ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"} />
+          {filter !== 'TODOS' && routePolylineCoords.length > 1 && (<Polyline positions={routePolylineCoords} pathOptions={{ color: '#3b82f6', weight: 4, opacity: 0.6, dashArray: '10, 10' }} />)}
           {filteredData.map(client => {
             const deviceTodayStr = getDeviceTodayStr();
             const loan = client.loans?.[0];
             const hasPaidToday = loan?.installmentDetails ? loan.installmentDetails.some((i: any) => i.dueDate.startsWith(deviceTodayStr) && i.status === 'PAID') : false;
-            
             return client.latitude && (
               <Marker key={client.id} position={[client.latitude, client.longitude]} icon={hasPaidToday ? greenIcon : redIcon}>
                 <Popup className="custom-popup">
@@ -588,7 +541,6 @@ export default function CarteraActiva() {
         </MapContainer>
       </div>
 
-      {/* CONFIRMAR PAGO TOTAL */}
       {confirmPayModal.open && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-[#05050A] border border-white/10 rounded-3xl p-7 shadow-2xl text-center animate-[slideUp_0.18s_ease-out]">
@@ -604,7 +556,6 @@ export default function CarteraActiva() {
         </div>
       )}
 
-      {/* POPUP INTELIGENTE DE MORA */}
       {overdueModal.open && (() => {
         const inst = overdueModal.inst;
         const faltante = Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount || 0));
@@ -648,7 +599,6 @@ export default function CarteraActiva() {
                         <p className="text-xs text-slate-400 mt-0.5">La cuota actual se etiqueta como Mora Renegociada y la de mañana cobrará el doble.</p>
                       </div>
                     </label>
-
                     <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overdueAction === 'DIFERIR' ? 'bg-red-600/20 border-red-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
                       <input type="radio" name="overdueAction" checked={overdueAction === 'DIFERIR'} onChange={() => setOverdueAction('DIFERIR')} className="mt-1 shrink-0 accent-red-500" />
                       <div>
@@ -656,7 +606,6 @@ export default function CarteraActiva() {
                         <p className="text-xs text-slate-400 mt-0.5">Reparte la deuda entre todas las cuotas que le faltan.</p>
                       </div>
                     </label>
-
                     <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overdueAction === 'CUOTA_ESPECIFICA' ? 'bg-red-600/20 border-red-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
                       <input type="radio" name="overdueAction" checked={overdueAction === 'CUOTA_ESPECIFICA'} onChange={() => { setOverdueAction('CUOTA_ESPECIFICA'); setOverdueTargetInst(futureInstallmentsUI[0]?.installmentNumber); }} className="mt-1 shrink-0 accent-red-500" />
                       <div className="w-full">
@@ -741,20 +690,14 @@ export default function CarteraActiva() {
         return (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
             <div className="w-full max-w-md bg-[#05050A] border border-white/10 rounded-3xl shadow-2xl animate-[slideUp_0.18s_ease-out] overflow-y-auto max-h-[95vh] [&::-webkit-scrollbar]:hidden">
-              
               <div className="p-6 border-b border-white/5">
                 <div className="flex justify-between items-center mb-5">
                    <h3 className="text-lg font-bold text-white">Registrar Abono</h3>
                    <span className="text-[10px] text-blue-400/80 font-bold uppercase tracking-widest bg-blue-500/10 px-2 py-1 rounded">Cuota Actual: ${faltante.toLocaleString('es-CO')}</span>
                 </div>
-                
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
-                  <input 
-                    type="number" value={manualAmount} onChange={(e) => setManualAmount(e.target.value)} 
-                    className={`w-full bg-[#0B0B12] border ${esExcedente ? 'border-emerald-500 focus:border-emerald-400 text-emerald-400' : 'border-white/10 focus:border-blue-500 text-white'} rounded-2xl pl-8 pr-4 py-4 text-2xl font-bold outline-none shadow-inner transition-colors text-center`} 
-                    placeholder="0.00" autoFocus
-                  />
+                  <input type="number" value={manualAmount} onChange={(e) => setManualAmount(e.target.value)} className={`w-full bg-[#0B0B12] border ${esExcedente ? 'border-emerald-500 focus:border-emerald-400 text-emerald-400' : 'border-white/10 focus:border-blue-500 text-white'} rounded-2xl pl-8 pr-4 py-4 text-2xl font-bold outline-none shadow-inner transition-colors text-center`} placeholder="0.00" autoFocus />
                 </div>
               </div>
 
@@ -779,7 +722,6 @@ export default function CarteraActiva() {
                             <p className="text-xs text-slate-400 mt-0.5">Liquida la cuota de hoy. La próxima será más costosa.</p>
                           </div>
                         </label>
-
                         <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${saldoAction === 'DIFERIR' ? 'bg-blue-600/20 border-blue-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
                           <input type="radio" name="saldoAction" checked={saldoAction === 'DIFERIR'} onChange={() => setSaldoAction('DIFERIR')} className="mt-1 shrink-0 accent-blue-500" />
                           <div>
@@ -787,7 +729,6 @@ export default function CarteraActiva() {
                             <p className="text-xs text-slate-400 mt-0.5">Reparte la deuda restante equitativamente.</p>
                           </div>
                         </label>
-
                         <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${saldoAction === 'CUOTA_ESPECIFICA' ? 'bg-blue-600/20 border-blue-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
                           <input type="radio" name="saldoAction" checked={saldoAction === 'CUOTA_ESPECIFICA'} onChange={() => { setSaldoAction('CUOTA_ESPECIFICA'); setTargetInstallmentNum(futureInstallmentsUI[0]?.installmentNumber); }} className="mt-1 shrink-0 accent-blue-500" />
                           <div className="w-full">
@@ -837,7 +778,7 @@ export default function CarteraActiva() {
                       </div>
                     </label>
 
-                    {/* NUEVA OPCIÓN: Aplicar excedente restando a una cuota específica */}
+                    {/* ESTA ES LA OPCIÓN QUE NO TE SALÍA PORQUE FALTABA EN EL ARCHIVO QUE TENÍAS */}
                     {futureInstallmentsUI.length > 0 && (
                         <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overpaymentAction === 'ABONO_CUOTA_ESPECIFICA' ? 'bg-emerald-600/20 border-emerald-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
                           <input type="radio" name="overpaymentAction" checked={overpaymentAction === 'ABONO_CUOTA_ESPECIFICA'} onChange={() => { setOverpaymentAction('ABONO_CUOTA_ESPECIFICA'); setTargetInstallmentNum(futureInstallmentsUI[0]?.installmentNumber); }} className="mt-1 shrink-0 accent-emerald-500" />
@@ -925,7 +866,11 @@ export default function CarteraActiva() {
                   
                   const instDbDate = inst.dueDate.split('T')[0];
                   const deviceTodayStr = getDeviceTodayStr();
-                  const requiereRenegociarModal = instDbDate < deviceTodayStr && inst.status !== 'PAID' && inst.status !== 'RENEGOTIATED';
+                  const faltanteActual = Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount || 0));
+                  
+                  const requiereRenegociarModal = instDbDate < deviceTodayStr && inst.status !== 'PAID' && inst.status !== 'RENEGOTIATED' && faltanteActual > 0;
+                  const isRenegociadaFutura = inst.status === 'RENEGOTIATED' && inst.promiseDate && inst.promiseDate.split('T')[0] > deviceTodayStr;
+                  const mostrarBotones = (inst.status === 'PENDING' || inst.status === 'PARTIAL' || inst.status === 'OVERDUE' || (inst.status === 'RENEGOTIATED' && faltanteActual > 0)) && !isRenegociadaFutura;
 
                   return (
                     <div key={inst.id} className={`flex flex-col gap-3 p-4 rounded-2xl border transition-colors ${inst.status === 'RENEGOTIATED' ? 'bg-orange-500/5 border-orange-500/10' : inst.status === 'PAID' ? 'bg-emerald-500/5 border-emerald-500/10' : inst.status === 'PARTIAL' ? 'bg-blue-500/5 border-blue-500/10' : 'bg-[#0B0B12] border-white/5 hover:border-white/10'}`}>
@@ -948,7 +893,7 @@ export default function CarteraActiva() {
                              ${Math.round(Number(inst.expectedAmount) || 0).toLocaleString('es-CO')}
                            </p>
                            <p className={`text-[10px] uppercase font-bold tracking-wider mt-1 ${inst.status === 'RENEGOTIATED' ? 'text-orange-400' : inst.status === 'PARTIAL' ? 'text-blue-400' : 'text-slate-500'}`}>
-                             {inst.status === 'PARTIAL' ? `Faltan $${Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount)).toLocaleString('es-CO')}` : traducirEstado(inst.status)}
+                             {inst.status === 'PARTIAL' ? `Faltan $${faltanteActual.toLocaleString('es-CO')}` : traducirEstado(inst.status)}
                            </p>
                            {requiereRenegociarModal && (
                              <div className="mt-1.5 text-[9px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded flex items-center gap-1 uppercase border border-red-500/20">
@@ -965,7 +910,7 @@ export default function CarteraActiva() {
                         </div>
                       )}
                       
-                      {inst.status !== 'PAID' && (
+                      {mostrarBotones && (
                         isRouteClosed ? (
                           <div className="mt-2 pt-3 border-t border-white/5 text-center">
                             <span className="text-xs text-slate-500 font-semibold flex items-center justify-center gap-1"><FiLock size={12} /> Caja cerrada hoy</span>
@@ -974,7 +919,7 @@ export default function CarteraActiva() {
                           <div className="flex gap-2 mt-2 pt-3 border-t border-white/5">
                             {inst.status !== 'RENEGOTIATED' && (
                               <button 
-                                onClick={() => setConfirmPayModal({ open: true, inst: inst, faltante: Number(inst.expectedAmount) - Number(inst.paidAmount || 0) })} 
+                                onClick={() => setConfirmPayModal({ open: true, inst: inst, faltante: faltanteActual })} 
                                 disabled={updatingInstId === inst.id} 
                                 className="flex-[2] bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 py-2.5 rounded-xl text-blue-400 text-xs font-semibold transition-all flex items-center justify-center"
                               >
@@ -1024,21 +969,16 @@ export default function CarteraActiva() {
       {closureModalOpen && closureSummary && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-md bg-[#05050A] border border-white/10 rounded-3xl p-7 shadow-2xl animate-[slideUp_0.18s_ease-out]">
-            
             <div className="text-center mb-6">
-              <div className="h-12 w-12 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-emerald-400">
-                <FiCheckCircle size={24} />
-              </div>
+              <div className="h-12 w-12 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-emerald-400"><FiCheckCircle size={24} /></div>
               <h3 className="text-xl font-bold text-white mb-1">Arqueo de Caja</h3>
               <p className="text-sm text-slate-400">Verifica los valores antes de entregar el efectivo.</p>
             </div>
-
             <div className="grid grid-cols-2 gap-3 mb-6">
               <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl col-span-2 text-center">
                 <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Efectivo a entregar (Recaudo)</p>
                 <p className="text-3xl font-bold text-emerald-400">${closureSummary.totalCollected.toLocaleString('es-CO')}</p>
               </div>
-
               <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl">
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Disponible en ruta</p>
                 <p className="text-sm font-bold text-blue-400">${closureSummary.availableCapital.toLocaleString('es-CO')}</p>
@@ -1047,7 +987,6 @@ export default function CarteraActiva() {
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Cartera en la calle</p>
                 <p className="text-sm font-bold text-white">${closureSummary.totalPortfolio.toLocaleString('es-CO')}</p>
               </div>
-              
               <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl">
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Ventas (Nuevos)</p>
                 <p className="text-sm font-bold text-white">${closureSummary.newSales.toLocaleString('es-CO')}</p>
@@ -1057,33 +996,19 @@ export default function CarteraActiva() {
                 <p className="text-sm font-bold text-white">${closureSummary.renewals.toLocaleString('es-CO')}</p>
               </div>
             </div>
-
             <div className="flex justify-between items-center mb-6 px-3 text-[10px] sm:text-xs text-slate-400 font-medium bg-white/5 py-2.5 rounded-lg">
               <span className="flex flex-col items-center gap-1"><FiMapPin size={14} /> Total: {closureSummary.totalClients}</span>
               <span className="flex flex-col items-center gap-1 text-emerald-400/80"><FiCheckCircle size={14} /> Pagos: {closureSummary.collectedClients}</span>
               <span className="flex flex-col items-center gap-1 text-orange-400/80"><FiClock size={14} /> Acuerdos: {closureSummary.renegotiatedClients || 0}</span>
               <span className="flex flex-col items-center gap-1 text-red-400/80"><FiAlertTriangle size={14} /> Mora: {closureSummary.overdueClients || 0}</span>
             </div>
-            
             <div className="flex gap-3">
-              <button 
-                onClick={() => setClosureModalOpen(false)} 
-                className="flex-1 py-3 bg-white/5 border border-white/5 text-slate-300 rounded-xl font-medium text-sm hover:bg-white/10 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={handleConfirmClosure}
-                disabled={isClosing}
-                className="flex-[2] py-3 bg-emerald-600 text-white rounded-xl font-semibold text-sm hover:bg-emerald-500 transition-all disabled:opacity-50 flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.3)]"
-              >
-                {isClosing ? <FiLoader className="animate-spin" /> : 'Confirmar Cierre'}
-              </button>
+              <button onClick={() => setClosureModalOpen(false)} className="flex-1 py-3 bg-white/5 border border-white/5 text-slate-300 rounded-xl font-medium text-sm hover:bg-white/10 transition-colors">Cancelar</button>
+              <button onClick={handleConfirmClosure} disabled={isClosing} className="flex-[2] py-3 bg-emerald-600 text-white rounded-xl font-semibold text-sm hover:bg-emerald-500 transition-all disabled:opacity-50 flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.3)]">{isClosing ? <FiLoader className="animate-spin" /> : 'Confirmar Cierre'}</button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
