@@ -319,29 +319,21 @@ export const updateInstallmentStatus = async (req: AuthRequest, res: Response) =
       if (hasAction) {
         const diffAmount = Number(actionParams.amount);
 
-        // --- MANEJO DEL NUEVO ESTADO: RENEGOTIATED ---
-        if (status === 'RENEGOTIATED') {
-          await tx.installment.update({
-            where: { id: parseInt(id) },
-            data: {
-              status: 'RENEGOTIATED',
-              wasLate: true, // La mancha para Datacrédito
-              actionDescription: descripcionFrontend // Guardar nota
-            }
-          });
-        } else {
-          // Liquidamos la cuota actual (Comportamiento original)
-          await tx.installment.update({
-            where: { id: parseInt(id) },
-            data: {
-              expectedAmount: nuevoTotalPagado,
-              paidAmount: nuevoTotalPagado,
-              status: 'PAID',
-              paidAt: new Date(),
-              actionDescription: descripcionFrontend // Guardar nota
-            }
-          });
-        }
+        // --- CORRECCIÓN CRÍTICA DE DUPLICACIÓN DE DEUDA ---
+        // Al mover dinero a cuotas futuras (diffAmount), debemos liquidar esta cuota actual.
+        // Se le asigna como "expectedAmount" únicamente lo que realmente se logró pagar.
+        // Esto evita que el sistema siga cobrando este saldo en la cuota vieja.
+        await tx.installment.update({
+          where: { id: parseInt(id) },
+          data: {
+            expectedAmount: nuevoTotalPagado, 
+            paidAmount: nuevoTotalPagado,
+            status: status === 'RENEGOTIATED' ? 'RENEGOTIATED' : 'PAID',
+            paidAt: status === 'RENEGOTIATED' ? null : new Date(),
+            wasLate: status === 'RENEGOTIATED' ? true : undefined,
+            actionDescription: descripcionFrontend // Guardar nota
+          }
+        });
         
         nuevoEstado = status === 'RENEGOTIATED' ? 'RENEGOTIATED' : 'PAID';
 
@@ -493,7 +485,7 @@ export const updateInstallmentStatus = async (req: AuthRequest, res: Response) =
             });
         }
       } else {
-        // --- MANEJO DE LA PROMESA DE PAGO ---
+        // --- MANEJO DE LA PROMESA DE PAGO Y ABONOS PARCIALES SIN ACCIÓN ---
         let promiseDateObj = null;
         if (actionParams && actionParams.promiseDate) {
             const [year, month, day] = actionParams.promiseDate.split('-');
@@ -727,5 +719,141 @@ export const addLoanToExistingClient = async (req: AuthRequest, res: Response) =
     return res.status(201).json({ success: true, message: "Préstamo agregado", data: result });
   } catch (error: any) {
     return res.status(400).json({ error: error.message || "Error interno" });
+  }
+};
+
+
+
+export const getCapitalByRoute = async (req: AuthRequest, res: Response) => {
+  try {
+    const companyId = req.user?.companyId; // SAAS-BLINDAJE
+    if (!companyId) return res.status(403).json({ success: false, message: "Acceso denegado: No tienes empresa asignada." });
+
+    if (req.user?.role !== "ADMIN") {
+      return res.status(403).json({ success: false, message: "Acceso denegado. Requiere rol ADMIN." });
+    }
+
+    const routes = await prisma.route.findMany({
+      where: { companyId }, // SAAS-BLINDAJE: Solo las rutas de la empresa
+      include: {
+        assignedTo: {
+          select: { id: true, name: true, email: true }
+        }
+      },
+      orderBy: { id: "asc" }
+    });
+
+    return res.status(200).json({ success: true, data: routes });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: "Error al obtener capital de rutas", error: error.message });
+  }
+};
+
+export const addCapital = async (req: AuthRequest, res: Response) => {
+  try {
+    const companyId = req.user?.companyId; // SAAS-BLINDAJE
+    if (!companyId) return res.status(403).json({ success: false, message: "Acceso denegado." });
+
+    if (req.user?.role !== "ADMIN") {
+      return res.status(403).json({ success: false, message: "Acceso denegado. Requiere rol ADMIN." });
+    }
+
+    const { routeId, amount, description } = req.body;
+    const adminId = req.user.id;
+
+    if (!routeId || !amount || amount <= 0) {
+      return res.status(400).json({ success: false, message: "Ruta y monto válido (mayor a 0) son requeridos." });
+    }
+
+    // SAAS-BLINDAJE: Cambiamos findUnique por findFirst para poder validar el companyId
+    const route = await prisma.route.findFirst({ 
+      where: { id: Number(routeId), companyId } 
+    });
+    
+    if (!route) {
+      return res.status(404).json({ success: false, message: "La ruta especificada no existe o no te pertenece." });
+    }
+
+    const result = await prisma.$transaction([
+      prisma.route.update({
+        where: { id: Number(routeId) },
+        data: { availableCapital: { increment: amount } }
+      }),
+      prisma.capitalTransaction.create({
+        data: {
+          routeId: Number(routeId),
+          type: "INVERSION",
+          amount: amount,
+          description: description || "Inversión de capital",
+          createdBy: adminId
+        }
+      })
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      message: "Capital asignado correctamente.",
+      data: result[0] 
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: "Error al asignar capital", error: error.message });
+  }
+};
+
+export const withdrawCapital = async (req: AuthRequest, res: Response) => {
+  try {
+    const companyId = req.user?.companyId; // SAAS-BLINDAJE
+    if (!companyId) return res.status(403).json({ success: false, message: "Acceso denegado." });
+
+    if (req.user?.role !== "ADMIN") {
+      return res.status(403).json({ success: false, message: "Acceso denegado. Requiere rol ADMIN." });
+    }
+
+    const { routeId, amount, description } = req.body;
+    const adminId = req.user.id;
+
+    if (!routeId || !amount || amount <= 0) {
+      return res.status(400).json({ success: false, message: "Ruta y monto válido (mayor a 0) son requeridos." });
+    }
+
+    // SAAS-BLINDAJE
+    const route = await prisma.route.findFirst({ 
+      where: { id: Number(routeId), companyId } 
+    });
+    
+    if (!route) {
+      return res.status(404).json({ success: false, message: "La ruta especificada no existe o no te pertenece." });
+    }
+
+    if (Number(route.availableCapital) < Number(amount)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Fondos insuficientes. Capital disponible: ${route.availableCapital} ${route.currency}` 
+      });
+    }
+
+    const result = await prisma.$transaction([
+      prisma.route.update({
+        where: { id: Number(routeId) },
+        data: { availableCapital: { decrement: amount } }
+      }),
+      prisma.capitalTransaction.create({
+        data: {
+          routeId: Number(routeId),
+          type: "RETIRO",
+          amount: amount,
+          description: description || "Retiro de capital",
+          createdBy: adminId
+        }
+      })
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      message: "Retiro realizado correctamente.",
+      data: result[0] 
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: "Error al retirar capital", error: error.message });
   }
 };
