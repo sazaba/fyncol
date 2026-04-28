@@ -59,7 +59,6 @@ export default function CarteraActiva() {
   const [mapTheme, setMapTheme] = useState<'light' | 'dark'>('light');
   const [focusCoords, setFocusCoords] = useState<[number, number] | null>(null);
   
-  // ESTADO MÓVIL
   const [mobileView, setMobileView] = useState<'LIST' | 'MAP'>('LIST');
 
   const [selectedClient, setSelectedClient] = useState<any>(null); 
@@ -71,10 +70,10 @@ export default function CarteraActiva() {
   const [manualPayModal, setManualPayModal] = useState<{open: boolean, inst: any, loan: any}>({ open: false, inst: null, loan: null });
   const [manualAmount, setManualAmount] = useState("");
   
-  // NUEVO ESTADO: 'MANTENER' es el predeterminado para abonos parciales lógicos.
   const [saldoAction, setSaldoAction] = useState<'MANTENER' | 'PROXIMA_CUOTA' | 'DIFERIR' | 'CUOTA_ESPECIFICA'>('MANTENER');
   
-  const [overpaymentAction, setOverpaymentAction] = useState<'NEXT_QUOTA' | 'REDUCE_TIME' | 'REDUCE_QUOTA'>('NEXT_QUOTA');
+  // AGREGADO: 'ABONO_CUOTA_ESPECIFICA' para manejar saldos a favor
+  const [overpaymentAction, setOverpaymentAction] = useState<'NEXT_QUOTA' | 'REDUCE_TIME' | 'REDUCE_QUOTA' | 'ABONO_CUOTA_ESPECIFICA'>('NEXT_QUOTA');
   const [targetInstallmentNum, setTargetInstallmentNum] = useState<number>(0);
 
   const [overdueModal, setOverdueModal] = useState<{open: boolean, inst: any, loan: any}>({ open: false, inst: null, loan: null });
@@ -88,9 +87,6 @@ export default function CarteraActiva() {
   const [isClosing, setIsClosing] = useState(false);
   const [isRouteClosed, setIsRouteClosed] = useState(false); 
 
-  // ==========================================
-  // SISTEMA DE RASTREO GPS EN TIEMPO REAL
-  // ==========================================
   const latestCoords = useRef<{lat: number, lng: number} | null>(null);
   const [gpsStatus, setGpsStatus] = useState<'SEARCHING' | 'ACTIVE' | 'ERROR'>('SEARCHING');
 
@@ -135,7 +131,6 @@ export default function CarteraActiva() {
       clearInterval(syncInterval);
     };
   }, []);
-  // ==========================================
 
   const fetchCartera = async () => {
     setIsLoading(true);
@@ -351,7 +346,7 @@ export default function CarteraActiva() {
         </button>
       </div>
 
-      {/* PANEL LATERAL IZQUIERDO (Lista) */}
+      {/* PANEL LATERAL IZQUIERDO */}
       <div className={`
         absolute md:relative inset-0 md:inset-auto 
         w-full md:w-[420px] lg:w-[480px] h-full 
@@ -362,8 +357,6 @@ export default function CarteraActiva() {
         <div className="p-5 border-b border-white/5 shrink-0 bg-[#0B0B12]">
           <div className="flex justify-between items-start mb-4">
             <h1 className="text-xl font-bold text-white">Sistema Logístico</h1>
-            
-            {/* INDICADOR DE GPS */}
             <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest border ${
               gpsStatus === 'ACTIVE' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
               gpsStatus === 'ERROR' ? 'bg-red-500/10 border-red-500/20 text-red-400' :
@@ -388,56 +381,31 @@ export default function CarteraActiva() {
                   <span className="text-sm font-bold text-green-400">${Math.round(Number(routeInfo.availableCapital) || 0).toLocaleString('es-CO')}</span>
                 </div>
               </div>
-              
               {isRouteClosed ? (
-                <button 
-                  disabled
-                  className="w-full bg-[#0B0B12] text-slate-500 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border border-white/5 cursor-not-allowed"
-                >
-                  <FiLock size={16} /> Ruta Cerrada por Hoy
-                </button>
+                <button disabled className="w-full bg-[#0B0B12] text-slate-500 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border border-white/5 cursor-not-allowed"><FiLock size={16} /> Ruta Cerrada por Hoy</button>
               ) : (
-                <button 
-                  onClick={handleOpenClosure}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-emerald-900/20 transition-all flex items-center justify-center gap-2 border border-emerald-500/30"
-                >
-                  <FiCheckCircle size={16} /> Cerrar Ruta de Hoy
-                </button>
+                <button onClick={handleOpenClosure} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-emerald-900/20 transition-all flex items-center justify-center gap-2 border border-emerald-500/30"><FiCheckCircle size={16} /> Cerrar Ruta de Hoy</button>
               )}
             </div>
           )}
 
           <div className="relative mb-3">
             <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input 
-              type="text" placeholder="Buscar cliente..." 
-              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-[#05050A] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all"
-            />
+            <input type="text" placeholder="Buscar cliente..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-[#05050A] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all"/>
           </div>
 
           <div className="flex bg-[#05050A] p-1 rounded-xl border border-white/10">
             {[ { id: 'HOY', label: 'Ruta' }, { id: 'PENDIENTES', label: 'Mora' }, { id: 'TODOS', label: 'Todos' } ].map((btn) => (
-              <button
-                key={btn.id} onClick={() => setFilter(btn.id as any)}
-                className={`flex-1 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${filter === btn.id ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
-              >
-                {btn.label}
-              </button>
+              <button key={btn.id} onClick={() => setFilter(btn.id as any)} className={`flex-1 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${filter === btn.id ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>{btn.label}</button>
             ))}
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto pb-24 md:pb-0 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-track]:bg-transparent">
           {isLoading ? (
-            <div className="p-10 flex flex-col items-center justify-center gap-3 text-slate-400">
-              <FiLoader className="animate-spin text-blue-500" size={24} />
-              <span className="text-sm">Sincronizando ruta...</span>
-            </div>
+            <div className="p-10 flex flex-col items-center justify-center gap-3 text-slate-400"><FiLoader className="animate-spin text-blue-500" size={24} /><span className="text-sm">Sincronizando ruta...</span></div>
           ) : filteredData.length === 0 ? (
-            <div className="p-10 text-center text-slate-500 text-sm">
-              No hay clientes que coincidan con los filtros.
-            </div>
+            <div className="p-10 text-center text-slate-500 text-sm">No hay clientes que coincidan con los filtros.</div>
           ) : (
             filteredData.map((client, index) => {
               const loan = client.loans?.[0];
@@ -454,7 +422,6 @@ export default function CarteraActiva() {
                 const isFuturePromise = promiseDateStr && promiseDateStr > deviceTodayStr;
 
                 if (filter === 'HOY' && isFuturePromise) return false;
-
                 return isDueToday || isPromisedToday || i.status === 'RENEGOTIATED' || i.status === 'OVERDUE' || i.status === 'PENDING' || i.status === 'PARTIAL';
               });
 
@@ -471,17 +438,12 @@ export default function CarteraActiva() {
                   onClick={() => {
                     if (client.latitude && client.longitude) {
                       setFocusCoords([client.latitude, client.longitude]);
-                      if (window.innerWidth < 768) {
-                         setMobileView('MAP'); 
-                      }
+                      if (window.innerWidth < 768) setMobileView('MAP'); 
                     }
                   }}
                   className={`flex p-4 border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer group ${cuotaActiva?.status === 'RENEGOTIATED' ? 'bg-orange-500/5' : ''}`}
                 >
-                  <div className="w-8 shrink-0 text-slate-500 font-bold text-sm pt-0.5">
-                    {String(index + 1).padStart(2, '0')}
-                  </div>
-                  
+                  <div className="w-8 shrink-0 text-slate-500 font-bold text-sm pt-0.5">{String(index + 1).padStart(2, '0')}</div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start mb-1">
                       <h3 className="font-semibold text-sm text-white truncate pr-2">{client.name}</h3>
@@ -496,36 +458,24 @@ export default function CarteraActiva() {
                       )}
                     </div>
                     
-                    <div className="text-xs text-slate-400 flex items-center gap-1 mb-2 truncate">
-                      <FiMapPin className="shrink-0" size={10}/> {client.address}
-                    </div>
+                    <div className="text-xs text-slate-400 flex items-center gap-1 mb-2 truncate"><FiMapPin className="shrink-0" size={10}/> {client.address}</div>
 
                     {cuotaActiva && !prestamoTerminado && (
                       <div className={`mt-2 rounded-lg p-2.5 border ${cuotaActiva.status === 'RENEGOTIATED' ? 'bg-orange-500/10 border-orange-500/20' : 'bg-[#0B0B12] border-white/5'}`}>
                         <div className="flex justify-between items-center mb-2">
-                           <span className={`text-xs font-bold ${cuotaActiva.status === 'RENEGOTIATED' ? 'text-orange-400' : 'text-white'}`}>
-                             ${Math.round(Number(cuotaActiva.expectedAmount) || 0).toLocaleString('es-CO')}
-                           </span>
-                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded text-blue-400 bg-blue-500/10 uppercase">
-                             Cuota {cuotaActiva.installmentNumber}
-                           </span>
+                           <span className={`text-xs font-bold ${cuotaActiva.status === 'RENEGOTIATED' ? 'text-orange-400' : 'text-white'}`}>${Math.round(Number(cuotaActiva.expectedAmount) || 0).toLocaleString('es-CO')}</span>
+                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded text-blue-400 bg-blue-500/10 uppercase">Cuota {cuotaActiva.installmentNumber}</span>
                         </div>
 
                         {requiereRenegociar && (
-                          <div className="mb-2 text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-1 rounded inline-flex items-center gap-1 uppercase border border-red-500/20">
-                            <FiAlertTriangle size={10} /> RENEGOCIAR
-                          </div>
+                          <div className="mb-2 text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-1 rounded inline-flex items-center gap-1 uppercase border border-red-500/20"><FiAlertTriangle size={10} /> RENEGOCIAR</div>
                         )}
 
                         {cuotaActiva.status === 'RENEGOTIATED' && (
-                          <div className="mb-2 text-[10px] font-bold text-orange-400 bg-orange-500/10 px-2 py-1 rounded inline-block uppercase">
-                            MORA RENEGOCIADA
-                          </div>
+                          <div className="mb-2 text-[10px] font-bold text-orange-400 bg-orange-500/10 px-2 py-1 rounded inline-block uppercase">MORA RENEGOCIADA</div>
                         )}
                         {cuotaActiva.promiseDate && (
-                          <div className="mb-2 text-[10px] font-medium text-slate-400 flex items-center gap-1">
-                            <FiCalendar size={10} /> Visita agendada: {new Date(cuotaActiva.promiseDate).toLocaleDateString('es-CO')}
-                          </div>
+                          <div className="mb-2 text-[10px] font-medium text-slate-400 flex items-center gap-1"><FiCalendar size={10} /> Visita agendada: {new Date(cuotaActiva.promiseDate).toLocaleDateString('es-CO')}</div>
                         )}
 
                         {cuotaActiva.actionDescription && (
@@ -537,9 +487,7 @@ export default function CarteraActiva() {
                         
                         {(cuotaActiva.status === 'PENDING' || cuotaActiva.status === 'PARTIAL' || cuotaActiva.status === 'OVERDUE' || cuotaActiva.status === 'RENEGOTIATED') && !isRenegociadaFutura && (
                           isRouteClosed ? (
-                            <div className="py-2 text-center border border-white/5 bg-white/5 rounded-lg text-slate-500 text-xs font-semibold flex items-center justify-center gap-1.5 mt-1">
-                               <FiLock size={12} /> Pagos bloqueados por cierre
-                            </div>
+                            <div className="py-2 text-center border border-white/5 bg-white/5 rounded-lg text-slate-500 text-xs font-semibold flex items-center justify-center gap-1.5 mt-1"><FiLock size={12} /> Pagos bloqueados por cierre</div>
                           ) : (
                             <div className="flex gap-1.5 mt-2">
                               {cuotaActiva.status !== 'RENEGOTIATED' && (
@@ -559,7 +507,8 @@ export default function CarteraActiva() {
                                   e.stopPropagation(); 
                                   setManualPayModal({ open: true, inst: cuotaActiva, loan }); 
                                   setManualAmount(""); 
-                                  setSaldoAction('MANTENER'); // <-- Reseteado al comportamiento correcto
+                          
+                                  setSaldoAction('MANTENER'); 
                                   setOverpaymentAction('NEXT_QUOTA'); 
                                 }}
                                 className="flex-1 bg-white/10 hover:bg-white/20 py-1.5 rounded text-white text-[10px] font-bold flex justify-center items-center transition-all"
@@ -571,7 +520,6 @@ export default function CarteraActiva() {
                                   onClick={(e) => { 
                                     e.stopPropagation(); 
                                     setOverdueModal({ open: true, inst: cuotaActiva, loan: loan }); 
-                                    
                                     const isDiario = loan.periodicity === 'DIARIO';
                                     setOverdueAction(isDiario ? 'PROXIMA_CUOTA' : 'SOLO_MORA'); 
                                   }}
@@ -587,19 +535,9 @@ export default function CarteraActiva() {
                     )}
 
                     <div className="flex gap-2 mt-2">
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); openClientModal(client); }}
-                        className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 bg-white/5 px-2 py-1 rounded"
-                      >
-                        <FiCalendar size={10} /> Historial
-                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); openClientModal(client); }} className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 bg-white/5 px-2 py-1 rounded"><FiCalendar size={10} /> Historial</button>
                       {client.latitude && (
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); openNavigationApp(client.latitude, client.longitude); }}
-                          className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-blue-500/10 px-2 py-1 rounded"
-                        >
-                          <FiNavigation size={10} /> GPS
-                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); openNavigationApp(client.latitude, client.longitude); }} className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-blue-500/10 px-2 py-1 rounded"><FiNavigation size={10} /> GPS</button>
                       )}
                     </div>
 
@@ -624,11 +562,7 @@ export default function CarteraActiva() {
         <MapContainer center={[6.2442, -75.5812]} zoom={13} style={{ height: '100%', width: '100%', zIndex: 1 }} zoomControl={false}>
           <TileLayer 
             key={mapTheme}
-            url={
-              mapTheme === 'light' 
-                ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-                : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-            } 
+            url={mapTheme === 'light' ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"} 
           />
           {filter !== 'TODOS' && routePolylineCoords.length > 1 && (
              <Polyline positions={routePolylineCoords} pathOptions={{ color: '#3b82f6', weight: 4, opacity: 0.6, dashArray: '10, 10' }} />
@@ -644,12 +578,7 @@ export default function CarteraActiva() {
                   <div className="p-3 text-slate-800 bg-white rounded-xl shadow-lg">
                     <p className="font-bold text-sm mb-1">{client.name}</p>
                     <p className="text-xs text-slate-500 mb-3">{client.address}</p>
-                    <button 
-                      onClick={() => openNavigationApp(client.latitude, client.longitude)}
-                      className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
-                    >
-                      <FiExternalLink size={12} /> Navegar
-                    </button>
+                    <button onClick={() => openNavigationApp(client.latitude, client.longitude)} className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"><FiExternalLink size={12} /> Navegar</button>
                   </div>
                 </Popup>
               </Marker>
@@ -663,27 +592,13 @@ export default function CarteraActiva() {
       {confirmPayModal.open && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-[#05050A] border border-white/10 rounded-3xl p-7 shadow-2xl text-center animate-[slideUp_0.18s_ease-out]">
-            <div className="h-12 w-12 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-blue-400">
-              <FiCheckCircle size={24} />
-            </div>
+            <div className="h-12 w-12 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-blue-400"><FiCheckCircle size={24} /></div>
             <h3 className="text-lg font-bold text-white mb-1">Confirmar Pago</h3>
             <p className="text-sm text-slate-400 mb-4">¿Registrar pago total de la cuota por:</p>
             <p className="text-3xl font-bold text-white mb-6">${confirmPayModal.faltante.toLocaleString('es-CO')}?</p>
-            
             <div className="flex gap-3">
-              <button 
-                onClick={() => setConfirmPayModal({ open: false, inst: null, faltante: 0 })} 
-                className="flex-1 py-3 bg-white/5 border border-white/5 text-slate-300 rounded-xl font-medium text-sm hover:bg-white/10 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={() => confirmPayModal.inst && handleUpdateStatus(confirmPayModal.inst.id, 'PAID', confirmPayModal.faltante, { action: 'NONE', description: 'Pago completo de la cuota.' })}
-                disabled={updatingInstId === confirmPayModal.inst?.id}
-                className="flex-[2] py-3 bg-blue-600 text-white rounded-xl font-semibold text-sm hover:bg-blue-500 transition-all disabled:opacity-50 flex items-center justify-center shadow-[0_0_15px_rgba(37,99,235,0.3)]"
-              >
-                {updatingInstId === confirmPayModal.inst?.id ? <FiLoader className="animate-spin" /> : 'Sí, registrar pago'}
-              </button>
+              <button onClick={() => setConfirmPayModal({ open: false, inst: null, faltante: 0 })} className="flex-1 py-3 bg-white/5 border border-white/5 text-slate-300 rounded-xl font-medium text-sm hover:bg-white/10 transition-colors">Cancelar</button>
+              <button onClick={() => confirmPayModal.inst && handleUpdateStatus(confirmPayModal.inst.id, 'PAID', confirmPayModal.faltante, { action: 'NONE', description: 'Pago completo de la cuota.' })} disabled={updatingInstId === confirmPayModal.inst?.id} className="flex-[2] py-3 bg-blue-600 text-white rounded-xl font-semibold text-sm hover:bg-blue-500 transition-all disabled:opacity-50 flex items-center justify-center shadow-[0_0_15px_rgba(37,99,235,0.3)]">{updatingInstId === confirmPayModal.inst?.id ? <FiLoader className="animate-spin" /> : 'Sí, registrar pago'}</button>
             </div>
           </div>
         </div>
@@ -693,47 +608,30 @@ export default function CarteraActiva() {
       {overdueModal.open && (() => {
         const inst = overdueModal.inst;
         const faltante = Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount || 0));
-        
         const isDiario = overdueModal.loan?.periodicity === 'DIARIO';
-
-        const futureInstallmentsUI = overdueModal.loan?.installmentDetails?.filter(
-          (i: any) => i.installmentNumber > inst.installmentNumber && i.status !== 'PAID'
-        ) || [];
+        const futureInstallmentsUI = overdueModal.loan?.installmentDetails?.filter((i: any) => i.installmentNumber > inst.installmentNumber && i.status !== 'PAID') || [];
 
         return (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
             <div className="w-full max-w-md bg-[#05050A] border border-white/10 rounded-3xl shadow-2xl animate-[slideUp_0.18s_ease-out] overflow-y-auto max-h-[95vh] [&::-webkit-scrollbar]:hidden">
-              
               <div className="p-6 border-b border-white/5 text-center">
-                <div className="h-12 w-12 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-red-400">
-                  <FiAlertTriangle size={24} />
-                </div>
+                <div className="h-12 w-12 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-red-400"><FiAlertTriangle size={24} /></div>
                 <h3 className="text-lg font-bold text-white mb-2">Gestión de Mora</h3>
-                <p className="text-sm font-semibold text-red-400">
-                  El cliente tiene un saldo pendiente de <span className="text-white">${faltante.toLocaleString('es-CO')}</span>
-                </p>
+                <p className="text-sm font-semibold text-red-400">El cliente tiene un saldo pendiente de <span className="text-white">${faltante.toLocaleString('es-CO')}</span></p>
                 <p className="text-xs text-slate-400 mt-1">Selecciona cómo gestionar esta deuda:</p>
               </div>
 
               <div className="p-6 bg-red-500/5 border-b border-white/5 space-y-2">
-                
                 {!isDiario && (
                   <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overdueAction === 'SOLO_MORA' ? 'bg-red-600/20 border-red-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
                     <input type="radio" name="overdueAction" checked={overdueAction === 'SOLO_MORA'} onChange={() => setOverdueAction('SOLO_MORA')} className="mt-1 shrink-0 accent-red-500" />
                     <div className="w-full">
                       <p className="text-sm font-semibold text-white">Solo reportar en mora</p>
                       <p className="text-xs text-slate-400 mt-0.5">Deja el saldo pendiente y no reestructura la deuda.</p>
-                      
                       {overdueAction === 'SOLO_MORA' && (
                         <div className="mt-3 p-3 bg-black/20 rounded-xl border border-white/5">
                           <label className="text-xs text-slate-400 font-semibold uppercase tracking-widest">Agendar nueva visita (Opcional)</label>
-                          <input 
-                            type="date" 
-                            value={promiseDate} 
-                            onChange={e => setPromiseDate(e.target.value)} 
-                            min={getDeviceTodayStr()} 
-                            className="w-full mt-1 bg-[#05050A] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-red-500 outline-none [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert" 
-                          />
+                          <input type="date" value={promiseDate} onChange={e => setPromiseDate(e.target.value)} min={getDeviceTodayStr()} className="w-full mt-1 bg-[#05050A] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-red-500 outline-none [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert" />
                           <p className="text-[10px] text-slate-500 mt-1">El cliente volverá a aparecer en la ruta principal en esta fecha.</p>
                         </div>
                       )}
@@ -760,29 +658,14 @@ export default function CarteraActiva() {
                     </label>
 
                     <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overdueAction === 'CUOTA_ESPECIFICA' ? 'bg-red-600/20 border-red-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
-                      <input 
-                        type="radio" name="overdueAction" 
-                        checked={overdueAction === 'CUOTA_ESPECIFICA'} 
-                        onChange={() => { 
-                          setOverdueAction('CUOTA_ESPECIFICA'); 
-                          setOverdueTargetInst(futureInstallmentsUI[0]?.installmentNumber); 
-                        }} 
-                        className="mt-1 shrink-0 accent-red-500" 
-                      />
+                      <input type="radio" name="overdueAction" checked={overdueAction === 'CUOTA_ESPECIFICA'} onChange={() => { setOverdueAction('CUOTA_ESPECIFICA'); setOverdueTargetInst(futureInstallmentsUI[0]?.installmentNumber); }} className="mt-1 shrink-0 accent-red-500" />
                       <div className="w-full">
                         <p className="text-sm font-semibold text-white">Sumar a una cuota específica</p>
                         <p className="text-xs text-slate-400 mt-0.5 mb-2">Elige a qué cuota futura cargarle esta deuda.</p>
-                        
                         {overdueAction === 'CUOTA_ESPECIFICA' && (
-                          <select 
-                            value={overdueTargetInst} 
-                            onChange={e => setOverdueTargetInst(Number(e.target.value))}
-                            className="w-full bg-[#05050A] border border-white/20 rounded-lg p-2 text-white text-sm focus:border-red-500 outline-none"
-                          >
+                          <select value={overdueTargetInst} onChange={e => setOverdueTargetInst(Number(e.target.value))} className="w-full bg-[#05050A] border border-white/20 rounded-lg p-2 text-white text-sm focus:border-red-500 outline-none">
                             {futureInstallmentsUI.map((fInst: any) => (
-                              <option key={fInst.id} value={fInst.installmentNumber}>
-                                Cuota #{fInst.installmentNumber} - ({new Date(fInst.dueDate).toLocaleDateString('es-CO')})
-                              </option>
+                              <option key={fInst.id} value={fInst.installmentNumber}>Cuota #{fInst.installmentNumber} - ({new Date(fInst.dueDate).toLocaleDateString('es-CO')})</option>
                             ))}
                           </select>
                         )}
@@ -798,7 +681,6 @@ export default function CarteraActiva() {
                     <p className="text-xs text-slate-400 mt-0.5">Alarga el plazo del crédito creando una nueva cuota al final.</p>
                   </div>
                 </label>
-
               </div>
               
               <div className="p-6 flex gap-3 shrink-0">
@@ -878,13 +760,8 @@ export default function CarteraActiva() {
 
               {esParcial && (
                 <div className="p-6 bg-blue-500/5 border-b border-white/5">
-                  <p className="text-sm font-semibold text-blue-400 mb-3 text-center">
-                    Falta un saldo de <span className="text-white">${diferencia.toLocaleString('es-CO')}</span>. ¿Qué hacer con él?
-                  </p>
-                  
+                  <p className="text-sm font-semibold text-blue-400 mb-3 text-center">Falta un saldo de <span className="text-white">${diferencia.toLocaleString('es-CO')}</span>. ¿Qué hacer con él?</p>
                   <div className="space-y-2">
-                    
-                    {/* OPCIÓN CORREGIDA: Dejar el abono en esta misma cuota sin liquidarla */}
                     <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${saldoAction === 'MANTENER' ? 'bg-blue-600/20 border-blue-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
                       <input type="radio" name="saldoAction" checked={saldoAction === 'MANTENER'} onChange={() => setSaldoAction('MANTENER')} className="mt-1 shrink-0 accent-blue-500" />
                       <div>
@@ -912,29 +789,14 @@ export default function CarteraActiva() {
                         </label>
 
                         <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${saldoAction === 'CUOTA_ESPECIFICA' ? 'bg-blue-600/20 border-blue-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
-                          <input 
-                            type="radio" name="saldoAction" 
-                            checked={saldoAction === 'CUOTA_ESPECIFICA'} 
-                            onChange={() => { 
-                              setSaldoAction('CUOTA_ESPECIFICA'); 
-                              setTargetInstallmentNum(futureInstallmentsUI[0]?.installmentNumber); 
-                            }} 
-                            className="mt-1 shrink-0 accent-blue-500" 
-                          />
+                          <input type="radio" name="saldoAction" checked={saldoAction === 'CUOTA_ESPECIFICA'} onChange={() => { setSaldoAction('CUOTA_ESPECIFICA'); setTargetInstallmentNum(futureInstallmentsUI[0]?.installmentNumber); }} className="mt-1 shrink-0 accent-blue-500" />
                           <div className="w-full">
                             <p className="text-sm font-semibold text-white">Cargar a una cuota específica</p>
                             <p className="text-xs text-slate-400 mt-0.5 mb-2">Mueve la deuda a otra cuota futura elegida a mano.</p>
-                            
                             {saldoAction === 'CUOTA_ESPECIFICA' && (
-                              <select 
-                                value={targetInstallmentNum} 
-                                onChange={e => setTargetInstallmentNum(Number(e.target.value))}
-                                className="w-full bg-[#05050A] border border-white/20 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none"
-                              >
+                              <select value={targetInstallmentNum} onChange={e => setTargetInstallmentNum(Number(e.target.value))} className="w-full bg-[#05050A] border border-white/20 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none">
                                 {futureInstallmentsUI.map((fInst: any) => (
-                                  <option key={fInst.id} value={fInst.installmentNumber}>
-                                    Cuota #{fInst.installmentNumber} - ({new Date(fInst.dueDate).toLocaleDateString('es-CO')})
-                                  </option>
+                                  <option key={fInst.id} value={fInst.installmentNumber}>Cuota #{fInst.installmentNumber} - ({new Date(fInst.dueDate).toLocaleDateString('es-CO')})</option>
                                 ))}
                               </select>
                             )}
@@ -948,9 +810,7 @@ export default function CarteraActiva() {
 
               {esExcedente && (
                 <div className="p-6 bg-emerald-500/5 border-b border-white/5">
-                  <p className="text-sm font-semibold text-emerald-400 mb-3 text-center">
-                    ¡Hay un excedente de <span className="text-white">${diferencia.toLocaleString('es-CO')}</span>! ¿Dónde lo aplicamos?
-                  </p>
+                  <p className="text-sm font-semibold text-emerald-400 mb-3 text-center">¡Hay un excedente de <span className="text-white">${diferencia.toLocaleString('es-CO')}</span>! ¿Dónde lo aplicamos?</p>
                   
                   <div className="space-y-2">
                     <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overpaymentAction === 'NEXT_QUOTA' ? 'bg-emerald-600/20 border-emerald-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
@@ -976,6 +836,25 @@ export default function CarteraActiva() {
                         <p className="text-xs text-slate-400 mt-0.5">Baja el valor de todas las cuotas restantes por igual.</p>
                       </div>
                     </label>
+
+                    {/* NUEVA OPCIÓN: Aplicar excedente restando a una cuota específica */}
+                    {futureInstallmentsUI.length > 0 && (
+                        <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${overpaymentAction === 'ABONO_CUOTA_ESPECIFICA' ? 'bg-emerald-600/20 border-emerald-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
+                          <input type="radio" name="overpaymentAction" checked={overpaymentAction === 'ABONO_CUOTA_ESPECIFICA'} onChange={() => { setOverpaymentAction('ABONO_CUOTA_ESPECIFICA'); setTargetInstallmentNum(futureInstallmentsUI[0]?.installmentNumber); }} className="mt-1 shrink-0 accent-emerald-500" />
+                          <div className="w-full">
+                            <p className="text-sm font-semibold text-white">Descontar a una cuota específica</p>
+                            <p className="text-xs text-slate-400 mt-0.5 mb-2">Elige a qué cuota futura restarle este saldo a favor.</p>
+                            
+                            {overpaymentAction === 'ABONO_CUOTA_ESPECIFICA' && (
+                              <select value={targetInstallmentNum} onChange={e => setTargetInstallmentNum(Number(e.target.value))} className="w-full bg-[#05050A] border border-white/20 rounded-lg p-2 text-white text-sm focus:border-emerald-500 outline-none">
+                                {futureInstallmentsUI.map((fInst: any) => (
+                                  <option key={fInst.id} value={fInst.installmentNumber}>Cuota #{fInst.installmentNumber} - ({new Date(fInst.dueDate).toLocaleDateString('es-CO')})</option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                        </label>
+                    )}
                   </div>
                 </div>
               )}
@@ -998,10 +877,11 @@ export default function CarteraActiva() {
                            if (saldoAction === 'CUOTA_ESPECIFICA') actionData.description = `Faltante de $${diferencia.toLocaleString('es-CO')} sumado a cuota #${targetInstallmentNum}.`;
                        }
                     } else if (esExcedente) {
-                       actionData = { action: overpaymentAction, amount: diferencia, targetInstallment: 0 };
+                       actionData = { action: overpaymentAction, amount: diferencia, targetInstallment: overpaymentAction === 'ABONO_CUOTA_ESPECIFICA' ? targetInstallmentNum : 0 };
                        if (overpaymentAction === 'NEXT_QUOTA') actionData.description = `Excedente de $${diferencia.toLocaleString('es-CO')} abonado a la siguiente cuota.`;
                        if (overpaymentAction === 'REDUCE_TIME') actionData.description = `Excedente de $${diferencia.toLocaleString('es-CO')} usado para reducir tiempo (atrás hacia adelante).`;
                        if (overpaymentAction === 'REDUCE_QUOTA') actionData.description = `Excedente de $${diferencia.toLocaleString('es-CO')} usado para reducir cuotas restantes.`;
+                       if (overpaymentAction === 'ABONO_CUOTA_ESPECIFICA') actionData.description = `Excedente de $${diferencia.toLocaleString('es-CO')} descontado de la cuota #${targetInstallmentNum}.`;
                     } else {
                        actionData.description = "Pago liquidado exactamente.";
                     }
