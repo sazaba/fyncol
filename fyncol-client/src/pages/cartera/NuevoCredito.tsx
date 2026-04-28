@@ -35,7 +35,6 @@ type PremiumAlertState = {
   onConfirm?: (() => void) | null;
 };
 
-// LISTA DE PAÍSES MEJORADA CON "ALIAS" PARA EVITAR ERRORES DE ORTOGRAFÍA O IDIOMA
 const COUNTRY_CODES = [
   { code: '+57', country: 'Colombia', aliases: ['colombia', 'col'] },
   { code: '+52', country: 'México', aliases: ['mexico', 'méxico', 'mex'] },
@@ -190,6 +189,7 @@ export default function NuevoCredito() {
     setFormData(prev => ({ ...prev, firstPaymentDate: `${yyyy}-${mm}-${dd}` }));
   }, [formData.periodicity]);
 
+  // --- FIX DE CÁLCULOS ALINEADOS CON EL BACKEND ---
   const creditMetrics = useMemo(() => {
     const amountNum = parseFloat(formData.amount) || 0;
     const interestNum = parseFloat(formData.interestRate) || 0;
@@ -216,10 +216,15 @@ export default function NuevoCredito() {
 
     const totalDays = daysUntilFirstPayment + ((installmentsNum - 1) * daysPerInstallment);
     const interestPerDay = (interestNum / 100 / 30) * amountNum;
-    const totalInterest = interestPerDay * totalDays;
+    const totalInterestExact = interestPerDay * totalDays;
 
-    const total = amountNum + totalInterest;
-    const installmentValue = total / installmentsNum;
+    const exactProjectedTotal = amountNum + totalInterestExact;
+    
+    // 1. Redondeamos la cuota al entero superior
+    const installmentValue = Math.ceil(exactProjectedTotal / installmentsNum);
+    
+    // 2. Multiplicamos la cuota exacta por los meses para obtener el total a mostrar
+    const total = installmentValue * installmentsNum;
 
     const schedule = [];
     let currentBalance = total;
@@ -244,6 +249,7 @@ export default function NuevoCredito() {
     }
     return { total, installmentValue, schedule };
   }, [formData.amount, formData.interestRate, formData.installments, formData.periodicity, formData.firstPaymentDate]);
+  // ------------------------------------------------
 
   const handleGetLocation = () => {
     if (navigator.geolocation) {
@@ -714,7 +720,7 @@ export default function NuevoCredito() {
                   Total Proyectado a Recoger
                 </p>
                 <p className="text-3xl md:text-4xl font-bold text-white tracking-tight">
-                  ${Math.round(creditMetrics.total).toLocaleString('es-CO')}
+                  ${creditMetrics.total.toLocaleString('es-CO')}
                 </p>
               </div>
 
@@ -723,7 +729,7 @@ export default function NuevoCredito() {
                   Valor Cuota ({formData.periodicity.toLowerCase()})
                 </p>
                 <p className="text-2xl font-bold text-emerald-400">
-                  ${Math.round(creditMetrics.installmentValue).toLocaleString('es-CO')}
+                  ${creditMetrics.installmentValue.toLocaleString('es-CO')}
                 </p>
               </div>
 
@@ -790,10 +796,10 @@ export default function NuevoCredito() {
                       {item.date}
                     </div>
                     <div className="text-right font-medium text-emerald-400">
-                      ${Math.round(item.amount).toLocaleString('es-CO')}
+                      ${item.amount.toLocaleString('es-CO')}
                     </div>
                     <div className="text-right font-medium text-slate-400">
-                      ${Math.round(item.balance).toLocaleString('es-CO')}
+                      ${item.balance.toLocaleString('es-CO')}
                     </div>
                   </div>
                 ))}
@@ -806,7 +812,7 @@ export default function NuevoCredito() {
                   Total a Recoger
                 </p>
                 <p className="text-xl font-bold text-white">
-                  ${Math.round(creditMetrics.total).toLocaleString('es-CO')}
+                  ${creditMetrics.total.toLocaleString('es-CO')}
                 </p>
               </div>
               <button 
