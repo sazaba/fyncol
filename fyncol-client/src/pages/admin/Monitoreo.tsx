@@ -156,6 +156,9 @@ export default function Monitoreo() {
     );
   };
 
+  // Buscamos los datos del resumen de la ruta actual para pasarlos a la tarjeta de rendimiento
+  const currentRouteSummary = routesSummary.find(r => r.id === selectedRouteId);
+
   return (
     <div className="min-h-[calc(100dvh-64px)] w-full bg-[#0B0B12] p-4 md:p-6 lg:p-8 overflow-x-hidden overflow-y-auto">
       
@@ -300,11 +303,12 @@ export default function Monitoreo() {
           {view === 'DETAIL' && dashboardData && (
             <div className="space-y-6 animate-[fadeIn_0.2s_ease-out] pb-10 w-full overflow-x-hidden">
               
+              {/* TARJETA DE RENDIMIENTO ACTUALIZADA CON LÓGICA DEL RESUMEN */}
               <div className="bg-[#05050A] border border-white/5 rounded-3xl p-5 md:p-6 relative overflow-hidden w-full">
                 <div className="absolute top-0 left-0 w-full h-1 bg-white/5">
                    <div 
                      className="h-full bg-gradient-to-r from-blue-500 to-emerald-400 transition-all duration-1000"
-                     style={{ width: `${Math.min(dashboardData.rendimiento.porcentaje, 100)}%` }}
+                     style={{ width: `${currentRouteSummary?.porcentaje || 0}%` }}
                    ></div>
                 </div>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
@@ -313,16 +317,20 @@ export default function Monitoreo() {
                       <FiTarget size={24} />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="text-base sm:text-lg font-bold text-white truncate">Rendimiento de Recaudo</h3>
-                      <p className="text-xs text-slate-400 mt-1 break-words">
-                        Meta: <span className="font-semibold text-slate-300">{formatCurrency(dashboardData.rendimiento.proyectado)}</span>
+                      <h3 className="text-base sm:text-lg font-bold text-white truncate">Progreso de la Ruta</h3>
+                      <p className="text-xs text-slate-300 font-medium flex flex-wrap gap-x-2 gap-y-1 mt-1">
+                        <span><span className="text-white font-bold">{currentRouteSummary?.clientesTotales || 0}</span> Total</span>
+                        <span className="text-slate-600">•</span>
+                        <span><span className="text-emerald-400 font-bold">{currentRouteSummary?.clientesCobrados || 0}</span> Cobrados</span>
+                        <span className="text-slate-600">•</span>
+                        <span><span className="text-red-400 font-bold">{currentRouteSummary?.clientesMora || 0}</span> Mora</span>
                       </p>
                     </div>
                   </div>
                   <div className="text-left sm:text-right w-full sm:w-auto border-t sm:border-t-0 border-white/5 pt-4 sm:pt-0">
                     <div className="flex items-end gap-2 sm:justify-end">
                       <span className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
-                        {dashboardData.rendimiento.porcentaje}%
+                        {currentRouteSummary?.porcentaje || 0}%
                       </span>
                     </div>
                     <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mt-1">Cumplimiento hoy</p>
