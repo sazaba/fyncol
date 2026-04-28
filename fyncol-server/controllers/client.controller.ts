@@ -18,6 +18,11 @@ interface InstallmentInput {
  * Crea el cliente, el préstamo inicial y genera automáticamente el plan de pagos (amortización)
  * Incluye validación de duplicados por documentId.
  */
+/**
+ * 1. CREAR CLIENTE Y PRÉSTAMO
+ * Crea el cliente, el préstamo inicial y genera automáticamente el plan de pagos (amortización)
+ * Incluye validación de duplicados por documentId.
+ */
 export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
   try {
     const companyId = req.user?.companyId; // SAAS-BLINDAJE
@@ -52,12 +57,20 @@ export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
     let daysUntilFirstPayment = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     if (daysUntilFirstPayment <= 0) daysUntilFirstPayment = 1;
 
+    // --- FIX MATEMÁTICO: REDONDEO PERFECTO ---
     const totalDays = daysUntilFirstPayment + ((installmentsNum - 1) * daysPerInstallment);
     const interestPerDay = (interestNum / 100 / 30) * amountNum;
     const totalInterest = interestPerDay * totalDays;
     
-    const projectedTotal = amountNum + totalInterest;
-    const installmentValue = projectedTotal / installmentsNum;
+    // 1. Calculamos el total con decimales
+    const exactProjectedTotal = amountNum + totalInterest;
+    
+    // 2. Calculamos la cuota y la redondeamos HACIA ARRIBA al entero (ej. 20.66 -> 21)
+    const installmentValue = Math.ceil(exactProjectedTotal / installmentsNum);
+    
+    // 3. El total proyectado REAL es la cuota cerrada multiplicada por el número de cuotas
+    const projectedTotal = installmentValue * installmentsNum; 
+    // -----------------------------------------
 
     const installmentsArray: any[] = [];
     let currentDate = new Date(firstPayment);
@@ -66,7 +79,7 @@ export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
       installmentsArray.push({
         installmentNumber: i,
         dueDate: new Date(currentDate),
-        expectedAmount: Number(installmentValue.toFixed(2)),
+        expectedAmount: installmentValue, // Ya es un número entero perfecto
         paidAmount: 0,
         status: "PENDING",
       });
@@ -109,7 +122,7 @@ export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
               interestRate: interestNum,
               periodicity: periodicity,
               firstPaymentDate: firstPayment,
-              projectedTotal: Number(projectedTotal.toFixed(2)),
+              projectedTotal: projectedTotal, // Guardamos el total entero coherente
               isRenewal: false,
               installmentDetails: {
                 create: installmentsArray 
@@ -143,7 +156,6 @@ export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     console.error("Error al crear cliente:", error);
 
-    // Captura específica de documento duplicado (Error P2002 de Prisma)
     if (error.code === 'P2002') {
       return res.status(400).json({ 
         error: "Error: Ya existe un cliente registrado con este número de documento." 
@@ -153,6 +165,8 @@ export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
     return res.status(400).json({ error: error.message || "Error interno del servidor" });
   }
 };
+
+
 
 /**
  * 2. OBTENER CARTERA DEL COBRADOR
