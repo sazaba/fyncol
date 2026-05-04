@@ -5,6 +5,7 @@ import {
   createClientAndLoan, 
   getCarteraDelCobrador, 
   getClientsByRoute, 
+  liquidarPrestamo, 
   registrarPago, updateInstallmentStatus 
 } from '../controllers/client.controller';
 import { verifyToken } from '../middleware/auth.middleware'; 
@@ -21,5 +22,6 @@ router.patch('/installment/:id', updateInstallmentStatus);
 router.get('/route/:routeId', getClientsByRoute);
 router.post('/:clientId/add-loan', addLoanToExistingClient);
 router.get('/datacredito/:documentId', consultarDatacredito);
+router.patch('/loan/:loanId/liquidate', liquidarPrestamo);
 
 export default router;

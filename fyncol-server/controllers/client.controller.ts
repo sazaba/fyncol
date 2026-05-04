@@ -631,6 +631,86 @@ export const consultarDatacredito = async (req: AuthRequest, res: Response) => {
 };
 
 /**
+ * 6. LIQUIDAR DEUDA TOTAL
+ * Cancela todas las cuotas pendientes de un préstamo en una sola transacción.
+ */
+export const liquidarPrestamo = async (req: AuthRequest, res: Response) => {
+  try {
+    const companyId = req.user?.companyId; 
+    if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
+
+   const loanId = parseInt(req.params.loanId as string);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const loan = await tx.loan.findFirst({
+        where: { 
+          id: loanId, 
+          client: { route: { companyId } } 
+        },
+        include: { client: true, installmentDetails: true }
+      });
+
+      if (!loan || !loan.isActive) throw new Error("Préstamo no existe o ya está cancelado.");
+
+      // Filtrar las cuotas que aún tienen saldo pendiente
+      const cuotasPendientes = loan.installmentDetails.filter(
+        inst => inst.status !== 'PAID' && (Number(inst.expectedAmount) - Number(inst.paidAmount || 0)) > 0
+      );
+
+      if (cuotasPendientes.length === 0) throw new Error("No hay cuotas con saldo pendiente.");
+
+      // Calcular la deuda total exacta
+      const deudaTotal = cuotasPendientes.reduce((sum, inst) => {
+        return sum + (Number(inst.expectedAmount) - Number(inst.paidAmount || 0));
+      }, 0);
+
+      // 1. Crear el recibo de pago por el total
+      await tx.payment.create({
+        data: {
+          amount: deudaTotal,
+          loanId: loan.id
+        }
+      });
+
+      // 2. Ingresar el capital a la ruta
+      await tx.route.update({
+        where: { id: loan.client.routeId },
+        data: { availableCapital: { increment: deudaTotal } }
+      });
+
+      // 3. Pagar todas las cuotas pendientes (Cascade)
+      const updatePromises = cuotasPendientes.map(inst => {
+        return tx.installment.update({
+          where: { id: inst.id },
+          data: {
+            paidAmount: inst.expectedAmount, // Se paga completo al valor original
+            status: 'PAID',
+            paidAt: new Date(),
+            actionDescription: "Liquidación total anticipada de la deuda."
+          }
+        });
+      });
+      await Promise.all(updatePromises);
+
+      // 4. Cerrar el préstamo
+      await tx.loan.update({
+        where: { id: loan.id },
+        data: { isActive: false }
+      });
+
+      return { success: true, liquidado: deudaTotal };
+    });
+
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    console.error("Error al liquidar:", error);
+    res.status(400).json({ error: error.message || "Error interno al liquidar" });
+  }
+};
+
+
+
+/**
  * OBTENER TODOS LOS CLIENTES DE UNA RUTA (Para el Popup de Reutilizar Cliente)
  */
 export const getClientsByRoute = async (req: AuthRequest, res: Response) => {
