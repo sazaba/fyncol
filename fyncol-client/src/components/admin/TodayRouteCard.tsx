@@ -51,6 +51,8 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
     return () => clearTimeout(timer);
   }, []);
 
+  const formatCurrency = (value: number) => `$${Math.round(value || 0).toLocaleString('es-CO')}`;
+
   const fetchRealTimeData = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -150,29 +152,61 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
             ) : clients.length === 0 ? (
               <p className="text-slate-400 text-sm text-center mt-10">No hay cobros pendientes para hoy.</p>
             ) : (
-              clients.map((client) => (
-                <div 
-                  key={client.id} 
-                  onClick={() => {
-                    if (client.latitude && client.longitude) {
-                      setFocusCoords([client.latitude, client.longitude]);
-                      setMobileView('MAP'); 
-                    }
-                  }}
-                  className="bg-white/5 border border-white/5 rounded-2xl p-4 hover:bg-white/10 transition-colors cursor-pointer group"
-                >
-                  <div className="flex justify-between items-start gap-2">
-                    <p className="font-semibold text-sm text-white flex items-center gap-2 overflow-hidden">
-                      <FiUser className="text-slate-400 group-hover:text-blue-400 transition-colors shrink-0" size={14} />
-                      <span className="truncate">{client.name}</span>
-                    </p>
-                    {!client.latitude && (
-                      <span className="text-[9px] bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded border border-red-500/20 shrink-0">Sin GPS</span>
-                    )}
+              clients.map((client) => {
+                const estadoStr = (client.estado || '').toUpperCase();
+                let estadoClasses = 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
+                let estadoText = 'PENDIENTE';
+
+                if (estadoStr === 'PAGADO') {
+                  estadoClasses = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+                  estadoText = 'PAGADO';
+                } else if (estadoStr === 'MORA') {
+                  estadoClasses = 'bg-red-500/10 text-red-400 border-red-500/20';
+                  estadoText = 'MORA';
+                }
+
+                return (
+                  <div 
+                    key={client.id} 
+                    onClick={() => {
+                      if (client.latitude && client.longitude) {
+                        setFocusCoords([client.latitude, client.longitude]);
+                        setMobileView('MAP'); 
+                      }
+                    }}
+                    className="bg-white/5 border border-white/5 rounded-2xl p-4 hover:bg-white/10 transition-colors cursor-pointer group flex flex-col gap-2"
+                  >
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm text-white flex items-center gap-2 overflow-hidden">
+                          <FiUser className="text-slate-400 group-hover:text-blue-400 transition-colors shrink-0" size={14} />
+                          <span className="truncate">{client.name}</span>
+                        </p>
+                        <p className="text-xs text-slate-400 mt-0.5 truncate">{client.address}</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold uppercase tracking-wider ${estadoClasses}`}>
+                          {estadoText}
+                        </span>
+                        {!client.latitude && (
+                          <span className="text-[9px] bg-slate-500/10 text-slate-400 px-1.5 py-0.5 rounded border border-slate-500/20">Sin GPS</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-end border-t border-white/5 pt-2 mt-1">
+                      <div>
+                        <p className="text-[9px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">Cuota</p>
+                        <p className="text-xs font-bold text-blue-400">{formatCurrency(client.cuotaDia)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[9px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">Deuda</p>
+                        <p className="text-xs font-bold text-slate-300">{formatCurrency(client.deudaTotal)}</p>
+                      </div>
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-400 mt-1 truncate">{client.address}</p>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -221,7 +255,8 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
                   >
                     <Popup>
                       <strong className="text-[#0B1020]">{client.name}</strong><br/>
-                      <span className="text-slate-600 text-xs">{client.address}</span>
+                      <span className="text-slate-600 text-xs">{client.address}</span><br/>
+                      <span className="text-[10px] font-bold text-blue-500">Deuda: {formatCurrency(client.deudaTotal)}</span>
                     </Popup>
                   </Marker>
                 )
