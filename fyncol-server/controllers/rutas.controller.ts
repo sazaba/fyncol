@@ -1,7 +1,8 @@
+// fyncol-server/controllers/rutas.controller.ts
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth.middleware'; 
-import { getDayLimitsByOffset, COUNTRY_TIMEZONES } from '../utils/time.utils';
+import { getDayLimitsByOffset, COUNTRY_TIMEZONES } from '../utils/time.utils'; 
 
 const prisma = new PrismaClient();
 
@@ -9,7 +10,6 @@ export const crearRuta = async (req: AuthRequest, res: Response): Promise<void> 
   try {
     const companyId = req.user?.companyId;
     
-    // CLÁUSULA DE GUARDIA: Asegura los tipos de aquí en adelante
     if (!companyId) {
       res.status(403).json({ error: "Acceso denegado: No tienes empresa asignada." });
       return;
@@ -227,8 +227,6 @@ export const eliminarRuta = async (req: AuthRequest, res: Response): Promise<voi
   }
 };
 
-
-
 export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -239,7 +237,6 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // Buscamos primero la ruta para extraer el país
     const ruta = await prisma.route.findUnique({
       where: { id: Number(id), companyId },
       include: { assignedTo: true }
@@ -250,7 +247,6 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // Aplicamos el límite de 12:00 PM al 12:00 PM basado en el país de ESA ruta en específico
     const offset = COUNTRY_TIMEZONES[ruta.country] ?? -5;
     const { startOfDay: hoyInicio, endOfDay: hoyFin } = getDayLimitsByOffset(offset);
 
@@ -371,14 +367,12 @@ export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    // PASO 1: Descubrimos en qué países opera esta empresa actualmente
     const distinctCountries = await prisma.route.findMany({
       where: { companyId, isActive: true },
       select: { country: true },
       distinct: ['country']
     });
 
-    // PASO 2: Procesamos las rutas agrupadas por país (para respetar el horario de cada bloque)
     const summaryPromises = distinctCountries.map(async ({ country }) => {
       const offset = COUNTRY_TIMEZONES[country] ?? -5;
       const { startOfDay: hoyInicio, endOfDay: hoyFin } = getDayLimitsByOffset(offset);
@@ -392,9 +386,8 @@ export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise
               loans: { 
                 where: { isActive: true },
                 include: {
-                  installmentDetails: {
-                    where: { dueDate: { gte: hoyInicio, lte: hoyFin } }
-                  },
+                  // FIX: Traemos todas las cuotas, no solo las de hoy, para calcular moras correctamente
+                  installmentDetails: true,
                   payments: {
                     where: { createdAt: { gte: hoyInicio, lte: hoyFin } }
                   }
@@ -411,25 +404,59 @@ export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise
         let clientesMora = 0;
         let totalRecaudado = 0;
 
+        // Iteramos CLIENTE por CLIENTE en lugar de CUOTA por CUOTA
         ruta.clients.forEach((client: any) => {
+          let needsToVisitToday = false;
+          let hasPaymentToday = false;
+          let hasMora = false;
+
           client.loans.forEach((loan: any) => {
-            if (loan.installmentDetails.length > 0) {
-              clientesTotales++;
-              
-              const cuotaHoy = loan.installmentDetails[0];
-              if (cuotaHoy.status === 'PAID') {
-                clientesCobrados++;
-              } else if (cuotaHoy.status === 'OVERDUE') {
-                clientesMora++;
-              }
+            // Si hay un pago hoy en este préstamo, marcamos que el cliente pagó
+            if (loan.payments.length > 0) {
+              hasPaymentToday = true;
+              loan.payments.forEach((pago: any) => {
+                totalRecaudado += Number(pago.amount);
+              });
             }
 
-            loan.payments.forEach((pago: any) => {
-              totalRecaudado += Number(pago.amount);
+            // Revisamos las cuotas para saber si hay moras o si caía hoy
+            loan.installmentDetails.forEach((inst: any) => {
+              const dueDate = new Date(inst.dueDate);
+              const isDueToday = dueDate >= hoyInicio && dueDate <= hoyFin;
+
+              if (inst.status === 'OVERDUE') {
+                hasMora = true;
+              }
+
+              if (
+                isDueToday ||
+                inst.status === 'OVERDUE' ||
+                (inst.promiseDate && new Date(inst.promiseDate) <= hoyFin && inst.status !== 'PAID')
+              ) {
+                needsToVisitToday = true;
+              }
             });
           });
+
+          // Forzamos la visita si el cliente soltó dinero hoy
+          if (hasPaymentToday) {
+            needsToVisitToday = true;
+          }
+
+          // Solo contabilizamos si el cliente es parte de la ruta del día
+          if (needsToVisitToday) {
+            clientesTotales++;
+            
+            // Lógica unificada para el conteo:
+            if (hasPaymentToday) {
+              clientesCobrados++; // Si pagó, es cobrado, punto.
+            } else if (hasMora) {
+              clientesMora++;     // Si no ha pagado y debe, es mora.
+            }
+          }
         });
 
+        // El porcentaje ahora sí reflejará el cobro real (ej. 1 pagado / 1 total = 100%)
         const porcentaje = clientesTotales === 0 ? 0 : Math.round((clientesCobrados / clientesTotales) * 100);
 
         return {
@@ -446,10 +473,7 @@ export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise
       });
     });
 
-    // Resolvemos las agrupaciones de todos los países de la empresa
     const resultsArray = await Promise.all(summaryPromises);
-    
-    // Aplanamos los resultados de los múltiples países en un solo array para el frontend
     const summary = resultsArray.flat();
 
     res.json({ success: true, data: summary });
