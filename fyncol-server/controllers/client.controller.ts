@@ -634,12 +634,17 @@ export const consultarDatacredito = async (req: AuthRequest, res: Response) => {
  * 6. LIQUIDAR DEUDA TOTAL
  * Cancela todas las cuotas pendientes de un préstamo en una sola transacción.
  */
+/**
+ * 6. LIQUIDAR DEUDA TOTAL
+ * Cancela todas las cuotas pendientes de un préstamo en una sola transacción.
+ */
 export const liquidarPrestamo = async (req: AuthRequest, res: Response) => {
   try {
     const companyId = req.user?.companyId; 
     if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
 
-   const loanId = parseInt(req.params.loanId as string);
+    // Aseguramos el tipado correcto de loanId
+    const loanId = parseInt(req.params.loanId as string);
 
     const result = await prisma.$transaction(async (tx) => {
       const loan = await tx.loan.findFirst({
@@ -678,19 +683,18 @@ export const liquidarPrestamo = async (req: AuthRequest, res: Response) => {
         data: { availableCapital: { increment: deudaTotal } }
       });
 
-      // 3. Pagar todas las cuotas pendientes (Cascade)
-      const updatePromises = cuotasPendientes.map(inst => {
-        return tx.installment.update({
+      // 3. Pagar todas las cuotas pendientes (Secuencialmente para no saturar Prisma)
+      for (const inst of cuotasPendientes) {
+        await tx.installment.update({
           where: { id: inst.id },
           data: {
-            paidAmount: inst.expectedAmount, // Se paga completo al valor original
+            paidAmount: inst.expectedAmount,
             status: 'PAID',
             paidAt: new Date(),
             actionDescription: "Liquidación total anticipada de la deuda."
           }
         });
-      });
-      await Promise.all(updatePromises);
+      }
 
       // 4. Cerrar el préstamo
       await tx.loan.update({
@@ -699,6 +703,10 @@ export const liquidarPrestamo = async (req: AuthRequest, res: Response) => {
       });
 
       return { success: true, liquidado: deudaTotal };
+    }, {
+      // Configuraciones de timeout para evitar el error de "Transaction closed"
+      maxWait: 5000, 
+      timeout: 20000 
     });
 
     res.json({ success: true, data: result });
