@@ -581,20 +581,18 @@ export const updateInstallmentStatus = async (req: AuthRequest, res: Response) =
 /**
  * 5. BURÓ INTERNO (MODIFICADO PARA BÚSQUEDA GLOBAL)
  */
+/**
+ * 5. BURÓ INTERNO (ACTUALIZADO PARA MULTI-RUTA)
+ */
 export const consultarDatacredito = async (req: AuthRequest, res: Response) => {
   try {
-    // Ya no requerimos que la búsqueda esté restringida a la empresa que consulta
-    // Permitiendo el comportamiento de "Datacrédito global"
-
     const documentId = req.params.documentId as string;
 
     if (!documentId) return res.status(400).json({ error: "Debe proveer un documento" });
-
-    // Blindaje: Quitamos cualquier espacio en blanco
     const cleanDocumentId = documentId.trim();
 
-    // AQUÍ ESTÁ LA MODIFICACIÓN: Buscamos a nivel de toda la BD (sin route: { companyId })
-    const client = await prisma.client.findFirst({ 
+    // CAMBIO CLAVE: Usamos findMany para traer el cliente de TODAS las rutas donde exista
+    const clients = await prisma.client.findMany({ 
       where: { 
         documentId: cleanDocumentId
       },
@@ -610,7 +608,8 @@ export const consultarDatacredito = async (req: AuthRequest, res: Response) => {
       }
     });
 
-    if (!client) {
+    // Si el array está vacío, el cliente no existe en ninguna ruta
+    if (clients.length === 0) {
       return res.json({ success: true, exists: false });
     }
 
@@ -618,21 +617,27 @@ export const consultarDatacredito = async (req: AuthRequest, res: Response) => {
     let prestamosActivos = 0;
     let prestamosCancelados = 0;
 
-    client.loans.forEach((loan: any) => {
-      if (loan.isActive) prestamosActivos++;
-      else prestamosCancelados++;
+    // Iteramos sobre CADA registro del cliente que encontramos en las distintas oficinas
+    clients.forEach((clientRecord) => {
+      clientRecord.loans.forEach((loan: any) => {
+        if (loan.isActive) prestamosActivos++;
+        else prestamosCancelados++;
 
-      loan.installmentDetails.forEach((inst: any) => {
-        if (inst.wasLate) fallasTotales++;
+        loan.installmentDetails.forEach((inst: any) => {
+          if (inst.wasLate) fallasTotales++;
+        });
       });
     });
+
+    // Tomamos el nombre y teléfono del primer registro que encontramos (asumiendo que son los mismos)
+    const primerRegistro = clients[0];
 
     return res.json({
       success: true,
       exists: true,
       data: {
-        name: client.name, // Retornamos el nombre real
-        phone: client.phone,
+        name: primerRegistro.name,
+        phone: primerRegistro.phone,
         fallasTotales,
         prestamosActivos,
         prestamosCancelados
