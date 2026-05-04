@@ -3,10 +3,19 @@ import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { FiMapPin, FiUser, FiNavigation, FiLoader } from "react-icons/fi";
+import { FiMapPin, FiUser, FiNavigation, FiLoader, FiCheckCircle } from "react-icons/fi";
 
 const clientIcon = new L.Icon({
   iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+const paidClientIcon = new L.Icon({
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-grey.png",
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
   iconSize: [25, 41],
   iconAnchor: [12, 41],
@@ -40,10 +49,8 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
   const [isLoading, setIsLoading] = useState(true);
   const [mobileView, setMobileView] = useState<'LIST' | 'MAP'>('LIST');
   
-  // Estado para garantizar que el DOM y las animaciones del padre finalizaron
   const [isLayoutReady, setIsLayoutReady] = useState(false);
 
-  // Retraso de montaje para evadir el conflicto con animate-[fadeIn] del padre Monitoreo.tsx
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsLayoutReady(true);
@@ -114,7 +121,6 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
 
   const mapCenter: [number, number] = focusCoords || [4.5709, -74.2973];
   
-  // Condición lógica de visibilidad estricta
   const isMapVisible = mobileView === 'MAP' || (typeof window !== 'undefined' && window.innerWidth >= 1024);
 
   return (
@@ -150,7 +156,7 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
                  <FiLoader className="animate-spin" size={24} />
                </div>
             ) : clients.length === 0 ? (
-              <p className="text-slate-400 text-sm text-center mt-10">No hay cobros pendientes para hoy.</p>
+              <p className="text-slate-400 text-sm text-center mt-10">No hay cobros pendientes o pagados para hoy.</p>
             ) : (
               clients.map((client) => {
                 const estadoStr = (client.estado || '').toUpperCase();
@@ -174,13 +180,17 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
                         setMobileView('MAP'); 
                       }
                     }}
-                    className="bg-white/5 border border-white/5 rounded-2xl p-4 hover:bg-white/10 transition-colors cursor-pointer group flex flex-col gap-2"
+                    className={`border rounded-2xl p-4 transition-colors cursor-pointer group flex flex-col gap-2 ${estadoStr === 'PAGADO' ? 'bg-emerald-900/10 border-emerald-500/10 hover:bg-emerald-900/20' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}
                   >
                     <div className="flex justify-between items-start gap-2">
                       <div className="min-w-0">
                         <p className="font-semibold text-sm text-white flex items-center gap-2 overflow-hidden">
-                          <FiUser className="text-slate-400 group-hover:text-blue-400 transition-colors shrink-0" size={14} />
-                          <span className="truncate">{client.name}</span>
+                          {estadoStr === 'PAGADO' ? (
+                            <FiCheckCircle className="text-emerald-500 shrink-0" size={14} />
+                          ) : (
+                            <FiUser className="text-slate-400 group-hover:text-blue-400 transition-colors shrink-0" size={14} />
+                          )}
+                          <span className={estadoStr === 'PAGADO' ? 'text-slate-300 line-through truncate' : 'truncate'}>{client.name}</span>
                         </p>
                         <p className="text-xs text-slate-400 mt-0.5 truncate">{client.address}</p>
                       </div>
@@ -197,7 +207,9 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
                     <div className="flex justify-between items-end border-t border-white/5 pt-2 mt-1">
                       <div>
                         <p className="text-[9px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">Cuota</p>
-                        <p className="text-xs font-bold text-blue-400">{formatCurrency(client.cuotaDia)}</p>
+                        <p className={`text-xs font-bold ${estadoStr === 'PAGADO' ? 'text-emerald-400' : 'text-blue-400'}`}>
+                          {formatCurrency(client.cuotaDia)}
+                        </p>
                       </div>
                       <div className="text-right">
                         <p className="text-[9px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">Deuda</p>
@@ -211,7 +223,7 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
           </div>
         </div>
 
-        {/* SECCIÓN DERECHA: Corrección Flexbox (flex-1) */}
+        {/* SECCIÓN DERECHA */}
         <div className={`w-full lg:w-2/3 flex flex-col flex-1 relative z-0 ${mobileView === 'LIST' ? 'hidden lg:flex' : 'flex'} min-h-full`}>
           
           {cobradorData && (
@@ -231,7 +243,6 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
             </div>
           )}
 
-          {/* Renderizado condicional estricto: Leaflet no tocará el DOM hasta que la estructura del contenedor esté resuelta y la vista activa lo demande */}
           {isLayoutReady && isMapVisible && (
             <MapContainer 
               center={mapCenter} 
@@ -246,21 +257,24 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
 
               <MapFocusController coords={focusCoords} />
 
-              {clients.map((client) => (
-                 client.latitude && client.longitude && (
+              {clients.map((client) => {
+                const estadoStr = (client.estado || '').toUpperCase();
+                return client.latitude && client.longitude && (
                   <Marker 
                     key={client.id} 
                     position={[client.latitude, client.longitude]} 
-                    icon={clientIcon}
+                    icon={estadoStr === 'PAGADO' ? paidClientIcon : clientIcon}
                   >
                     <Popup>
                       <strong className="text-[#0B1020]">{client.name}</strong><br/>
                       <span className="text-slate-600 text-xs">{client.address}</span><br/>
-                      <span className="text-[10px] font-bold text-blue-500">Deuda: {formatCurrency(client.deudaTotal)}</span>
+                      <span className={`text-[10px] font-bold ${estadoStr === 'PAGADO' ? 'text-emerald-500' : 'text-blue-500'}`}>
+                        {estadoStr === 'PAGADO' ? 'Pagado Hoy' : `Deuda: ${formatCurrency(client.deudaTotal)}`}
+                      </span>
                     </Popup>
                   </Marker>
                 )
-              ))}
+              })}
 
               {cobradorData && cobradorData.latitude && cobradorData.longitude && (
                 <Marker 
