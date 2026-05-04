@@ -289,6 +289,8 @@ export default function NuevoCredito() {
     return json.secure_url;
   };
 
+
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -318,11 +320,30 @@ export default function NuevoCredito() {
       });
 
       const responseData = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(responseData?.error || "Error del servidor");
+      
+      if (!response.ok) {
+        // Capturamos el error específico de la deuda activa
+        if (responseData?.errorType === "ACTIVE_DEBT") {
+          throw new Error(responseData.error);
+        }
+        throw new Error(responseData?.error || "Error del servidor");
+      }
+
+      // Evaluamos si el cliente tiene deudas en otras oficinas (Punto 4)
+      let titleMsg = "Crédito Registrado";
+      let successMsg = "El cliente y su préstamo inicial se guardaron correctamente.";
+      let alertVariant: AlertVariant = "success";
+
+      if (responseData.otherActiveLoansCount > 0) {
+        titleMsg = "Crédito Creado con Alerta";
+        successMsg = `El préstamo se registró. OJO: Este cliente tiene ${responseData.otherActiveLoansCount} crédito(s) activo(s) en otras oficinas.`;
+        alertVariant = "info"; // Usamos info para que sea visualmente diferente al éxito normal
+      }
 
       openAlert({
-        variant: "success", title: "Crédito Registrado",
-        message: "El cliente y su préstamo inicial se guardaron correctamente.",
+        variant: alertVariant, 
+        title: titleMsg,
+        message: successMsg,
         confirmText: "Listo",
         onConfirm: () => {
           closeAlert();
@@ -349,12 +370,17 @@ export default function NuevoCredito() {
       openAlert({
         variant: "danger", title: "Error al guardar",
         message: error.message || "Ocurrió un error inesperado.",
-        confirmText: "Revisar", onConfirm: () => closeAlert()
+        confirmText: "Entendido", onConfirm: () => closeAlert()
       });
     } finally {
       setIsSubmitting(false);
     }
   };
+
+
+
+
+
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
