@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FiCheckCircle, FiLoader, FiMap, FiCalendar, FiUser, FiEye, FiX, FiAlertTriangle, FiClock, FiInfo} from 'react-icons/fi';
+import { FiCheckCircle, FiLoader, FiMap, FiCalendar, FiUser, FiEye, FiX, FiAlertTriangle, FiClock, FiInfo } from 'react-icons/fi';
 
 const traducirEstado = (status: string) => {
   switch (status) {
@@ -187,11 +187,11 @@ export default function CierresDiarios() {
                     {/* Tarjeta Combinada: Inversiones y Retiros Históricos */}
                     <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl col-span-2 flex justify-between items-center">
                        <div className="text-center w-1/2 border-r border-white/10">
-                         <p className="text-[10px] text-emerald-500/80 font-bold uppercase tracking-wider mb-1">Inversiones de ese día</p>
+                         <p className="text-[10px] text-emerald-500/80 font-bold uppercase tracking-wider mb-1">Inversiones en esta fecha</p>
                          <p className="text-sm font-bold text-white">+${Math.round(Number(selectedClosure.totalInversiones || 0)).toLocaleString('es-CO')}</p>
                        </div>
                        <div className="text-center w-1/2">
-                         <p className="text-[10px] text-red-500/80 font-bold uppercase tracking-wider mb-1">Retiros de ese día</p>
+                         <p className="text-[10px] text-red-500/80 font-bold uppercase tracking-wider mb-1">Retiros en esta fecha</p>
                          <p className="text-sm font-bold text-white">-${Math.round(Number(selectedClosure.totalRetiros || 0)).toLocaleString('es-CO')}</p>
                        </div>
                     </div>
