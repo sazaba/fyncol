@@ -2,9 +2,69 @@
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth.middleware'; 
-import { getDayLimitsByOffset, COUNTRY_TIMEZONES } from '../utils/time.utils'; 
 
 const prisma = new PrismaClient();
+
+// ==========================================
+// UTILIDADES DE ZONA HORARIA INCRUSTADAS
+// ==========================================
+const COUNTRY_TIMEZONES: Record<string, number> = {
+  'Colombia': -5,
+  'Peru': -5,
+  'Ecuador': -5,
+  'Panama': -5,
+  'Mexico': -6, 
+  'Costa Rica': -6,
+  'Guatemala': -6,
+  'Honduras': -6,
+  'El Salvador': -6,
+  'Nicaragua': -6,
+  'Chile': -4,
+  'Bolivia': -4,
+  'Venezuela': -4,
+  'Paraguay': -4,
+  'República Dominicana': -4,
+  'Argentina': -3,
+  'Uruguay': -3,
+  'Brasil': -3,
+  'España': +1,
+  'USA': -5 
+};
+
+const getDayLimitsByOffset = (utcOffset: number) => {
+  const now = new Date();
+  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const localTime = new Date(utcTime + (utcOffset * 3600000));
+
+  const localStart = new Date(localTime);
+  const localEnd = new Date(localTime);
+
+  const corteAlMediodia = true; // TRUE = Cierra a las 12:00 PM
+
+  if (corteAlMediodia) {
+    if (localTime.getHours() < 12) {
+      localStart.setDate(localStart.getDate() - 1);
+      localStart.setHours(12, 0, 0, 0);
+      localEnd.setHours(11, 59, 59, 999);
+    } else {
+      localStart.setHours(12, 0, 0, 0);
+      localEnd.setDate(localEnd.getDate() + 1);
+      localEnd.setHours(11, 59, 59, 999);
+    }
+  } else {
+    localStart.setHours(0, 0, 0, 0);
+    localEnd.setHours(23, 59, 59, 999);
+  }
+
+  return { 
+    startOfDay: new Date(localStart.getTime() - (utcOffset * 3600000)), 
+    endOfDay: new Date(localEnd.getTime() - (utcOffset * 3600000)) 
+  };
+};
+
+// ==========================================
+// CONTROLADORES CRUD DE RUTAS
+// ==========================================
 
 export const crearRuta = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -227,6 +287,10 @@ export const eliminarRuta = async (req: AuthRequest, res: Response): Promise<voi
   }
 };
 
+// ==========================================
+// CONTROLADORES DE MONITOREO (REESCRITOS)
+// ==========================================
+
 export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -253,7 +317,15 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
     const clientesDeHoyRaw = await prisma.client.findMany({
       where: {
         routeId: Number(id),
-        loans: { some: { isActive: true } }
+        // FIX: Traemos los préstamos activos O los que se liquidaron hoy (inactivos con pago hoy)
+        loans: { 
+          some: { 
+            OR: [
+              { isActive: true },
+              { payments: { some: { createdAt: { gte: hoyInicio, lte: hoyFin } } } }
+            ]
+          } 
+        }
       },
       select: {
         id: true,
@@ -262,7 +334,12 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
         longitude: true,
         address: true,
         loans: {
-          where: { isActive: true },
+          where: { 
+            OR: [
+              { isActive: true },
+              { payments: { some: { createdAt: { gte: hoyInicio, lte: hoyFin } } } }
+            ]
+          },
           include: {
             installmentDetails: true,
             payments: {
@@ -384,9 +461,13 @@ export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise
           clients: { 
             include: {
               loans: { 
-                where: { isActive: true },
+                where: { 
+                  OR: [
+                    { isActive: true },
+                    { payments: { some: { createdAt: { gte: hoyInicio, lte: hoyFin } } } }
+                  ]
+                },
                 include: {
-                  // FIX: Traemos todas las cuotas, no solo las de hoy, para calcular moras correctamente
                   installmentDetails: true,
                   payments: {
                     where: { createdAt: { gte: hoyInicio, lte: hoyFin } }
@@ -404,14 +485,12 @@ export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise
         let clientesMora = 0;
         let totalRecaudado = 0;
 
-        // Iteramos CLIENTE por CLIENTE en lugar de CUOTA por CUOTA
         ruta.clients.forEach((client: any) => {
           let needsToVisitToday = false;
           let hasPaymentToday = false;
           let hasMora = false;
 
           client.loans.forEach((loan: any) => {
-            // Si hay un pago hoy en este préstamo, marcamos que el cliente pagó
             if (loan.payments.length > 0) {
               hasPaymentToday = true;
               loan.payments.forEach((pago: any) => {
@@ -419,7 +498,6 @@ export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise
               });
             }
 
-            // Revisamos las cuotas para saber si hay moras o si caía hoy
             loan.installmentDetails.forEach((inst: any) => {
               const dueDate = new Date(inst.dueDate);
               const isDueToday = dueDate >= hoyInicio && dueDate <= hoyFin;
@@ -438,25 +516,21 @@ export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise
             });
           });
 
-          // Forzamos la visita si el cliente soltó dinero hoy
           if (hasPaymentToday) {
             needsToVisitToday = true;
           }
 
-          // Solo contabilizamos si el cliente es parte de la ruta del día
           if (needsToVisitToday) {
             clientesTotales++;
             
-            // Lógica unificada para el conteo:
             if (hasPaymentToday) {
-              clientesCobrados++; // Si pagó, es cobrado, punto.
+              clientesCobrados++; 
             } else if (hasMora) {
-              clientesMora++;     // Si no ha pagado y debe, es mora.
+              clientesMora++;     
             }
           }
         });
 
-        // El porcentaje ahora sí reflejará el cobro real (ej. 1 pagado / 1 total = 100%)
         const porcentaje = clientesTotales === 0 ? 0 : Math.round((clientesCobrados / clientesTotales) * 100);
 
         return {
