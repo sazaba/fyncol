@@ -1031,28 +1031,48 @@ export default function CarteraActiva() {
               <h3 className="text-xl font-bold text-white mb-1">Arqueo de Caja</h3>
               <p className="text-sm text-slate-400">Verifica los valores antes de entregar el efectivo.</p>
             </div>
-            <div className="grid grid-cols-2 gap-3 mb-6">
-              <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl col-span-2 text-center">
+
+
+     <div className="grid grid-cols-2 gap-3 mb-6">
+              {/* Tarjeta Principal: Recaudo */}
+              <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl col-span-2 text-center shadow-inner">
                 <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Efectivo a entregar (Recaudo)</p>
-                <p className="text-3xl font-bold text-emerald-400">${closureSummary.totalCollected.toLocaleString('es-CO')}</p>
+                <p className="text-3xl font-bold text-emerald-400">${closureSummary.totalCollected?.toLocaleString('es-CO')}</p>
               </div>
+
+              {/* NUEVO: Tarjeta de Inversiones y Retiros combinada */}
+              <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl col-span-2 flex justify-between items-center">
+                 <div className="text-center w-1/2 border-r border-white/10">
+                   <p className="text-[10px] text-emerald-500/80 font-bold uppercase tracking-wider mb-1">Inversiones Hoy</p>
+                   <p className="text-sm font-bold text-white">+${(closureSummary.totalInversiones || 0).toLocaleString('es-CO')}</p>
+                 </div>
+                 <div className="text-center w-1/2">
+                   <p className="text-[10px] text-red-500/80 font-bold uppercase tracking-wider mb-1">Retiros Hoy</p>
+                   <p className="text-sm font-bold text-white">-${(closureSummary.totalRetiros || 0).toLocaleString('es-CO')}</p>
+                 </div>
+              </div>
+
+              {/* Tarjetas Secundarias */}
               <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl">
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Disponible en ruta</p>
-                <p className="text-sm font-bold text-blue-400">${closureSummary.availableCapital.toLocaleString('es-CO')}</p>
+                <p className="text-sm font-bold text-blue-400">${closureSummary.availableCapital?.toLocaleString('es-CO')}</p>
               </div>
               <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl">
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Cartera en la calle</p>
-                <p className="text-sm font-bold text-white">${closureSummary.totalPortfolio.toLocaleString('es-CO')}</p>
+                <p className="text-sm font-bold text-white">${closureSummary.totalPortfolio?.toLocaleString('es-CO')}</p>
               </div>
               <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl">
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Ventas (Nuevos)</p>
-                <p className="text-sm font-bold text-white">${closureSummary.newSales.toLocaleString('es-CO')}</p>
+                <p className="text-sm font-bold text-white">${closureSummary.newSales?.toLocaleString('es-CO')}</p>
               </div>
               <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl">
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Renovaciones</p>
-                <p className="text-sm font-bold text-white">${closureSummary.renewals.toLocaleString('es-CO')}</p>
+                <p className="text-sm font-bold text-white">${closureSummary.renewals?.toLocaleString('es-CO')}</p>
               </div>
             </div>
+
+
+
             <div className="flex justify-between items-center mb-6 px-3 text-[10px] sm:text-xs text-slate-400 font-medium bg-white/5 py-2.5 rounded-lg">
               <span className="flex flex-col items-center gap-1"><FiMapPin size={14} /> Total: {closureSummary.totalClients}</span>
               <span className="flex flex-col items-center gap-1 text-emerald-400/80"><FiCheckCircle size={14} /> Pagos: {closureSummary.collectedClients}</span>

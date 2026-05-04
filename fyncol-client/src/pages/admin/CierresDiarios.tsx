@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FiCheckCircle, FiLoader, FiMap, FiCalendar, FiUser, FiEye, FiX, FiAlertTriangle, FiClock, FiInfo, FiDollarSign } from 'react-icons/fi';
+import { FiCheckCircle, FiLoader, FiMap, FiCalendar, FiUser, FiEye, FiX, FiAlertTriangle, FiClock, FiInfo} from 'react-icons/fi';
 
 const traducirEstado = (status: string) => {
   switch (status) {
@@ -176,28 +176,42 @@ export default function CierresDiarios() {
               {/* TAB 1: RESUMEN FINANCIERO */}
               {modalTab === 'RESUMEN' && (
                 <div className="animate-[fadeIn_0.2s_ease-out]">
+
                   <div className="grid grid-cols-2 gap-3 mb-6">
+                    {/* Tarjeta Principal: Recaudo */}
                     <div className="bg-[#0B0B12] border border-white/5 p-4 rounded-xl col-span-2 text-center shadow-inner">
                       <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Efectivo Entregado (Recaudo)</p>
-                      <p className="text-3xl font-bold text-emerald-400">${Math.round(Number(selectedClosure.totalCollected)).toLocaleString('es-CO')}</p>
+                      <p className="text-3xl font-bold text-emerald-400">${Math.round(Number(selectedClosure.totalCollected || 0)).toLocaleString('es-CO')}</p>
                     </div>
 
+                    {/* Tarjeta Combinada: Inversiones y Retiros Históricos */}
+                    <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl col-span-2 flex justify-between items-center">
+                       <div className="text-center w-1/2 border-r border-white/10">
+                         <p className="text-[10px] text-emerald-500/80 font-bold uppercase tracking-wider mb-1">Inversiones de ese día</p>
+                         <p className="text-sm font-bold text-white">+${Math.round(Number(selectedClosure.totalInversiones || 0)).toLocaleString('es-CO')}</p>
+                       </div>
+                       <div className="text-center w-1/2">
+                         <p className="text-[10px] text-red-500/80 font-bold uppercase tracking-wider mb-1">Retiros de ese día</p>
+                         <p className="text-sm font-bold text-white">-${Math.round(Number(selectedClosure.totalRetiros || 0)).toLocaleString('es-CO')}</p>
+                       </div>
+                    </div>
+
+                    {/* Tarjetas Secundarias */}
                     <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl">
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Disponible en ruta</p>
-                      <p className="text-sm font-bold text-blue-400">${Math.round(Number(selectedClosure.availableCapital)).toLocaleString('es-CO')}</p>
+                      <p className="text-sm font-bold text-blue-400">${Math.round(Number(selectedClosure.availableCapital || 0)).toLocaleString('es-CO')}</p>
                     </div>
                     <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl">
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Cartera en la calle</p>
-                      <p className="text-sm font-bold text-white">${Math.round(Number(selectedClosure.totalPortfolio)).toLocaleString('es-CO')}</p>
+                      <p className="text-sm font-bold text-white">${Math.round(Number(selectedClosure.totalPortfolio || 0)).toLocaleString('es-CO')}</p>
                     </div>
-                    
                     <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl">
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Ventas (Nuevos)</p>
-                      <p className="text-sm font-bold text-white">${Math.round(Number(selectedClosure.newSales)).toLocaleString('es-CO')}</p>
+                      <p className="text-sm font-bold text-white">${Math.round(Number(selectedClosure.newSales || 0)).toLocaleString('es-CO')}</p>
                     </div>
                     <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl">
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Renovaciones</p>
-                      <p className="text-sm font-bold text-white">${Math.round(Number(selectedClosure.renewals)).toLocaleString('es-CO')}</p>
+                      <p className="text-sm font-bold text-white">${Math.round(Number(selectedClosure.renewals || 0)).toLocaleString('es-CO')}</p>
                     </div>
                   </div>
 
@@ -232,29 +246,46 @@ export default function CierresDiarios() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {closureDetails.map((detail) => (
-                        <div key={detail.id} className={`p-4 rounded-2xl border transition-colors ${detail.status === 'RENEGOTIATED' ? 'bg-orange-500/5 border-orange-500/10 hover:border-orange-500/20' : detail.status === 'OVERDUE' ? 'bg-red-500/5 border-red-500/10 hover:border-red-500/20' : detail.status === 'PAID' ? 'bg-emerald-500/5 border-emerald-500/10 hover:border-emerald-500/20' : detail.status === 'PARTIAL' ? 'bg-blue-500/5 border-blue-500/10 hover:border-blue-500/20' : 'bg-[#0B0B12] border-white/5 hover:border-white/10'}`}>
-                          
-                          <div className="flex justify-between items-start mb-2">
-                            <h4 className="font-bold text-sm text-white">{detail.clientName}</h4>
-                            <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded ${detail.status === 'RENEGOTIATED' ? 'bg-orange-500/10 text-orange-400' : detail.status === 'OVERDUE' ? 'bg-red-500/10 text-red-400' : detail.status === 'PAID' ? 'bg-emerald-500/10 text-emerald-400' : detail.status === 'PARTIAL' ? 'bg-blue-500/10 text-blue-400' : 'bg-slate-500/20 text-slate-400'}`}>
-                              {traducirEstado(detail.status)}
-                            </span>
-                          </div>
+                      {closureDetails.map((detail) => {
+                        const paid = Math.round(Number(detail.paidAmount || 0));
+                        const expected = Math.round(Number(detail.expectedAmount || 0));
+                        const isTotalPayoff = paid >= expected && detail.status === 'PAID';
 
-                          <div className="flex gap-4 text-xs font-medium text-slate-400 mb-3">
-                            <p className="flex items-center gap-1"><FiDollarSign className="text-slate-500"/> Esperado: <span className="text-slate-200">${Math.round(Number(detail.expectedAmount)).toLocaleString('es-CO')}</span></p>
-                            <p className="flex items-center gap-1"><FiCheckCircle className="text-emerald-500/50"/> Abonado: <span className={Number(detail.paidAmount) > 0 ? "text-emerald-400" : "text-slate-200"}>${Math.round(Number(detail.paidAmount || 0)).toLocaleString('es-CO')}</span></p>
-                          </div>
+                        return (
+                          <div key={detail.id} className={`p-4 rounded-2xl border transition-colors ${detail.status === 'RENEGOTIATED' ? 'bg-orange-500/5 border-orange-500/20' : detail.status === 'OVERDUE' ? 'bg-red-500/5 border-red-500/20' : detail.status === 'PAID' ? 'bg-emerald-500/5 border-emerald-500/20' : detail.status === 'PARTIAL' ? 'bg-blue-500/5 border-blue-500/20' : 'bg-[#0B0B12] border-white/10'}`}>
+                            
+                            <div className="flex justify-between items-start mb-3">
+                              <div>
+                                <h4 className="font-bold text-sm text-white mb-0.5">{detail.clientName}</h4>
+                                {isTotalPayoff ? (
+                                  <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-400 flex items-center gap-1">
+                                    <FiCheckCircle size={10}/> Pago / Liquidación Total
+                                  </span>
+                                ) : (
+                                  <span className={`text-[9px] font-bold uppercase tracking-widest ${detail.status === 'RENEGOTIATED' ? 'text-orange-400' : detail.status === 'OVERDUE' ? 'text-red-400' : detail.status === 'PARTIAL' ? 'text-blue-400' : 'text-slate-400'}`}>
+                                    {traducirEstado(detail.status)}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-right">
+                                <p className={`font-bold text-base ${paid > 0 ? 'text-emerald-400' : 'text-white'}`}>
+                                  +${paid.toLocaleString('es-CO')}
+                                </p>
+                                <p className="text-[9px] text-slate-500 font-medium uppercase tracking-widest mt-0.5">
+                                  Esperaba: ${expected.toLocaleString('es-CO')}
+                                </p>
+                              </div>
+                            </div>
 
-                          {/* TEXTO DE AUDITORÍA TIPO CARTERA ACTIVA */}
-                          <div className={`mt-1 text-[10px] font-medium p-2 rounded flex items-start gap-1.5 border italic ${detail.status === 'OVERDUE' ? 'bg-red-500/5 border-red-500/10 text-red-300' : detail.status === 'RENEGOTIATED' ? 'bg-orange-500/5 border-orange-500/10 text-orange-300' : 'bg-white/5 border-white/5 text-slate-400'}`}>
-                            {detail.status === 'OVERDUE' ? <FiAlertTriangle className="shrink-0 mt-0.5 text-red-400" /> : detail.status === 'RENEGOTIATED' ? <FiClock className="shrink-0 mt-0.5 text-orange-400" /> : <FiInfo className="shrink-0 mt-0.5 text-blue-400" />}
-                            <span>{detail.observation}</span>
-                          </div>
+                            {/* TEXTO DE AUDITORÍA (Descripción exacta enviada por el Cobrador) */}
+                            <div className={`text-[11px] font-medium p-2.5 rounded-lg flex items-start gap-2 border ${detail.status === 'OVERDUE' ? 'bg-red-500/10 border-red-500/20 text-red-300' : detail.status === 'RENEGOTIATED' ? 'bg-orange-500/10 border-orange-500/20 text-orange-300' : isTotalPayoff ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' : 'bg-blue-500/5 border-blue-500/20 text-blue-300'}`}>
+                              {detail.status === 'OVERDUE' ? <FiAlertTriangle className="shrink-0 mt-0.5" /> : detail.status === 'RENEGOTIATED' ? <FiClock className="shrink-0 mt-0.5" /> : isTotalPayoff ? <FiCheckCircle className="shrink-0 mt-0.5" /> : <FiInfo className="shrink-0 mt-0.5" />}
+                              <span className="leading-relaxed">{detail.observation}</span>
+                            </div>
 
-                        </div>
-                      ))}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
