@@ -1,9 +1,11 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+// Importa tus utilidades (Ajusta la ruta según tu estructura)
+import { getDayLimitsByOffset, COUNTRY_TIMEZONES } from '../utils/time.utils'; 
 
 const prisma = new PrismaClient();
 
-export const getDashboardStats = async (req: Request, res: Response) => {
+export const getDashboardStats = async (req: Request, res: Response): Promise<any> => {
   try {
     const routeId = Number(req.query.routeId);
 
@@ -11,27 +13,29 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: "El routeId es requerido" });
     }
 
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    // PASO 1: Buscamos la ruta primero para saber su país
+    const route = await prisma.route.findUnique({ where: { id: routeId } });
+    
+    if (!route) {
+      return res.status(404).json({ success: false, error: "Ruta no encontrada" });
+    }
 
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
-
+    // PASO 2: Calculamos los límites del día basándonos dinámicamente en el país
+    // Si el país no está en la lista, cae por defecto a -5 (Colombia/Ecuador/Perú)
+    const offset = COUNTRY_TIMEZONES[route.country] ?? -5;
+    const { startOfDay, endOfDay } = getDayLimitsByOffset(offset);
     const dateFilter = { gte: startOfDay, lte: endOfDay };
 
-    // Ejecutamos TODAS las consultas pesadas en paralelo
+    // PASO 3: Ejecutamos TODAS las demás consultas usando el dateFilter dinámico
     const [
-      route,
       paymentsToday,
       loansToday,
       installmentsDueToday,
       overdueInstallments,
       clientsPaidToday,
-      carteraActualQuery, // Movid0 aquí para mejor rendimiento
-      nuevaDeudaQuery     // NUEVA CONSULTA: Para calcular la cartera inicial
+      carteraActualQuery,
+      nuevaDeudaQuery
     ] = await Promise.all([
-      prisma.route.findUnique({ where: { id: routeId } }),
-
       prisma.payment.aggregate({
         _sum: { amount: true },
         where: { loan: { client: { routeId } }, createdAt: dateFilter }
@@ -59,7 +63,6 @@ export const getDashboardStats = async (req: Request, res: Response) => {
         distinct: ['loanId']
       }),
 
-      // Consulta de Cartera Final (Actual)
       prisma.installment.aggregate({
         _sum: { expectedAmount: true, paidAmount: true },
         where: { 
@@ -68,16 +71,11 @@ export const getDashboardStats = async (req: Request, res: Response) => {
         }
       }),
 
-      // Consulta de Deuda Nueva generada hoy (Capital + Intereses prestados hoy)
       prisma.installment.aggregate({
         _sum: { expectedAmount: true },
         where: { loan: { client: { routeId }, createdAt: dateFilter } }
       })
     ]);
-
-    if (!route) {
-      return res.status(404).json({ success: false, error: "Ruta no encontrada" });
-    }
 
     // --- PROCESAMIENTO DE DATOS ---
 
@@ -98,15 +96,11 @@ export const getDashboardStats = async (req: Request, res: Response) => {
     const prestamosTotalesDia = nuevosCreditosAmount + renovacionesAmount;
     const cajaInicial = saldoDisponible + prestamosTotalesDia - recaudoDia;
 
-    // 1. Calculamos la Cartera Final (La foto real de este segundo)
     const carteraEsperada = Number(carteraActualQuery._sum.expectedAmount || 0);
     const carteraPagada = Number(carteraActualQuery._sum.paidAmount || 0);
     const carteraFinal = carteraEsperada - carteraPagada;
 
-    // 2. Calculamos el valor total a pagar de los créditos generados hoy
     const nuevaDeudaHoy = Number(nuevaDeudaQuery._sum.expectedAmount || 0);
-
-    // 3. Calculamos la Cartera Inicial de forma matemática y precisa
     const carteraInicial = carteraFinal + recaudoDia - nuevaDeudaHoy;
 
     const clientesQuePagaron = clientsPaidToday.length;

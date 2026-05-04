@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth.middleware'; 
+import { getDayLimitsByOffset, COUNTRY_TIMEZONES } from '../utils/time.utils';
 
 const prisma = new PrismaClient();
 
@@ -226,8 +227,7 @@ export const eliminarRuta = async (req: AuthRequest, res: Response): Promise<voi
   }
 };
 
-// fyncol-server/controllers/rutas.controller.ts
-// Reemplaza ÚNICAMENTE esta función en tu fyncol-server/controllers/rutas.controller.ts
+
 
 export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -239,14 +239,7 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // Definimos el inicio y fin del día actual
-    const hoyInicio = new Date();
-    hoyInicio.setHours(0, 0, 0, 0);
-
-    const hoyFin = new Date();
-    hoyFin.setHours(23, 59, 59, 999);
-
-    // 1. Buscamos la ruta y el usuario cobrador asignado a ella
+    // Buscamos primero la ruta para extraer el país
     const ruta = await prisma.route.findUnique({
       where: { id: Number(id), companyId },
       include: { assignedTo: true }
@@ -257,11 +250,14 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // 2. Buscamos los clientes activos de la ruta con sus créditos
+    // Aplicamos el límite de 12:00 PM al 12:00 PM basado en el país de ESA ruta en específico
+    const offset = COUNTRY_TIMEZONES[ruta.country] ?? -5;
+    const { startOfDay: hoyInicio, endOfDay: hoyFin } = getDayLimitsByOffset(offset);
+
     const clientesDeHoyRaw = await prisma.client.findMany({
       where: {
         routeId: Number(id),
-        loans: { some: { isActive: true } } // Solo clientes con créditos activos
+        loans: { some: { isActive: true } }
       },
       select: {
         id: true,
@@ -272,10 +268,10 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
         loans: {
           where: { isActive: true },
           include: {
-            installmentDetails: true, // Traemos las cuotas para calcular la deuda y cuota del día
+            installmentDetails: true,
             payments: {
               where: {
-                createdAt: { gte: hoyInicio, lte: hoyFin } // Traemos los pagos hechos HOY
+                createdAt: { gte: hoyInicio, lte: hoyFin }
               }
             }
           }
@@ -283,7 +279,6 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
       }
     });
 
-    // 3. Procesamiento en memoria para armar el Dashboard del Mapa
     const clientesProcesados: any[] = [];
 
     for (const client of clientesDeHoyRaw) {
@@ -291,21 +286,18 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
       let cuotaDia = 0;
       let hasMora = false;
       let hasPaymentToday = false;
-      let needsToVisitToday = false; // Bandera para saber si el cobrador debe verlo hoy
+      let needsToVisitToday = false; 
 
       for (const loan of client.loans) {
-        // Si hay pagos de este crédito hoy, marcamos que pagó
         if (loan.payments.length > 0) {
           hasPaymentToday = true;
         }
 
         for (const inst of loan.installmentDetails) {
-          // A. Cálculo de Deuda Total (sumamos todo lo que no esté pagado)
           if (['PENDING', 'PARTIAL', 'OVERDUE', 'RENEGOTIATED'].includes(inst.status)) {
             deudaTotal += (Number(inst.expectedAmount) - Number(inst.paidAmount));
           }
 
-          // B. Validar si la cuota cae exactamente hoy
           const dueDate = new Date(inst.dueDate);
           const isDueToday = dueDate >= hoyInicio && dueDate <= hoyFin;
 
@@ -313,13 +305,10 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
             cuotaDia += Number(inst.expectedAmount);
           }
 
-          // C. Validar Mora
           if (inst.status === 'OVERDUE') {
             hasMora = true;
           }
 
-          // D. ¿Debe aparecer en la ruta de HOY?
-          // Aparece si: 1. Tiene cuota hoy | 2. Está en mora | 3. Promesa para hoy o antes | 4. Ya pagó hoy
           if (
             isDueToday ||
             inst.status === 'OVERDUE' ||
@@ -330,19 +319,17 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
         }
       }
 
-      // Si el cliente hizo un pago hoy, forzamos que aparezca en el mapa para que el cobrador lo vea en verde (PAGADO)
       if (hasPaymentToday) {
         needsToVisitToday = true;
       }
 
-      // 4. Si el cliente aplica para la ruta de hoy, le asignamos su estado y lo guardamos
       if (needsToVisitToday) {
         let estado = 'PENDIENTE';
         
         if (hasPaymentToday) {
-          estado = 'PAGADO'; // Prioridad 1: Si ya soltó plata hoy, está felizmente pagado
+          estado = 'PAGADO'; 
         } else if (hasMora) {
-          estado = 'MORA';   // Prioridad 2: Si no ha pagado y debe de antes, es moroso
+          estado = 'MORA';   
         }
 
         clientesProcesados.push({
@@ -358,7 +345,6 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
       }
     }
 
-    // 5. Enviamos la estructura exacta que el frontend espera
     res.json({ 
       success: true, 
       clientes: clientesProcesados,
@@ -385,83 +371,86 @@ export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    const hoyInicio = new Date();
-    hoyInicio.setHours(0, 0, 0, 0);
-
-    const hoyFin = new Date();
-    hoyFin.setHours(23, 59, 59, 999);
-
-    // CORRECCIÓN: Estructura de consulta respetando la relación Route -> Client -> Loan
-    const rutas = await prisma.route.findMany({
+    // PASO 1: Descubrimos en qué países opera esta empresa actualmente
+    const distinctCountries = await prisma.route.findMany({
       where: { companyId, isActive: true },
-      include: {
-        assignedTo: true,
-        clients: { // Primero incluimos a los clientes de la ruta
-          include: {
-            loans: { // Luego incluimos los préstamos de esos clientes
-              where: { isActive: true },
-              include: {
-                installmentDetails: {
-                  where: {
-                    dueDate: { gte: hoyInicio, lte: hoyFin }
-                  }
-                },
-                payments: {
-                  where: {
-                    createdAt: { gte: hoyInicio, lte: hoyFin }
+      select: { country: true },
+      distinct: ['country']
+    });
+
+    // PASO 2: Procesamos las rutas agrupadas por país (para respetar el horario de cada bloque)
+    const summaryPromises = distinctCountries.map(async ({ country }) => {
+      const offset = COUNTRY_TIMEZONES[country] ?? -5;
+      const { startOfDay: hoyInicio, endOfDay: hoyFin } = getDayLimitsByOffset(offset);
+
+      const rutas = await prisma.route.findMany({
+        where: { companyId, isActive: true, country },
+        include: {
+          assignedTo: true,
+          clients: { 
+            include: {
+              loans: { 
+                where: { isActive: true },
+                include: {
+                  installmentDetails: {
+                    where: { dueDate: { gte: hoyInicio, lte: hoyFin } }
+                  },
+                  payments: {
+                    where: { createdAt: { gte: hoyInicio, lte: hoyFin } }
                   }
                 }
               }
             }
           }
         }
-      }
-    });
-
-    // CORRECCIÓN: Mapeo de datos ajustado a la nueva estructura
-    const summary = rutas.map((ruta: any) => {
-      let clientesTotales = 0;
-      let clientesCobrados = 0;
-      let clientesMora = 0;
-      let totalRecaudado = 0;
-
-      // Iteramos sobre los clientes de la ruta primero
-      ruta.clients.forEach((client: any) => {
-        // Luego iteramos sobre los préstamos del cliente
-        client.loans.forEach((loan: any) => {
-          // Asumiendo 1 préstamo activo = 1 cliente en la ruta de hoy
-          if (loan.installmentDetails.length > 0) {
-            clientesTotales++;
-            
-            const cuotaHoy = loan.installmentDetails[0];
-            if (cuotaHoy.status === 'PAID') {
-              clientesCobrados++;
-            } else if (cuotaHoy.status === 'OVERDUE') {
-              clientesMora++;
-            }
-          }
-
-          // Sumar pagos hechos hoy a este préstamo
-          loan.payments.forEach((pago: any) => {
-            totalRecaudado += Number(pago.amount);
-          });
-        });
       });
 
-      const porcentaje = clientesTotales === 0 ? 0 : Math.round((clientesCobrados / clientesTotales) * 100);
+      return rutas.map((ruta: any) => {
+        let clientesTotales = 0;
+        let clientesCobrados = 0;
+        let clientesMora = 0;
+        let totalRecaudado = 0;
 
-      return {
-        id: ruta.id,
-        zona: ruta.city,
-        cobrador: ruta.assignedTo?.name || 'Sin Asignar',
-        disponible: Number(ruta.availableCapital),
-        recaudado: totalRecaudado,
-        clientesTotales,
-        clientesCobrados,
-        clientesMora,
-        porcentaje
-      };
+        ruta.clients.forEach((client: any) => {
+          client.loans.forEach((loan: any) => {
+            if (loan.installmentDetails.length > 0) {
+              clientesTotales++;
+              
+              const cuotaHoy = loan.installmentDetails[0];
+              if (cuotaHoy.status === 'PAID') {
+                clientesCobrados++;
+              } else if (cuotaHoy.status === 'OVERDUE') {
+                clientesMora++;
+              }
+            }
+
+            loan.payments.forEach((pago: any) => {
+              totalRecaudado += Number(pago.amount);
+            });
+          });
+        });
+
+        const porcentaje = clientesTotales === 0 ? 0 : Math.round((clientesCobrados / clientesTotales) * 100);
+
+        return {
+          id: ruta.id,
+          zona: ruta.city,
+          cobrador: ruta.assignedTo?.name || 'Sin Asignar',
+          disponible: Number(ruta.availableCapital),
+          recaudado: totalRecaudado,
+          clientesTotales,
+          clientesCobrados,
+          clientesMora,
+          porcentaje
+        };
+      });
     });
+
+    // Resolvemos las agrupaciones de todos los países de la empresa
+    const resultsArray = await Promise.all(summaryPromises);
+    
+    // Aplanamos los resultados de los múltiples países en un solo array para el frontend
+    const summary = resultsArray.flat();
 
     res.json({ success: true, data: summary });
   } catch (error) {
