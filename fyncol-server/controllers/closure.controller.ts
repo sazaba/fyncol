@@ -47,6 +47,22 @@ export const getClosureSummary = async (req: AuthRequest, res: Response) => {
     const routeId = route.id;
     const availableCapital = Number(route.availableCapital);
 
+    // NUEVO: Obtener Inversiones y Retiros del día
+    const capitalTransactionsToday = await prisma.capitalTransaction.findMany({
+      where: {
+        routeId,
+        createdAt: { gte: start, lte: end }
+      }
+    });
+
+    const totalInversiones = capitalTransactionsToday
+      .filter(t => t.type === 'INVERSION')
+      .reduce((acc, t) => acc + Number(t.amount), 0);
+
+    const totalRetiros = capitalTransactionsToday
+      .filter(t => t.type === 'RETIRO')
+      .reduce((acc, t) => acc + Number(t.amount), 0);
+
     const paymentsToday = await prisma.payment.findMany({
       where: {
         createdAt: { gte: start, lte: end },
@@ -127,6 +143,8 @@ export const getClosureSummary = async (req: AuthRequest, res: Response) => {
         availableCapital,
         totalPortfolio,
         totalCollected,
+        totalInversiones, 
+        totalRetiros,     
         newSales,
         renewals,
         totalClients,
@@ -210,6 +228,8 @@ export const confirmDailyClosure = async (req: AuthRequest, res: Response) => {
           totalClients: Number(summaryData.totalClients),
           collectedClients: Number(summaryData.collectedClients),
           overdueClients: Number(summaryData.overdueClients) + Number(summaryData.renegotiatedClients),
+          totalInversiones: Number(summaryData.totalInversiones || 0), 
+          totalRetiros: Number(summaryData.totalRetiros || 0) 
         }
       });
 
@@ -299,8 +319,8 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
     const installments = await prisma.installment.findMany({
       where: {
         loan: { 
-          client: { routeId: closure.routeId },
-          isActive: true
+          client: { routeId: closure.routeId }
+          // ELIMINADO: isActive: true, para que traiga a los liquidados
         },
         OR: [
           { dueDate: { gte: start, lte: end } }, 

@@ -31,19 +31,19 @@ model Company {
 }
 
 model Subscription {
-  id        Int      @id @default(autoincrement())
-  plan      String   @default("BASIC") @db.VarChar(50)
-  
-  status    SubscriptionStatus @default(TRIAL)
-  
-  startDate DateTime @default(now()) @map("start_date")
+  id   Int    @id @default(autoincrement())
+  plan String @default("BASIC") @db.VarChar(50)
+
+  status SubscriptionStatus @default(TRIAL)
+
+  startDate DateTime  @default(now()) @map("start_date")
   endDate   DateTime? @map("end_date") // Fecha en la que expira el Trial o el pago
-  
+
   // ID de la suscripción en la pasarela de pagos
   providerSubscriptionId String? @unique @map("provider_subscription_id")
-  
-  companyId Int      @unique @map("company_id")
-  company   Company  @relation(fields: [companyId], references: [id])
+
+  companyId Int     @unique @map("company_id")
+  company   Company @relation(fields: [companyId], references: [id])
 
   @@map("subscriptions")
 }
@@ -53,18 +53,18 @@ model Subscription {
 // ==========================================
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  name      String?
-  role      Role     @default(COBRADOR)
-  createdAt DateTime @default(now()) @map("created_at")
-  document  String?  @unique(map: "document")
-  phone     String?
-  address   String?  @db.VarChar(255)
-  isActive  Boolean  @default(true)
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
-  imageUrl  String?  @db.VarChar(255)
+  id                 Int       @id @default(autoincrement())
+  email              String    @unique
+  password           String
+  name               String?
+  role               Role      @default(COBRADOR)
+  createdAt          DateTime  @default(now()) @map("created_at")
+  document           String?   @unique(map: "document")
+  phone              String?
+  address            String?   @db.VarChar(255)
+  isActive           Boolean   @default(true)
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at")
+  imageUrl           String?   @db.VarChar(255)
   lastLatitude       Float?
   lastLongitude      Float?
   lastLocationUpdate DateTime? @map("last_location_update")
@@ -79,21 +79,21 @@ model User {
 }
 
 model Route {
-  id               Int      @id @default(autoincrement())
-  country          String   @db.VarChar(100)
-  city             String   @db.VarChar(100)
-  currency         String   @db.VarChar(10)
-  isActive         Boolean  @default(true)
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
-  
-  assignedToId     Int?     @unique @map("assigned_to_id")
-  assignedTo       User?    @relation(fields: [assignedToId], references: [id])
+  id        Int      @id @default(autoincrement())
+  country   String   @db.VarChar(100)
+  city      String   @db.VarChar(100)
+  currency  String   @db.VarChar(10)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
-  companyId        Int      @map("company_id")
-  company          Company  @relation(fields: [companyId], references: [id])
+  assignedToId Int?  @unique @map("assigned_to_id")
+  assignedTo   User? @relation(fields: [assignedToId], references: [id])
 
-  availableCapital Decimal  @default(0) @map("available_capital")
+  companyId Int     @map("company_id")
+  company   Company @relation(fields: [companyId], references: [id])
+
+  availableCapital Decimal              @default(0) @map("available_capital")
   transactions     CapitalTransaction[]
 
   clients       Client[]
@@ -103,14 +103,14 @@ model Route {
 }
 
 model CapitalTransaction {
-  id          Int      @id @default(autoincrement())
-  routeId     Int      @map("route_id")
-  route       Route    @relation(fields: [routeId], references: [id])
+  id          Int             @id @default(autoincrement())
+  routeId     Int             @map("route_id")
+  route       Route           @relation(fields: [routeId], references: [id])
   type        TransactionType
   amount      Decimal
-  description String?  @db.VarChar(255)
-  createdAt   DateTime @default(now()) @map("created_at")
-  createdBy   Int      @map("created_by")
+  description String?         @db.VarChar(255)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  createdBy   Int             @map("created_by")
 
   @@map("capital_transactions")
 }
@@ -125,34 +125,35 @@ model Client {
   longitude   Float?
   documentUrl String?  @db.VarChar(255)
   createdAt   DateTime @default(now()) @map("created_at")
-  
-  routeId     Int      @map("route_id")
-  route       Route    @relation(fields: [routeId], references: [id])
 
-  loans       Loan[]
+  routeId Int   @map("route_id")
+  route   Route @relation(fields: [routeId], references: [id])
+
+  loans Loan[]
 
   @@map("clients")
 }
 
 model Loan {
-  id               Int      @id @default(autoincrement())
-  amount           Decimal
-  installments     Int
-  interestRate     Decimal
-  
-  periodicity      String   @default("DIARIO") @db.VarChar(20) 
-  
-  firstPaymentDate DateTime @map("first_payment_date")
-  
-  projectedTotal   Decimal
-  isActive         Boolean  @default(true)
-  createdAt        DateTime @default(now()) @map("created_at")
+  id           Int     @id @default(autoincrement())
+  amount       Decimal
+  installments Int
+  interestRate Decimal
 
-  clientId         Int      @map("client_id")
-  client           Client   @relation(fields: [clientId], references: [id])
-  payments         Payment[]
+  periodicity String @default("DIARIO") @db.VarChar(20)
+
+  firstPaymentDate DateTime @map("first_payment_date")
+
+  projectedTotal Decimal
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  clientId           Int           @map("client_id")
+  client             Client        @relation(fields: [clientId], references: [id])
+  payments           Payment[]
   installmentDetails Installment[]
-isRenewal       Boolean  @default(false) @map("is_renewal")
+  isRenewal          Boolean       @default(false) @map("is_renewal")
+
   @@map("loans")
 }
 
@@ -161,49 +162,52 @@ model Payment {
   amount    Decimal
   createdAt DateTime @default(now()) @map("created_at")
 
-  loanId    Int      @map("loan_id")
-  loan      Loan     @relation(fields: [loanId], references: [id])
+  loanId Int  @map("loan_id")
+  loan   Loan @relation(fields: [loanId], references: [id])
 
   @@map("payments")
 }
 
 model Installment {
-  id                Int       @id @default(autoincrement())
-  installmentNumber Int       @map("installment_number")
-  dueDate           DateTime  @map("due_date")
-  expectedAmount    Decimal   @map("expected_amount")
-  paidAmount        Decimal   @default(0) @map("paid_amount")
-  
+  id                Int      @id @default(autoincrement())
+  installmentNumber Int      @map("installment_number")
+  dueDate           DateTime @map("due_date")
+  expectedAmount    Decimal  @map("expected_amount")
+  paidAmount        Decimal  @default(0) @map("paid_amount")
+
   status            String    @default("PENDING") @db.VarChar(20)
   paidAt            DateTime? @map("paid_at")
   wasLate           Boolean   @default(false) @map("was_late")
   promiseDate       DateTime? @map("promise_date")
   actionDescription String?   @map("action_description") @db.VarChar(255)
-  
-  loanId            Int       @map("loan_id")
-  loan              Loan      @relation(fields: [loanId], references: [id])
+
+  loanId Int  @map("loan_id")
+  loan   Loan @relation(fields: [loanId], references: [id])
 
   @@map("installments")
 }
 
 model DailyClosure {
-  id               Int      @id @default(autoincrement())
-  closedAt         DateTime @default(now()) @map("closed_at")
+  id       Int      @id @default(autoincrement())
+  closedAt DateTime @default(now()) @map("closed_at")
 
-  availableCapital Decimal  @map("available_capital")
-  totalPortfolio   Decimal  @map("total_portfolio")
-  totalCollected   Decimal  @map("total_collected")
-  newSales         Decimal  @map("new_sales")
-  renewals         Decimal  @map("renewals")
-  totalClients     Int      @map("total_clients")
-  collectedClients Int      @map("collected_clients")
-  overdueClients   Int      @map("overdue_clients")
+  availableCapital Decimal @map("available_capital")
+  totalPortfolio   Decimal @map("total_portfolio")
+  totalCollected   Decimal @map("total_collected")
+  newSales         Decimal @map("new_sales")
+  renewals         Decimal @map("renewals")
+  totalClients     Int     @map("total_clients")
+  collectedClients Int     @map("collected_clients")
+  overdueClients   Int     @map("overdue_clients")
 
-  routeId          Int      @map("route_id")
-  route            Route    @relation(fields: [routeId], references: [id])
+  routeId Int   @map("route_id")
+  route   Route @relation(fields: [routeId], references: [id])
 
-  closedById       Int      @map("closed_by_id")
-  closedBy         User     @relation(fields: [closedById], references: [id])
+  closedById Int  @map("closed_by_id")
+  closedBy   User @relation(fields: [closedById], references: [id])
+
+  totalInversiones Decimal @default(0) @map("total_inversiones")
+  totalRetiros     Decimal @default(0) @map("total_retiros")
 
   @@map("daily_closures")
 }
