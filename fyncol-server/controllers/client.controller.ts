@@ -20,7 +20,7 @@ interface InstallmentInput {
  */
 export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
   try {
-    const companyId = req.user?.companyId; // SAAS-BLINDAJE
+    const companyId = req.user?.companyId; 
     if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
 
     const {
@@ -32,16 +32,49 @@ export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
 
+    const cleanDocumentId = documentId.trim();
+    const routeIdInt = parseInt(routeId as string);
+
+    // ==========================================
+    // LOGICA DE RENOVACIÓN Y RUTAS EXTERNAS
+    // ==========================================
+    
+    // 1. Buscar si la cédula ya existe en cualquier ruta de LA EMPRESA
+    const existingClients = await prisma.client.findMany({
+      where: { 
+        documentId: cleanDocumentId,
+        route: { companyId } 
+      },
+      include: { loans: { where: { isActive: true } } }
+    });
+
+    // 2. Separar si existe en la ruta actual o en otras
+    const clientSameRoute = existingClients.find(c => c.routeId === routeIdInt);
+    
+    // 3. Contar deudas en otras oficinas para la alerta (Punto 4)
+    const activeLoansOtherRoutes = existingClients
+      .filter(c => c.routeId !== routeIdInt)
+      .reduce((sum, c) => sum + c.loans.length, 0);
+
+    // 4. Bloqueo si tiene deuda en LA MISMA ruta (Punto 3)
+    if (clientSameRoute && clientSameRoute.loans.length > 0) {
+      return res.status(400).json({ 
+        errorType: "ACTIVE_DEBT",
+        error: "Este cliente ya está en tu ruta y tiene una deuda activa. Debe saldarla para poder prestarle de nuevo." 
+      });
+    }
+
+    // ==========================================
+    // CÁLCULOS MATEMÁTICOS (Sin cambios)
+    // ==========================================
     const amountNum = parseFloat(amount);
     const interestNum = parseFloat(interestRate);
     const installmentsNum = parseInt(installments);
-    const routeIdInt = parseInt(routeId as string);
 
     let daysPerInstallment = 1; 
     if (periodicity === 'QUINCENAL') daysPerInstallment = 15;
     if (periodicity === 'MENSUAL') daysPerInstallment = 30;
 
-    // FIX ZONA HORARIA
     const [year, month, day] = firstPaymentDate.split('-');
     const firstPayment = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
 
@@ -52,20 +85,13 @@ export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
     let daysUntilFirstPayment = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     if (daysUntilFirstPayment <= 0) daysUntilFirstPayment = 1;
 
-    // --- FIX MATEMÁTICO: REDONDEO PERFECTO ---
     const totalDays = daysUntilFirstPayment + ((installmentsNum - 1) * daysPerInstallment);
     const interestPerDay = (interestNum / 100 / 30) * amountNum;
     const totalInterest = interestPerDay * totalDays;
     
-    // 1. Calculamos el total con decimales
     const exactProjectedTotal = amountNum + totalInterest;
-    
-    // 2. Calculamos la cuota y la redondeamos HACIA ARRIBA al entero (ej. 20.66 -> 21)
     const installmentValue = Math.ceil(exactProjectedTotal / installmentsNum);
-    
-    // 3. El total proyectado REAL es la cuota cerrada multiplicada por el número de cuotas
     const projectedTotal = installmentValue * installmentsNum; 
-    // -----------------------------------------
 
     const installmentsArray: any[] = [];
     let currentDate = new Date(firstPayment);
@@ -74,89 +100,78 @@ export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
       installmentsArray.push({
         installmentNumber: i,
         dueDate: new Date(currentDate),
-        expectedAmount: installmentValue, // Ya es un número entero perfecto
+        expectedAmount: installmentValue,
         paidAmount: 0,
         status: "PENDING",
       });
 
-      if (periodicity === 'MENSUAL') {
-        currentDate.setMonth(currentDate.getMonth() + 1);
-      } else if (periodicity === 'QUINCENAL') {
-        currentDate.setDate(currentDate.getDate() + 15);
-      } else {
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
+      if (periodicity === 'MENSUAL') currentDate.setMonth(currentDate.getMonth() + 1);
+      else if (periodicity === 'QUINCENAL') currentDate.setDate(currentDate.getDate() + 15);
+      else currentDate.setDate(currentDate.getDate() + 1);
     }
 
+    // ==========================================
+    // TRANSACCIÓN DE BASE DE DATOS
+    // ==========================================
     const result = await prisma.$transaction(async (tx) => {
-      // SAAS-BLINDAJE: Validar que la ruta le pertenezca a la empresa
-      const route = await tx.route.findFirst({ 
-        where: { 
-          id: routeIdInt, 
-          companyId 
-        } 
-      });
-      
+      const route = await tx.route.findFirst({ where: { id: routeIdInt, companyId } });
       if (!route) throw new Error("La ruta especificada no existe o no estás autorizado");
       if (Number(route.availableCapital) < amountNum) throw new Error("Capital insuficiente en esta ruta");
 
-      const newClient = await tx.client.create({
-        data: {
-          name, 
-          documentId, 
-          phone,      
-          address, 
-          latitude: latitude ? parseFloat(latitude) : null,
-          longitude: longitude ? parseFloat(longitude) : null,
-          documentUrl,
-          routeId: routeIdInt,
-          loans: {
-            create: {
-              amount: amountNum,
-              installments: installmentsNum,
-              interestRate: interestNum,
-              periodicity: periodicity,
-              firstPaymentDate: firstPayment,
-              projectedTotal: projectedTotal, // Guardamos el total entero coherente
-              isRenewal: false,
-              installmentDetails: {
-                create: installmentsArray 
+      let processedClient;
+
+      if (clientSameRoute) {
+        // ES RENOVACIÓN (Punto 2): Actualizamos datos del cliente y metemos el Loan nuevo
+        processedClient = await tx.client.update({
+          where: { id: clientSameRoute.id },
+          data: {
+            name, phone, address, latitude, longitude,
+            documentUrl: documentUrl || clientSameRoute.documentUrl, // Mantiene la foto si no envían una nueva
+            loans: {
+              create: {
+                amount: amountNum, installments: installmentsNum, interestRate: interestNum,
+                periodicity: periodicity, firstPaymentDate: firstPayment, projectedTotal: projectedTotal,
+                isRenewal: true, // Marca importante
+                installmentDetails: { create: installmentsArray }
               }
             }
-          }
-        },
-        include: { 
-          loans: {
-            include: { installmentDetails: true }
-          }
-        } 
-      });
+          },
+          include: { loans: { include: { installmentDetails: true } } }
+        });
+      } else {
+        // ES CLIENTE NUEVO PARA ESTA RUTA
+        processedClient = await tx.client.create({
+          data: {
+            name, documentId: cleanDocumentId, phone, address, latitude, longitude, documentUrl, routeId: routeIdInt,
+            loans: {
+              create: {
+                amount: amountNum, installments: installmentsNum, interestRate: interestNum,
+                periodicity: periodicity, firstPaymentDate: firstPayment, projectedTotal: projectedTotal,
+                isRenewal: false,
+                installmentDetails: { create: installmentsArray }
+              }
+            }
+          },
+          include: { loans: { include: { installmentDetails: true } } } 
+        });
+      }
 
       await tx.route.update({
         where: { id: routeIdInt },
         data: { availableCapital: { decrement: amountNum } }
       });
 
-      return newClient;
-    }, {
-      maxWait: 5000, 
-      timeout: 20000 
-    });
+      return processedClient;
+    }, { maxWait: 5000, timeout: 20000 });
 
     return res.status(201).json({
-      message: "Cliente y préstamo creados exitosamente",
+      message: clientSameRoute ? "Crédito renovado exitosamente" : "Cliente y préstamo creados exitosamente",
+      otherActiveLoansCount: activeLoansOtherRoutes, // Pasamos este dato al frontend
       data: result
     });
 
   } catch (error: any) {
-    console.error("Error al crear cliente:", error);
-
-    if (error.code === 'P2002') {
-      return res.status(400).json({ 
-        error: "Error: Ya existe un cliente registrado con este número de documento." 
-      });
-    }
-
+    console.error("Error al crear/renovar cliente:", error);
     return res.status(400).json({ error: error.message || "Error interno del servidor" });
   }
 };

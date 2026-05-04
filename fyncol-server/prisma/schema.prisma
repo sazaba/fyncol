@@ -118,7 +118,8 @@ model CapitalTransaction {
 model Client {
   id          Int      @id @default(autoincrement())
   name        String   @db.VarChar(255)
-  documentId  String?  @unique @db.VarChar(50)
+
+  documentId  String?  @db.VarChar(50) 
   phone       String?  @db.VarChar(50)
   address     String   @db.VarChar(255)
   latitude    Float?
@@ -126,11 +127,12 @@ model Client {
   documentUrl String?  @db.VarChar(255)
   createdAt   DateTime @default(now()) @map("created_at")
 
-  routeId Int   @map("route_id")
-  route   Route @relation(fields: [routeId], references: [id])
+  routeId     Int      @map("route_id")
+  route       Route    @relation(fields: [routeId], references: [id])
 
-  loans Loan[]
+  loans       Loan[]
 
+  @@unique([documentId, routeId]) 
   @@map("clients")
 }
 
