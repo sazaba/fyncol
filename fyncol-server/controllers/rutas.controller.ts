@@ -227,8 +227,7 @@ export const eliminarRuta = async (req: AuthRequest, res: Response): Promise<voi
 };
 
 // fyncol-server/controllers/rutas.controller.ts
-
-// fyncol-server/controllers/rutas.controller.ts
+// Reemplaza ÚNICAMENTE esta función en tu fyncol-server/controllers/rutas.controller.ts
 
 export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -240,7 +239,10 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // Solo necesitamos el final del día de hoy para saber el límite de tiempo
+    // Definimos el inicio y fin del día actual
+    const hoyInicio = new Date();
+    hoyInicio.setHours(0, 0, 0, 0);
+
     const hoyFin = new Date();
     hoyFin.setHours(23, 59, 59, 999);
 
@@ -255,27 +257,11 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // 2. Buscamos los clientes de esa ruta
-    const clientesDeHoy = await prisma.client.findMany({
+    // 2. Buscamos los clientes activos de la ruta con sus créditos
+    const clientesDeHoyRaw = await prisma.client.findMany({
       where: {
         routeId: Number(id),
-        loans: {
-          some: {
-            isActive: true,
-            installmentDetails: {
-              some: {
-                // El estado NO debe ser PAID (traerá PENDING, PARTIAL, OVERDUE, RENEGOTIATED)
-                status: { not: 'PAID' }, 
-                OR: [
-                  // Cuotas vencidas o de hoy
-                  { dueDate: { lte: hoyFin } }, 
-                  // O cuotas con promesa de pago para hoy o antes
-                  { promiseDate: { lte: hoyFin } } 
-                ]
-              }
-            }
-          }
-        }
+        loans: { some: { isActive: true } } // Solo clientes con créditos activos
       },
       select: {
         id: true,
@@ -283,13 +269,99 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
         latitude: true,
         longitude: true,
         address: true,
+        loans: {
+          where: { isActive: true },
+          include: {
+            installmentDetails: true, // Traemos las cuotas para calcular la deuda y cuota del día
+            payments: {
+              where: {
+                createdAt: { gte: hoyInicio, lte: hoyFin } // Traemos los pagos hechos HOY
+              }
+            }
+          }
+        }
       }
     });
 
-    // 3. Enviamos ambas cosas al frontend
+    // 3. Procesamiento en memoria para armar el Dashboard del Mapa
+    const clientesProcesados: any[] = [];
+
+    for (const client of clientesDeHoyRaw) {
+      let deudaTotal = 0;
+      let cuotaDia = 0;
+      let hasMora = false;
+      let hasPaymentToday = false;
+      let needsToVisitToday = false; // Bandera para saber si el cobrador debe verlo hoy
+
+      for (const loan of client.loans) {
+        // Si hay pagos de este crédito hoy, marcamos que pagó
+        if (loan.payments.length > 0) {
+          hasPaymentToday = true;
+        }
+
+        for (const inst of loan.installmentDetails) {
+          // A. Cálculo de Deuda Total (sumamos todo lo que no esté pagado)
+          if (['PENDING', 'PARTIAL', 'OVERDUE', 'RENEGOTIATED'].includes(inst.status)) {
+            deudaTotal += (Number(inst.expectedAmount) - Number(inst.paidAmount));
+          }
+
+          // B. Validar si la cuota cae exactamente hoy
+          const dueDate = new Date(inst.dueDate);
+          const isDueToday = dueDate >= hoyInicio && dueDate <= hoyFin;
+
+          if (isDueToday) {
+            cuotaDia += Number(inst.expectedAmount);
+          }
+
+          // C. Validar Mora
+          if (inst.status === 'OVERDUE') {
+            hasMora = true;
+          }
+
+          // D. ¿Debe aparecer en la ruta de HOY?
+          // Aparece si: 1. Tiene cuota hoy | 2. Está en mora | 3. Promesa para hoy o antes | 4. Ya pagó hoy
+          if (
+            isDueToday ||
+            inst.status === 'OVERDUE' ||
+            (inst.promiseDate && new Date(inst.promiseDate) <= hoyFin && inst.status !== 'PAID')
+          ) {
+            needsToVisitToday = true;
+          }
+        }
+      }
+
+      // Si el cliente hizo un pago hoy, forzamos que aparezca en el mapa para que el cobrador lo vea en verde (PAGADO)
+      if (hasPaymentToday) {
+        needsToVisitToday = true;
+      }
+
+      // 4. Si el cliente aplica para la ruta de hoy, le asignamos su estado y lo guardamos
+      if (needsToVisitToday) {
+        let estado = 'PENDIENTE';
+        
+        if (hasPaymentToday) {
+          estado = 'PAGADO'; // Prioridad 1: Si ya soltó plata hoy, está felizmente pagado
+        } else if (hasMora) {
+          estado = 'MORA';   // Prioridad 2: Si no ha pagado y debe de antes, es moroso
+        }
+
+        clientesProcesados.push({
+          id: client.id,
+          name: client.name,
+          latitude: client.latitude,
+          longitude: client.longitude,
+          address: client.address,
+          deudaTotal,
+          cuotaDia,
+          estado
+        });
+      }
+    }
+
+    // 5. Enviamos la estructura exacta que el frontend espera
     res.json({ 
       success: true, 
-      clientes: clientesDeHoy,
+      clientes: clientesProcesados,
       cobrador: ruta.assignedTo ? {
         id: ruta.assignedTo.id,
         name: ruta.assignedTo.name,
@@ -303,6 +375,8 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
+
+
 export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const companyId = req.user?.companyId;
