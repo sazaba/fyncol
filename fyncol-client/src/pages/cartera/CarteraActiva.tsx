@@ -65,6 +65,7 @@ export default function CarteraActiva() {
   const [modalTab, setModalTab] = useState<'PLAN' | 'RECIBOS'>('PLAN');
   
   const [updatingInstId, setUpdatingInstId] = useState<number | null>(null);
+  const [isLiquidating, setIsLiquidating] = useState(false); // NUEVO ESTADO PARA CARGA DE LIQUIDACIÓN
   
   const [confirmPayModal, setConfirmPayModal] = useState<{open: boolean, inst: any, faltante: number}>({ open: false, inst: null, faltante: 0 });
   const [manualPayModal, setManualPayModal] = useState<{open: boolean, inst: any, loan: any}>({ open: false, inst: null, loan: null });
@@ -208,6 +209,41 @@ export default function CarteraActiva() {
       setFocusCoords(routePolylineCoords[0]);
     }
   }, [routePolylineCoords]);
+
+  // NUEVA FUNCIÓN PARA LIQUIDAR TOTALMENTE
+  const handleLiquidarDeudaTotal = async (loanId: number) => {
+    if(isRouteClosed) return; 
+    setIsLiquidating(true);
+    try {
+      const token = localStorage.getItem("token");
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      
+      const res = await fetch(`${baseUrl}/api/clients/loan/${loanId}/liquidate`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        setManualPayModal({ open: false, inst: null, loan: null });
+        setManualAmount("");
+        await fetchCartera();
+        
+        if (selectedClient) {
+           const resData = await fetch(`${baseUrl}/api/clients/cartera`, { headers: { 'Authorization': `Bearer ${token}` } });
+           const updatedData = await resData.json();
+           const refreshedClient = updatedData.clients.find((c: any) => c.id === selectedClient.id);
+           setSelectedClient(refreshedClient);
+        }
+      } else {
+         const data = await res.json();
+         alert("Error: " + (data.error || "No se pudo liquidar la deuda"));
+      }
+    } catch (error) {
+      console.error("Error en liquidación");
+    } finally {
+      setIsLiquidating(false);
+    }
+  };
 
   const handleUpdateStatus = async (instId: number, status: string, amount: number, actionData?: any) => {
     if(isRouteClosed) return; 
@@ -394,11 +430,9 @@ export default function CarteraActiva() {
 
               const dbDateActiva = cuotaActiva ? cuotaActiva.dueDate.split('T')[0] : null;
               
-              // BLINDAJE: Calculamos faltante real y gestionamos botones
               const faltanteActual = cuotaActiva ? Math.round(Number(cuotaActiva.expectedAmount) - Number(cuotaActiva.paidAmount || 0)) : 0;
               const requiereRenegociar = cuotaActiva && dbDateActiva && dbDateActiva < deviceTodayStr && cuotaActiva.status !== 'PAID' && cuotaActiva.status !== 'RENEGOTIATED' && faltanteActual > 0;
               
-              // Se muestran los botones de acción si está activa o si está renegociada pero aún tiene deuda pendiente.
               const mostrarContainerBotones = cuotaActiva && (cuotaActiva.status === 'PENDING' || cuotaActiva.status === 'PARTIAL' || cuotaActiva.status === 'OVERDUE' || cuotaActiva.status === 'RENEGOTIATED') && faltanteActual > 0;
 
               return (
@@ -432,7 +466,6 @@ export default function CarteraActiva() {
                     {cuotaActiva && !prestamoTerminado && (
                       <div className={`mt-2 rounded-lg p-2.5 border ${cuotaActiva.status === 'RENEGOTIATED' ? 'bg-orange-500/10 border-orange-500/20' : 'bg-[#0B0B12] border-white/5'}`}>
                         <div className="flex justify-between items-center mb-2">
-                           {/* MUESTRA EL SALDO FALTANTE REAL SIEMPRE */}
                            <span className={`text-xs font-bold ${cuotaActiva.status === 'RENEGOTIATED' ? 'text-orange-400' : 'text-white'}`}>${faltanteActual.toLocaleString('es-CO')}</span>
                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded text-blue-400 bg-blue-500/10 uppercase">Cuota {cuotaActiva.installmentNumber}</span>
                         </div>
@@ -460,7 +493,6 @@ export default function CarteraActiva() {
                             <div className="py-2 text-center border border-white/5 bg-white/5 rounded-lg text-slate-500 text-xs font-semibold flex items-center justify-center gap-1.5 mt-1"><FiLock size={12} /> Pagos bloqueados por cierre</div>
                           ) : (
                             <div className="flex gap-1.5 mt-2">
-                              {/* NO MUESTRA PAGAR NI MORA SI ESTA RENEGOCIADA */}
                               {cuotaActiva.status !== 'RENEGOTIATED' && (
                                 <button 
                                   onClick={(e) => {
@@ -472,7 +504,6 @@ export default function CarteraActiva() {
                                   PAGAR
                                 </button>
                               )}
-                              {/* ABONO APARECE SIEMPRE QUE HAYA SALDO PENDIENTE */}
                               <button 
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
@@ -676,7 +707,7 @@ export default function CarteraActiva() {
         );
       })()}
 
-      {/* POPUP INTELIGENTE DE ABONOS */}
+      {/* POPUP INTELIGENTE DE ABONOS CON LIQUIDACIÓN TOTAL INCLUIDA */}
       {manualPayModal.open && (() => {
         const inst = manualPayModal.inst;
         const faltante = Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount || 0));
@@ -691,6 +722,12 @@ export default function CarteraActiva() {
           (i: any) => i.installmentNumber > inst.installmentNumber && i.status !== 'PAID' && i.status !== 'RENEGOTIATED'
         ) || [];
 
+        // CALCULAMOS LA DEUDA TOTAL DE ESTE PRESTAMO
+        const totalDebt = manualPayModal.loan?.installmentDetails?.reduce((sum: number, i: any) => {
+            if (i.status === 'PAID') return sum;
+            return sum + Math.round(Number(i.expectedAmount) - Number(i.paidAmount || 0));
+        }, 0) || 0;
+
         return (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
             <div className="w-full max-w-md bg-[#05050A] border border-white/10 rounded-3xl shadow-2xl animate-[slideUp_0.18s_ease-out] overflow-y-auto max-h-[95vh] [&::-webkit-scrollbar]:hidden">
@@ -699,6 +736,23 @@ export default function CarteraActiva() {
                    <h3 className="text-lg font-bold text-white">Registrar Abono</h3>
                    <span className="text-[10px] text-blue-400/80 font-bold uppercase tracking-widest bg-blue-500/10 px-2 py-1 rounded">Cuota Actual: ${faltante.toLocaleString('es-CO')}</span>
                 </div>
+
+                {/* --- NUEVO PANEL DE LIQUIDACIÓN TOTAL ESTILO APPLE --- */}
+                <div className="mb-5 bg-gradient-to-r from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-2xl p-4 flex items-center justify-between shadow-inner">
+                    <div>
+                        <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mb-1 flex items-center gap-1"><FiCheckCircle size={10} /> Deuda Total Restante</p>
+                        <p className="text-xl font-bold text-white">${totalDebt.toLocaleString('es-CO')}</p>
+                    </div>
+                    <button 
+                        onClick={() => handleLiquidarDeudaTotal(manualPayModal.loan.id)}
+                        disabled={isLiquidating}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-50 flex items-center gap-2"
+                    >
+                        {isLiquidating ? <FiLoader className="animate-spin" /> : 'Liquidar Todo'}
+                    </button>
+                </div>
+                {/* -------------------------------------------------- */}
+
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
                   <input type="number" value={manualAmount} onChange={(e) => setManualAmount(e.target.value)} className={`w-full bg-[#0B0B12] border ${esExcedente ? 'border-emerald-500 focus:border-emerald-400 text-emerald-400' : 'border-white/10 focus:border-blue-500 text-white'} rounded-2xl pl-8 pr-4 py-4 text-2xl font-bold outline-none shadow-inner transition-colors text-center`} placeholder="0.00" autoFocus />
