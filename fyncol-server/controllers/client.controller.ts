@@ -36,36 +36,42 @@ export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
     const routeIdInt = parseInt(routeId as string);
 
     // ==========================================
-    // LOGICA DE RENOVACIÓN Y RUTAS EXTERNAS
+    // LOGICA GLOBAL DE RENOVACIÓN Y BLOQUEO
     // ==========================================
     
-    // 1. Buscar si la cédula ya existe en cualquier ruta de LA EMPRESA
-    const existingClients = await prisma.client.findMany({
-      where: { 
-        documentId: cleanDocumentId,
-        route: { companyId } 
-      },
-      include: { loans: { where: { isActive: true } } }
+    // 1. Buscamos al cliente en TODA la base de datos (todas las empresas y rutas)
+    const allExistingClients = await prisma.client.findMany({
+      where: { documentId: cleanDocumentId },
+      include: { 
+        loans: { where: { isActive: true } },
+        route: true // Traemos la ruta para saber a qué empresa (companyId) pertenece cada registro
+      }
     });
 
-    // 2. Separar si existe en la ruta actual o en otras
-    const clientSameRoute = existingClients.find(c => c.routeId === routeIdInt);
-    
-    // 3. Contar deudas en otras oficinas para la alerta (Punto 4)
-    const activeLoansOtherRoutes = existingClients
-      .filter(c => c.routeId !== routeIdInt)
-      .reduce((sum, c) => sum + c.loans.length, 0);
+    // 2. Filtramos los registros que pertenecen a la MISMA EMPRESA (Administrador)
+    const clientsSameCompany = allExistingClients.filter(c => c.route.companyId === companyId);
 
-    // 4. Bloqueo si tiene deuda en LA MISMA ruta (Punto 3)
-    if (clientSameRoute && clientSameRoute.loans.length > 0) {
+    // 3. Verificamos si tiene alguna deuda activa en CUALQUIER RUTA de esta misma empresa
+    const hasActiveDebtInSameCompany = clientsSameCompany.some(c => c.loans.length > 0);
+
+    // REGLA DE NEGOCIO: Bloqueo total si hay deuda en la misma empresa
+    if (hasActiveDebtInSameCompany) {
       return res.status(400).json({ 
         errorType: "ACTIVE_DEBT",
-        error: "Este cliente ya está en tu ruta y tiene una deuda activa. Debe saldarla para poder prestarle de nuevo." 
+        error: "Este cliente ya tiene una deuda activa en tu oficina (en esta o en otra ruta). Debe saldarla para poder prestarle de nuevo." 
       });
     }
 
+    // 4. Identificamos si el cliente ya existe físicamente en la ruta actual (Para renovarlo y no duplicar registro)
+    const clientSameRoute = clientsSameCompany.find(c => c.routeId === routeIdInt);
+    
+    // 5. Contamos créditos en OTRAS EMPRESAS (Otros Administradores) para la Alerta Azul
+    const activeLoansOtherCompanies = allExistingClients
+      .filter(c => c.route.companyId !== companyId)
+      .reduce((sum, c) => sum + c.loans.length, 0);
+
     // ==========================================
-    // CÁLCULOS MATEMÁTICOS (Sin cambios)
+    // CÁLCULOS MATEMÁTICOS
     // ==========================================
     const amountNum = parseFloat(amount);
     const interestNum = parseFloat(interestRate);
@@ -121,17 +127,17 @@ export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
       let processedClient;
 
       if (clientSameRoute) {
-        // ES RENOVACIÓN (Punto 2): Actualizamos datos del cliente y metemos el Loan nuevo
+        // RENOVACIÓN EN LA MISMA RUTA (Actualiza datos y añade préstamo isRenewal: true)
         processedClient = await tx.client.update({
           where: { id: clientSameRoute.id },
           data: {
             name, phone, address, latitude, longitude,
-            documentUrl: documentUrl || clientSameRoute.documentUrl, // Mantiene la foto si no envían una nueva
+            documentUrl: documentUrl || clientSameRoute.documentUrl,
             loans: {
               create: {
                 amount: amountNum, installments: installmentsNum, interestRate: interestNum,
                 periodicity: periodicity, firstPaymentDate: firstPayment, projectedTotal: projectedTotal,
-                isRenewal: true, // Marca importante
+                isRenewal: true, 
                 installmentDetails: { create: installmentsArray }
               }
             }
@@ -139,7 +145,7 @@ export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
           include: { loans: { include: { installmentDetails: true } } }
         });
       } else {
-        // ES CLIENTE NUEVO PARA ESTA RUTA
+        // CLIENTE NUEVO PARA ESTA RUTA ESPECÍFICA (pero dentro de la misma empresa)
         processedClient = await tx.client.create({
           data: {
             name, documentId: cleanDocumentId, phone, address, latitude, longitude, documentUrl, routeId: routeIdInt,
@@ -166,7 +172,7 @@ export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
 
     return res.status(201).json({
       message: clientSameRoute ? "Crédito renovado exitosamente" : "Cliente y préstamo creados exitosamente",
-      otherActiveLoansCount: activeLoansOtherRoutes, // Pasamos este dato al frontend
+      otherActiveLoansCount: activeLoansOtherCompanies, // <--- Envía la alerta azul para otras empresas
       data: result
     });
 
@@ -175,6 +181,8 @@ export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
     return res.status(400).json({ error: error.message || "Error interno del servidor" });
   }
 };
+
+
 
 /**
  * 2. OBTENER CARTERA DEL COBRADOR
@@ -649,6 +657,8 @@ export const consultarDatacredito = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ error: "Error al consultar historial." });
   }
 };
+
+
 
 /**
  * 6. LIQUIDAR DEUDA TOTAL
