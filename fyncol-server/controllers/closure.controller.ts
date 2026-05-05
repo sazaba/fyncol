@@ -320,7 +320,6 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
       where: {
         loan: { 
           client: { routeId: closure.routeId }
-          // ELIMINADO: isActive: true, para que traiga a los liquidados
         },
         OR: [
           { dueDate: { gte: start, lte: end } }, 
@@ -336,16 +335,30 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
       orderBy: { dueDate: 'asc' } 
     });
 
-   const loanMap = new Map();
+    const loanMap = new Map();
 
     for (const inst of installments) {
-      // EL CAMBIO CLAVE: Agrupamos por ID del préstamo, no por nombre del cliente
       const loanId = inst.loanId; 
       const current = loanMap.get(loanId);
       
       if (!current) {
-        loanMap.set(loanId, inst);
+        // Inicializamos el acumulador para este préstamo
+        loanMap.set(loanId, {
+          ...inst,
+          aggregatedExpected: Number(inst.expectedAmount || 0),
+          aggregatedPaid: Number(inst.paidAmount || 0),
+          allObservations: inst.actionDescription ? [inst.actionDescription] : []
+        });
       } else {
+        // Si ya existe, SUMAMOS los valores de las demás cuotas pagadas/movidas hoy
+        current.aggregatedExpected += Number(inst.expectedAmount || 0);
+        current.aggregatedPaid += Number(inst.paidAmount || 0);
+        
+        // Agregamos la observación si es diferente a las que ya tenemos guardadas
+        if (inst.actionDescription && !current.allObservations.includes(inst.actionDescription)) {
+            current.allObservations.push(inst.actionDescription);
+        }
+
         const getWeight = (status: string) => {
             if(status === 'RENEGOTIATED') return 5;
             if(status === 'PAID') return 4;
@@ -353,8 +366,9 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
             if(status === 'OVERDUE') return 2;
             return 1; 
         };
+        // Mantenemos el estado de mayor peso
         if (getWeight(inst.status) > getWeight(current.status)) {
-            loanMap.set(loanId, inst);
+            current.status = inst.status;
         }
       }
     }
@@ -363,12 +377,14 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
 
     const details = uniqueInstallments.map((inst: any) => ({
       id: inst.id,
-      // Le añadimos el ID del préstamo al nombre para que el admin diferencie fácil
       clientName: `${inst.loan.client.name} (Préstamo #${inst.loanId})`, 
       status: inst.status,
-      expectedAmount: inst.expectedAmount,
-      paidAmount: inst.paidAmount,
-      observation: inst.actionDescription || (inst.status === 'OVERDUE' ? 'Cliente no pagó, reportado en mora automática.' : 'Sin observaciones adicionales.')
+      expectedAmount: inst.aggregatedExpected, // Usamos la suma total esperada
+      paidAmount: inst.aggregatedPaid,         // Usamos la suma total pagada
+      // Unimos todas las observaciones separadas por un " | "
+      observation: inst.allObservations.length > 0 
+        ? inst.allObservations.join(' | ') 
+        : (inst.status === 'OVERDUE' ? 'Cliente no pagó, reportado en mora automática.' : 'Sin observaciones adicionales.')
     }));
 
     return res.json({ success: true, data: details });
