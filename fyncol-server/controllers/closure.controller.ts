@@ -336,14 +336,15 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
       orderBy: { dueDate: 'asc' } 
     });
 
-    const clientMap = new Map();
+   const loanMap = new Map();
 
     for (const inst of installments) {
-      const clientId = inst.loan.client.name; 
-      const current = clientMap.get(clientId);
+      // EL CAMBIO CLAVE: Agrupamos por ID del préstamo, no por nombre del cliente
+      const loanId = inst.loanId; 
+      const current = loanMap.get(loanId);
       
       if (!current) {
-        clientMap.set(clientId, inst);
+        loanMap.set(loanId, inst);
       } else {
         const getWeight = (status: string) => {
             if(status === 'RENEGOTIATED') return 5;
@@ -353,20 +354,21 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
             return 1; 
         };
         if (getWeight(inst.status) > getWeight(current.status)) {
-            clientMap.set(clientId, inst);
+            loanMap.set(loanId, inst);
         }
       }
     }
 
-    const uniqueInstallments = Array.from(clientMap.values());
+    const uniqueInstallments = Array.from(loanMap.values());
 
     const details = uniqueInstallments.map((inst: any) => ({
       id: inst.id,
-      clientName: inst.loan.client.name,
+      // Le añadimos el ID del préstamo al nombre para que el admin diferencie fácil
+      clientName: `${inst.loan.client.name} (Préstamo #${inst.loanId})`, 
       status: inst.status,
       expectedAmount: inst.expectedAmount,
       paidAmount: inst.paidAmount,
-      observation: inst.actionDescription || (inst.status === 'OVERDUE' ? 'Cliente no pagó, reportado en mora.' : 'Sin observaciones adicionales.')
+      observation: inst.actionDescription || (inst.status === 'OVERDUE' ? 'Cliente no pagó, reportado en mora automática.' : 'Sin observaciones adicionales.')
     }));
 
     return res.json({ success: true, data: details });
