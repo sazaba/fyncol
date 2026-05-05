@@ -249,7 +249,10 @@ export default function CierresDiarios() {
                       {closureDetails.map((detail) => {
                         const paid = Math.round(Number(detail.paidAmount || 0));
                         const expected = Math.round(Number(detail.expectedAmount || 0));
-                        const isTotalPayoff = paid >= expected && detail.status === 'PAID';
+                        const isPaid = paid >= expected && detail.status === 'PAID';
+                        
+                        // NUEVO: Verificamos si en la observación del backend dice la palabra "liquid" (liquidado/liquidación)
+                        const isRealLiquidation = isPaid && detail.observation?.toLowerCase().includes('liquid');
 
                         return (
                           <div key={detail.id} className={`p-4 rounded-2xl border transition-colors ${detail.status === 'RENEGOTIATED' ? 'bg-orange-500/5 border-orange-500/20' : detail.status === 'OVERDUE' ? 'bg-red-500/5 border-red-500/20' : detail.status === 'PAID' ? 'bg-emerald-500/5 border-emerald-500/20' : detail.status === 'PARTIAL' ? 'bg-blue-500/5 border-blue-500/20' : 'bg-[#0B0B12] border-white/10'}`}>
@@ -257,9 +260,9 @@ export default function CierresDiarios() {
                             <div className="flex justify-between items-start mb-3">
                               <div>
                                 <h4 className="font-bold text-sm text-white mb-0.5">{detail.clientName}</h4>
-                                {isTotalPayoff ? (
+                                {isPaid ? (
                                   <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-400 flex items-center gap-1">
-                                    <FiCheckCircle size={10}/> Pago / Liquidación Total
+                                    <FiCheckCircle size={10}/> {isRealLiquidation ? 'Liquidación Total' : 'Pago Completo'}
                                   </span>
                                 ) : (
                                   <span className={`text-[9px] font-bold uppercase tracking-widest ${detail.status === 'RENEGOTIATED' ? 'text-orange-400' : detail.status === 'OVERDUE' ? 'text-red-400' : detail.status === 'PARTIAL' ? 'text-blue-400' : 'text-slate-400'}`}>
@@ -278,8 +281,8 @@ export default function CierresDiarios() {
                             </div>
 
                             {/* TEXTO DE AUDITORÍA (Descripción exacta enviada por el Cobrador) */}
-                            <div className={`text-[11px] font-medium p-2.5 rounded-lg flex items-start gap-2 border ${detail.status === 'OVERDUE' ? 'bg-red-500/10 border-red-500/20 text-red-300' : detail.status === 'RENEGOTIATED' ? 'bg-orange-500/10 border-orange-500/20 text-orange-300' : isTotalPayoff ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' : 'bg-blue-500/5 border-blue-500/20 text-blue-300'}`}>
-                              {detail.status === 'OVERDUE' ? <FiAlertTriangle className="shrink-0 mt-0.5" /> : detail.status === 'RENEGOTIATED' ? <FiClock className="shrink-0 mt-0.5" /> : isTotalPayoff ? <FiCheckCircle className="shrink-0 mt-0.5" /> : <FiInfo className="shrink-0 mt-0.5" />}
+                            <div className={`text-[11px] font-medium p-2.5 rounded-lg flex items-start gap-2 border ${detail.status === 'OVERDUE' ? 'bg-red-500/10 border-red-500/20 text-red-300' : detail.status === 'RENEGOTIATED' ? 'bg-orange-500/10 border-orange-500/20 text-orange-300' : isPaid ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' : 'bg-blue-500/5 border-blue-500/20 text-blue-300'}`}>
+                              {detail.status === 'OVERDUE' ? <FiAlertTriangle className="shrink-0 mt-0.5" /> : detail.status === 'RENEGOTIATED' ? <FiClock className="shrink-0 mt-0.5" /> : isPaid ? <FiCheckCircle className="shrink-0 mt-0.5" /> : <FiInfo className="shrink-0 mt-0.5" />}
                               <span className="leading-relaxed">{detail.observation}</span>
                             </div>
 
