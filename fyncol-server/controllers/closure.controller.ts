@@ -1,21 +1,37 @@
 import { Response } from "express";
 import { PrismaClient } from '@prisma/client';
-import { AuthRequest } from "../middleware/auth.middleware"; // SAAS-BLINDAJE
+import { AuthRequest } from "../middleware/auth.middleware"; 
 import { getDayLimitsByOffset, COUNTRY_TIMEZONES } from '../utils/time.utils';
 
 const prisma = new PrismaClient();
+
+// NUEVO HELPER: Calcula la medianoche estricta del día actual para no cobrar cuotas del día siguiente
+const getDueDateLimits = (start: Date, offset: number) => {
+  const utcStart = start.getTime() + (offset * 3600000);
+  const localDate = new Date(utcStart);
+  
+  const startLocal = new Date(localDate);
+  startLocal.setHours(0, 0, 0, 0);
+  
+  const endLocal = new Date(localDate);
+  endLocal.setHours(23, 59, 59, 999);
+  
+  return {
+    dueDateStart: new Date(startLocal.getTime() - (offset * 3600000)),
+    dueDateEnd: new Date(endLocal.getTime() - (offset * 3600000))
+  };
+};
 
 /**
  * 1. OBTENER RESUMEN DE ARQUEO (Para el Modal)
  */
 export const getClosureSummary = async (req: AuthRequest, res: Response) => {
   try {
-    const companyId = req.user?.companyId; // SAAS-BLINDAJE
+    const companyId = req.user?.companyId; 
     const userId = req.user?.id;
     
     if (!companyId || !userId) return res.status(403).json({ error: "Acceso denegado." });
 
-    // SAAS-BLINDAJE: Validar que la ruta le pertenece a su empresa
     const route = await prisma.route.findFirst({
       where: { 
         assignedToId: userId,
@@ -28,14 +44,15 @@ export const getClosureSummary = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: "No tienes una ruta asignada o autorizada." });
     }
 
-    // Integración de time.utils para el turno dinámico
     const offset = COUNTRY_TIMEZONES[route.country] ?? -5;
     const { startOfDay: start, endOfDay: end } = getDayLimitsByOffset(offset);
+    
+    // CORRECCIÓN: Obtenemos el límite de medianoche para las cuotas
+    const { dueDateEnd } = getDueDateLimits(start, offset);
 
     const routeId = route.id;
     const availableCapital = Number(route.availableCapital);
 
-    // Obtener Inversiones y Retiros del día
     const capitalTransactionsToday = await prisma.capitalTransaction.findMany({
       where: {
         routeId,
@@ -92,7 +109,7 @@ export const getClosureSummary = async (req: AuthRequest, res: Response) => {
           { status: 'RENEGOTIATED' },
           {
             status: { in: ['PENDING', 'PARTIAL'] },
-            dueDate: { lte: end }, 
+            dueDate: { lte: dueDateEnd }, // Usamos el límite estricto de medianoche
             expectedAmount: { gt: 0 } 
           }
         ]
@@ -152,7 +169,7 @@ export const getClosureSummary = async (req: AuthRequest, res: Response) => {
  */
 export const confirmDailyClosure = async (req: AuthRequest, res: Response) => {
   try {
-    const companyId = req.user?.companyId; // SAAS-BLINDAJE
+    const companyId = req.user?.companyId; 
     const userId = req.user?.id;
     if (!companyId || !userId) return res.status(403).json({ error: "Acceso denegado." });
 
@@ -163,7 +180,6 @@ export const confirmDailyClosure = async (req: AuthRequest, res: Response) => {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // SAAS-BLINDAJE
       const route = await tx.route.findFirst({ 
         where: { 
           assignedToId: userId,
@@ -175,11 +191,12 @@ export const confirmDailyClosure = async (req: AuthRequest, res: Response) => {
         throw new Error("No tienes una ruta asignada o autorizada.");
       }
 
-      // Obtener el fin del día con la utilidad dinámica
       const offset = COUNTRY_TIMEZONES[route.country] ?? -5;
       const { startOfDay: start, endOfDay: end } = getDayLimitsByOffset(offset);
+      
+      // CORRECCIÓN: Obtenemos el límite de medianoche para barrer morosos
+      const { dueDateEnd } = getDueDateLimits(start, offset);
 
-      // BLINDAJE ANTI-DUPLICADOS: Verificar si ya existe un cierre en este turno
       const existingClosure = await tx.dailyClosure.findFirst({
         where: {
           routeId: route.id,
@@ -201,7 +218,7 @@ export const confirmDailyClosure = async (req: AuthRequest, res: Response) => {
             isActive: true 
           },
           status: { in: ['PENDING', 'PARTIAL'] },
-          dueDate: { lte: end },
+          dueDate: { lte: dueDateEnd }, // Usamos el límite estricto de medianoche
           expectedAmount: { gt: 0 } 
         }
       });
@@ -259,12 +276,12 @@ export const confirmDailyClosure = async (req: AuthRequest, res: Response) => {
  */
 export const getAllClosures = async (req: AuthRequest, res: Response) => {
   try {
-    const companyId = req.user?.companyId; // SAAS-BLINDAJE
+    const companyId = req.user?.companyId; 
     if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
 
     const closures = await prisma.dailyClosure.findMany({
       where: {
-        route: { companyId } // SAAS-BLINDAJE
+        route: { companyId } 
       },
       include: {
         route: true,
@@ -291,7 +308,7 @@ export const getAllClosures = async (req: AuthRequest, res: Response) => {
  */
 export const getClosureDetails = async (req: AuthRequest, res: Response) => {
   try {
-    const companyId = req.user?.companyId; // SAAS-BLINDAJE
+    const companyId = req.user?.companyId; 
     if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
 
     const id = req.params.id as string; 
@@ -308,7 +325,6 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: "Cierre no encontrado o no autorizado." });
     }
 
-    // Reconstruir el turno de 12 a 12 basado en la hora exacta en la que se cerró
     const offset = COUNTRY_TIMEZONES[closure.route.country] ?? -5;
     const utcTime = closure.closedAt.getTime();
     const localTime = new Date(utcTime + (offset * 3600000));
@@ -329,13 +345,16 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
     const start = new Date(localStart.getTime() - (offset * 3600000));
     const end = new Date(localEnd.getTime() - (offset * 3600000));
 
+    // CORRECCIÓN: Límites exactos del día para no mezclar cuotas
+    const { dueDateStart, dueDateEnd } = getDueDateLimits(start, offset);
+
     const installments = await prisma.installment.findMany({
       where: {
         loan: { 
           client: { routeId: closure.routeId }
         },
         OR: [
-          { dueDate: { gte: start, lte: end } }, 
+          { dueDate: { gte: dueDateStart, lte: dueDateEnd } }, // Solo traemos cuotas limitadas al día local
           { paidAt: { gte: start, lte: end } },  
           { status: { in: ['OVERDUE', 'RENEGOTIATED'] } } 
         ]
