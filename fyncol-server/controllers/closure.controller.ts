@@ -1,23 +1,9 @@
 import { Response } from "express";
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from "../middleware/auth.middleware"; // SAAS-BLINDAJE
+import { getDayLimitsByOffset, COUNTRY_TIMEZONES } from '../utils/time.utils';
 
 const prisma = new PrismaClient();
-
-// Helper para obtener el rango del día actual blindado para Colombia (UTC-5)
-const getTodayRange = () => {
-  const now = new Date();
-  now.setUTCHours(now.getUTCHours() - 5);
-  
-  const year = now.getUTCFullYear();
-  const month = now.getUTCMonth();
-  const day = now.getUTCDate();
-
-  const start = new Date(Date.UTC(year, month, day, 5, 0, 0, 0)); 
-  const end = new Date(Date.UTC(year, month, day, 28, 59, 59, 999)); 
-
-  return { start, end };
-};
 
 /**
  * 1. OBTENER RESUMEN DE ARQUEO (Para el Modal)
@@ -28,8 +14,6 @@ export const getClosureSummary = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id;
     
     if (!companyId || !userId) return res.status(403).json({ error: "Acceso denegado." });
-
-    const { start, end } = getTodayRange();
 
     // SAAS-BLINDAJE: Validar que la ruta le pertenece a su empresa
     const route = await prisma.route.findFirst({
@@ -44,10 +28,14 @@ export const getClosureSummary = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: "No tienes una ruta asignada o autorizada." });
     }
 
+    // Integración de time.utils para el turno dinámico
+    const offset = COUNTRY_TIMEZONES[route.country] ?? -5;
+    const { startOfDay: start, endOfDay: end } = getDayLimitsByOffset(offset);
+
     const routeId = route.id;
     const availableCapital = Number(route.availableCapital);
 
-    // NUEVO: Obtener Inversiones y Retiros del día
+    // Obtener Inversiones y Retiros del día
     const capitalTransactionsToday = await prisma.capitalTransaction.findMany({
       where: {
         routeId,
@@ -84,7 +72,6 @@ export const getClosureSummary = async (req: AuthRequest, res: Response) => {
     let renewals = 0;
 
     loansToday.forEach((loan: any) => {
-      // Usamos el flag nativo isRenewal de la base de datos
       if (loan.isRenewal) {
         renewals += Number(loan.amount);
       } else {
@@ -160,7 +147,6 @@ export const getClosureSummary = async (req: AuthRequest, res: Response) => {
   }
 };
 
-
 /**
  * 2. GUARDAR EL CIERRE DEFINITIVO EN BASE DE DATOS Y BARRIDO DE MOROSOS
  */
@@ -176,8 +162,6 @@ export const confirmDailyClosure = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: "Faltan los datos del resumen de cierre." });
     }
 
-    const { end } = getTodayRange(); 
-
     const result = await prisma.$transaction(async (tx) => {
       // SAAS-BLINDAJE
       const route = await tx.route.findFirst({ 
@@ -189,6 +173,25 @@ export const confirmDailyClosure = async (req: AuthRequest, res: Response) => {
       
       if (!route) {
         throw new Error("No tienes una ruta asignada o autorizada.");
+      }
+
+      // Obtener el fin del día con la utilidad dinámica
+      const offset = COUNTRY_TIMEZONES[route.country] ?? -5;
+      const { startOfDay: start, endOfDay: end } = getDayLimitsByOffset(offset);
+
+      // BLINDAJE ANTI-DUPLICADOS: Verificar si ya existe un cierre en este turno
+      const existingClosure = await tx.dailyClosure.findFirst({
+        where: {
+          routeId: route.id,
+          closedAt: {
+            gte: start,
+            lte: end
+          }
+        }
+      });
+
+      if (existingClosure) {
+        throw new Error("Esta ruta ya fue cerrada en el turno de hoy. No se permiten cierres duplicados.");
       }
 
       const unmanagedInstallments = await tx.installment.findMany({
@@ -247,10 +250,9 @@ export const confirmDailyClosure = async (req: AuthRequest, res: Response) => {
 
   } catch (error: any) {
     console.error("Error al confirmar el cierre:", error);
-    return res.status(500).json({ error: error.message || "Error al procesar el cierre." });
+    return res.status(400).json({ error: error.message || "Error al procesar el cierre." });
   }
 };
-
 
 /**
  * 3. OBTENER HISTORIAL DE ARQUEOS (Para el Admin/Supervisor)
@@ -262,7 +264,7 @@ export const getAllClosures = async (req: AuthRequest, res: Response) => {
 
     const closures = await prisma.dailyClosure.findMany({
       where: {
-        route: { companyId } // SAAS-BLINDAJE: Solo los cierres de rutas de esta empresa
+        route: { companyId } // SAAS-BLINDAJE
       },
       include: {
         route: true,
@@ -292,29 +294,40 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
     const companyId = req.user?.companyId; // SAAS-BLINDAJE
     if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
 
-    const id = req.params.id as string; // CORRECCIÓN TIPADO TS
+    const id = req.params.id as string; 
     
-    // SAAS-BLINDAJE: Validar jerarquía
     const closure = await prisma.dailyClosure.findFirst({
       where: { 
         id: parseInt(id),
-        route: { companyId } // SAAS-BLINDAJE
-      }
+        route: { companyId } 
+      },
+      include: { route: true }
     });
 
     if (!closure) {
       return res.status(404).json({ error: "Cierre no encontrado o no autorizado." });
     }
 
-    const t = new Date(closure.closedAt);
-    t.setUTCHours(t.getUTCHours() - 5); 
+    // Reconstruir el turno de 12 a 12 basado en la hora exacta en la que se cerró
+    const offset = COUNTRY_TIMEZONES[closure.route.country] ?? -5;
+    const utcTime = closure.closedAt.getTime();
+    const localTime = new Date(utcTime + (offset * 3600000));
     
-    const year = t.getUTCFullYear();
-    const month = t.getUTCMonth();
-    const day = t.getUTCDate();
-
-    const start = new Date(Date.UTC(year, month, day, 5, 0, 0, 0));   
-    const end = new Date(Date.UTC(year, month, day, 28, 59, 59, 999)); 
+    const localStart = new Date(localTime);
+    const localEnd = new Date(localTime);
+    
+    if (localTime.getHours() < 12) {
+      localStart.setDate(localStart.getDate() - 1);
+      localStart.setHours(12, 0, 0, 0);
+      localEnd.setHours(11, 59, 59, 999);
+    } else {
+      localStart.setHours(12, 0, 0, 0);
+      localEnd.setDate(localEnd.getDate() + 1);
+      localEnd.setHours(11, 59, 59, 999);
+    }
+    
+    const start = new Date(localStart.getTime() - (offset * 3600000));
+    const end = new Date(localEnd.getTime() - (offset * 3600000));
 
     const installments = await prisma.installment.findMany({
       where: {
@@ -342,7 +355,6 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
       const current = loanMap.get(loanId);
       
       if (!current) {
-        // Inicializamos el acumulador para este préstamo
         loanMap.set(loanId, {
           ...inst,
           aggregatedExpected: Number(inst.expectedAmount || 0),
@@ -350,11 +362,9 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
           allObservations: inst.actionDescription ? [inst.actionDescription] : []
         });
       } else {
-        // Si ya existe, SUMAMOS los valores de las demás cuotas pagadas/movidas hoy
         current.aggregatedExpected += Number(inst.expectedAmount || 0);
         current.aggregatedPaid += Number(inst.paidAmount || 0);
         
-        // Agregamos la observación si es diferente a las que ya tenemos guardadas
         if (inst.actionDescription && !current.allObservations.includes(inst.actionDescription)) {
             current.allObservations.push(inst.actionDescription);
         }
@@ -366,7 +376,6 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
             if(status === 'OVERDUE') return 2;
             return 1; 
         };
-        // Mantenemos el estado de mayor peso
         if (getWeight(inst.status) > getWeight(current.status)) {
             current.status = inst.status;
         }
@@ -379,9 +388,8 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
       id: inst.id,
       clientName: `${inst.loan.client.name} (Préstamo #${inst.loanId})`, 
       status: inst.status,
-      expectedAmount: inst.aggregatedExpected, // Usamos la suma total esperada
-      paidAmount: inst.aggregatedPaid,         // Usamos la suma total pagada
-      // Unimos todas las observaciones separadas por un " | "
+      expectedAmount: inst.aggregatedExpected, 
+      paidAmount: inst.aggregatedPaid,         
       observation: inst.allObservations.length > 0 
         ? inst.allObservations.join(' | ') 
         : (inst.status === 'OVERDUE' ? 'Cliente no pagó, reportado en mora automática.' : 'Sin observaciones adicionales.')
