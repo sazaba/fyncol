@@ -77,18 +77,18 @@ export const getClosureSummary = async (req: AuthRequest, res: Response) => {
       where: {
         createdAt: { gte: start, lte: end },
         client: { routeId }
-      },
-      include: { client: true }
+      }
     });
 
     let newSales = 0;
     let renewals = 0;
 
     loansToday.forEach((loan: any) => {
-      if (loan.client.createdAt >= start && loan.client.createdAt <= end) {
-        newSales += Number(loan.amount);
-      } else {
+      // Usamos el flag nativo isRenewal de la base de datos
+      if (loan.isRenewal) {
         renewals += Number(loan.amount);
+      } else {
+        newSales += Number(loan.amount);
       }
     });
 
