@@ -41,12 +41,56 @@ function MapController({ coords, zoom }: { coords: [number, number] | null, zoom
   return null;
 }
 
-const getDeviceTodayStr = () => {
-    const today = new Date(); 
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
+// NUEVO: Diccionarios de zonas horarias para blindar la fecha del dispositivo
+const COUNTRY_CODES = [
+  { code: '+57', country: 'Colombia', aliases: ['colombia', 'col'] },
+  { code: '+52', country: 'México', aliases: ['mexico', 'méxico', 'mex'] },
+  { code: '+51', country: 'Perú', aliases: ['peru', 'perú'] },
+  { code: '+54', country: 'Argentina', aliases: ['argentina', 'arg'] },
+  { code: '+56', country: 'Chile', aliases: ['chile'] },
+  { code: '+593', country: 'Ecuador', aliases: ['ecuador'] },
+  { code: '+58', country: 'Venezuela', aliases: ['venezuela', 'ven'] },
+  { code: '+507', country: 'Panamá', aliases: ['panama', 'panamá'] },
+  { code: '+34', country: 'España', aliases: ['españa', 'spain', 'es'] },
+  { code: '+1', country: 'USA/Canadá', aliases: ['usa', 'estados unidos', 'eeuu', 'us', 'canada', 'canadá'] },
+  { code: '+55', country: 'Brasil', aliases: ['brasil', 'brazil', 'br'] }, 
+  { code: '+598', country: 'Uruguay', aliases: ['uruguay'] },
+  { code: '+595', country: 'Paraguay', aliases: ['paraguay'] },
+  { code: '+591', country: 'Bolivia', aliases: ['bolivia'] },
+];
+
+const COUNTRY_TIMEZONES: Record<string, string> = {
+  'Colombia': 'America/Bogota',
+  'México': 'America/Mexico_City',
+  'Perú': 'America/Lima',
+  'Argentina': 'America/Argentina/Buenos_Aires',
+  'Chile': 'America/Santiago',
+  'Ecuador': 'America/Guayaquil',
+  'Venezuela': 'America/Caracas',
+  'Panamá': 'America/Panama',
+  'España': 'Europe/Madrid',
+  'USA/Canadá': 'America/New_York', 
+  'Brasil': 'America/Sao_Paulo', 
+  'Uruguay': 'America/Montevideo',
+  'Paraguay': 'America/Asuncion',
+  'Bolivia': 'America/La_Paz',
+};
+
+const getRouteTodayStr = (countryStr?: string) => {
+  let tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (countryStr) {
+    const match = COUNTRY_CODES.find(c => c.aliases.some(alias => countryStr.toLowerCase().trim().includes(alias)));
+    if (match && COUNTRY_TIMEZONES[match.country]) {
+      tz = COUNTRY_TIMEZONES[match.country];
+    }
+  }
+  const nowStr = new Date().toLocaleString("en-US", { timeZone: tz });
+  const routeDate = new Date(nowStr);
+  
+  const yyyy = routeDate.getFullYear();
+  const mm = String(routeDate.getMonth() + 1).padStart(2, '0');
+  const dd = String(routeDate.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 };
 
 export default function CarteraActiva() {
@@ -65,7 +109,7 @@ export default function CarteraActiva() {
   const [modalTab, setModalTab] = useState<'PLAN' | 'RECIBOS'>('PLAN');
   
   const [updatingInstId, setUpdatingInstId] = useState<number | null>(null);
-  const [isLiquidating, setIsLiquidating] = useState(false); // NUEVO ESTADO PARA CARGA DE LIQUIDACIÓN
+  const [isLiquidating, setIsLiquidating] = useState(false); 
   
   const [confirmPayModal, setConfirmPayModal] = useState<{open: boolean, inst: any, faltante: number}>({ open: false, inst: null, faltante: 0 });
   const [manualPayModal, setManualPayModal] = useState<{open: boolean, inst: any, loan: any}>({ open: false, inst: null, loan: null });
@@ -155,15 +199,15 @@ export default function CarteraActiva() {
 
   useEffect(() => {
     if (routeInfo) {
-      const deviceTodayStr = getDeviceTodayStr();
-      const storageKey = `closed_route_${routeInfo.id}_${deviceTodayStr}`;
+      const todayStr = getRouteTodayStr(routeInfo.country);
+      const storageKey = `closed_route_${routeInfo.id}_${todayStr}`;
       const isClosed = localStorage.getItem(storageKey);
       setIsRouteClosed(isClosed === 'true');
     }
   }, [routeInfo]);
 
   const filteredData = useMemo(() => {
-    const deviceTodayStr = getDeviceTodayStr();
+    const todayStr = getRouteTodayStr(routeInfo?.country);
 
     return clients.filter(client => {
       const loan = client.loans[0];
@@ -175,9 +219,9 @@ export default function CarteraActiva() {
         const dbDate = i.dueDate.split('T')[0];
         const promiseDateStr = i.promiseDate ? i.promiseDate.split('T')[0] : null;
 
-        const isDueToday = dbDate <= deviceTodayStr;
-        const isPromisedToday = promiseDateStr && promiseDateStr <= deviceTodayStr;
-        const isFuturePromise = promiseDateStr && promiseDateStr > deviceTodayStr;
+        const isDueToday = dbDate <= todayStr;
+        const isPromisedToday = promiseDateStr && promiseDateStr <= todayStr;
+        const isFuturePromise = promiseDateStr && promiseDateStr > todayStr;
         
         if (filter === 'HOY') {
             if (isFuturePromise) return false;
@@ -192,13 +236,13 @@ export default function CarteraActiva() {
       if (filter === 'PENDIENTES') {
          return loan?.installmentDetails?.some((i: any) => 
            i.status === 'OVERDUE' || 
-           (i.status === 'RENEGOTIATED' && i.promiseDate && i.promiseDate.split('T')[0] <= deviceTodayStr) || 
-           (i.status === 'PENDING' && i.dueDate.split('T')[0] < deviceTodayStr)
+           (i.status === 'RENEGOTIATED' && i.promiseDate && i.promiseDate.split('T')[0] <= todayStr) || 
+           (i.status === 'PENDING' && i.dueDate.split('T')[0] < todayStr)
          );
       }
       return true;
     });
-  }, [clients, searchTerm, filter]);
+  }, [clients, searchTerm, filter, routeInfo?.country]);
 
   const routePolylineCoords = useMemo(() => {
     return filteredData.filter(c => c.latitude && c.longitude).map(c => [c.latitude, c.longitude] as [number, number]);
@@ -210,7 +254,6 @@ export default function CarteraActiva() {
     }
   }, [routePolylineCoords]);
 
-  // NUEVA FUNCIÓN PARA LIQUIDAR TOTALMENTE
   const handleLiquidarDeudaTotal = async (loanId: number) => {
     if(isRouteClosed) return; 
     setIsLiquidating(true);
@@ -335,8 +378,8 @@ export default function CarteraActiva() {
       
       if (res.ok && data.success) {
         setClosureModalOpen(false);
-        const deviceTodayStr = getDeviceTodayStr();
-        const storageKey = `closed_route_${routeInfo.id}_${deviceTodayStr}`;
+        const todayStr = getRouteTodayStr(routeInfo?.country);
+        const storageKey = `closed_route_${routeInfo.id}_${todayStr}`;
         localStorage.setItem(storageKey, 'true');
         setIsRouteClosed(true);
         window.location.href = '/dashboard'; 
@@ -411,27 +454,27 @@ export default function CarteraActiva() {
               const loan = client.loans?.[0];
               if (!loan) return null;
               
-              const deviceTodayStr = getDeviceTodayStr();
+              const todayStr = getRouteTodayStr(routeInfo?.country);
               
               const cuotaActiva = loan.installmentDetails?.find((i: any) => {
                 if (i.status === 'PAID') return false;
                 const dbDate = i.dueDate.split('T')[0];
                 const promiseDateStr = i.promiseDate ? i.promiseDate.split('T')[0] : null;
-                const isDueToday = dbDate <= deviceTodayStr;
-                const isPromisedToday = promiseDateStr && promiseDateStr <= deviceTodayStr;
-                const isFuturePromise = promiseDateStr && promiseDateStr > deviceTodayStr;
+                const isDueToday = dbDate <= todayStr;
+                const isPromisedToday = promiseDateStr && promiseDateStr <= todayStr;
+                const isFuturePromise = promiseDateStr && promiseDateStr > todayStr;
 
                 if (filter === 'HOY' && isFuturePromise) return false;
                 return isDueToday || isPromisedToday || i.status === 'RENEGOTIATED' || i.status === 'OVERDUE' || i.status === 'PENDING' || i.status === 'PARTIAL';
               });
 
               const prestamoTerminado = loan.installmentDetails ? loan.installmentDetails.every((i: any) => i.status === 'PAID') : false;
-              const hasPaidToday = loan.installmentDetails ? loan.installmentDetails.some((i: any) => i.dueDate.startsWith(deviceTodayStr) && i.status === 'PAID') : false;
+              const hasPaidToday = loan.installmentDetails ? loan.installmentDetails.some((i: any) => i.dueDate.startsWith(todayStr) && i.status === 'PAID') : false;
 
               const dbDateActiva = cuotaActiva ? cuotaActiva.dueDate.split('T')[0] : null;
               
               const faltanteActual = cuotaActiva ? Math.round(Number(cuotaActiva.expectedAmount) - Number(cuotaActiva.paidAmount || 0)) : 0;
-              const requiereRenegociar = cuotaActiva && dbDateActiva && dbDateActiva < deviceTodayStr && cuotaActiva.status !== 'PAID' && cuotaActiva.status !== 'RENEGOTIATED' && faltanteActual > 0;
+              const requiereRenegociar = cuotaActiva && dbDateActiva && dbDateActiva < todayStr && cuotaActiva.status !== 'PAID' && cuotaActiva.status !== 'RENEGOTIATED' && faltanteActual > 0;
               
               const mostrarContainerBotones = cuotaActiva && (cuotaActiva.status === 'PENDING' || cuotaActiva.status === 'PARTIAL' || cuotaActiva.status === 'OVERDUE' || cuotaActiva.status === 'RENEGOTIATED') && faltanteActual > 0;
 
@@ -557,9 +600,9 @@ export default function CarteraActiva() {
           <TileLayer key={mapTheme} url={mapTheme === 'light' ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"} />
           {filter !== 'TODOS' && routePolylineCoords.length > 1 && (<Polyline positions={routePolylineCoords} pathOptions={{ color: '#3b82f6', weight: 4, opacity: 0.6, dashArray: '10, 10' }} />)}
           {filteredData.map(client => {
-            const deviceTodayStr = getDeviceTodayStr();
+            const todayStr = getRouteTodayStr(routeInfo?.country);
             const loan = client.loans?.[0];
-            const hasPaidToday = loan?.installmentDetails ? loan.installmentDetails.some((i: any) => i.dueDate.startsWith(deviceTodayStr) && i.status === 'PAID') : false;
+            const hasPaidToday = loan?.installmentDetails ? loan.installmentDetails.some((i: any) => i.dueDate.startsWith(todayStr) && i.status === 'PAID') : false;
             return client.latitude && (
               <Marker key={client.id} position={[client.latitude, client.longitude]} icon={hasPaidToday ? greenIcon : redIcon}>
                 <Popup className="custom-popup">
@@ -617,7 +660,7 @@ export default function CarteraActiva() {
                       {overdueAction === 'SOLO_MORA' && (
                         <div className="mt-3 p-3 bg-black/20 rounded-xl border border-white/5">
                           <label className="text-xs text-slate-400 font-semibold uppercase tracking-widest">Agendar nueva visita (Opcional)</label>
-                          <input type="date" value={promiseDate} onChange={e => setPromiseDate(e.target.value)} min={getDeviceTodayStr()} className="w-full mt-1 bg-[#05050A] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-red-500 outline-none [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert" />
+                          <input type="date" value={promiseDate} onChange={e => setPromiseDate(e.target.value)} min={getRouteTodayStr(routeInfo?.country)} className="w-full mt-1 bg-[#05050A] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-red-500 outline-none [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert" />
                           <p className="text-[10px] text-slate-500 mt-1">El cliente volverá a aparecer en la ruta principal en esta fecha.</p>
                         </div>
                       )}
@@ -722,7 +765,6 @@ export default function CarteraActiva() {
           (i: any) => i.installmentNumber > inst.installmentNumber && i.status !== 'PAID' && i.status !== 'RENEGOTIATED'
         ) || [];
 
-        // CALCULAMOS LA DEUDA TOTAL DE ESTE PRESTAMO
         const totalDebt = manualPayModal.loan?.installmentDetails?.reduce((sum: number, i: any) => {
             if (i.status === 'PAID') return sum;
             return sum + Math.round(Number(i.expectedAmount) - Number(i.paidAmount || 0));
@@ -737,7 +779,6 @@ export default function CarteraActiva() {
                    <span className="text-[10px] text-blue-400/80 font-bold uppercase tracking-widest bg-blue-500/10 px-2 py-1 rounded">Cuota Actual: ${faltante.toLocaleString('es-CO')}</span>
                 </div>
 
-                {/* --- NUEVO PANEL DE LIQUIDACIÓN TOTAL ESTILO APPLE --- */}
                 <div className="mb-5 bg-gradient-to-r from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-2xl p-4 flex items-center justify-between shadow-inner">
                     <div>
                         <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mb-1 flex items-center gap-1"><FiCheckCircle size={10} /> Deuda Total Restante</p>
@@ -751,7 +792,6 @@ export default function CarteraActiva() {
                         {isLiquidating ? <FiLoader className="animate-spin" /> : 'Liquidar Todo'}
                     </button>
                 </div>
-                {/* -------------------------------------------------- */}
 
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
@@ -922,11 +962,11 @@ export default function CarteraActiva() {
                 selectedClient.loans[0]?.installmentDetails?.map((inst: any) => {
                   
                   const instDbDate = inst.dueDate.split('T')[0];
-                  const deviceTodayStr = getDeviceTodayStr();
+                  const todayStr = getRouteTodayStr(routeInfo?.country);
                   const faltanteActual = Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount || 0));
                   
-                  const requiereRenegociarModal = instDbDate < deviceTodayStr && inst.status !== 'PAID' && inst.status !== 'RENEGOTIATED' && faltanteActual > 0;
-                  const isRenegociadaFutura = inst.status === 'RENEGOTIATED' && inst.promiseDate && inst.promiseDate.split('T')[0] > deviceTodayStr;
+                  const requiereRenegociarModal = instDbDate < todayStr && inst.status !== 'PAID' && inst.status !== 'RENEGOTIATED' && faltanteActual > 0;
+                  const isRenegociadaFutura = inst.status === 'RENEGOTIATED' && inst.promiseDate && inst.promiseDate.split('T')[0] > todayStr;
                   const mostrarBotones = (inst.status === 'PENDING' || inst.status === 'PARTIAL' || inst.status === 'OVERDUE' || (inst.status === 'RENEGOTIATED' && faltanteActual > 0)) && !isRenegociadaFutura;
 
                   return (
@@ -1032,7 +1072,6 @@ export default function CarteraActiva() {
               <p className="text-sm text-slate-400">Verifica los valores antes de entregar el efectivo.</p>
             </div>
 
-
      <div className="grid grid-cols-2 gap-3 mb-6">
               {/* Tarjeta Principal: Recaudo */}
               <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl col-span-2 text-center shadow-inner">
@@ -1040,7 +1079,7 @@ export default function CarteraActiva() {
                 <p className="text-3xl font-bold text-emerald-400">${closureSummary.totalCollected?.toLocaleString('es-CO')}</p>
               </div>
 
-              {/* NUEVO: Tarjeta de Inversiones y Retiros combinada */}
+              {/* Tarjeta de Inversiones y Retiros combinada */}
               <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl col-span-2 flex justify-between items-center">
                  <div className="text-center w-1/2 border-r border-white/10">
                    <p className="text-[10px] text-emerald-500/80 font-bold uppercase tracking-wider mb-1">Inversiones Hoy</p>
@@ -1070,8 +1109,6 @@ export default function CarteraActiva() {
                 <p className="text-sm font-bold text-white">${closureSummary.renewals?.toLocaleString('es-CO')}</p>
               </div>
             </div>
-
-
 
             <div className="flex justify-between items-center mb-6 px-3 text-[10px] sm:text-xs text-slate-400 font-medium bg-white/5 py-2.5 rounded-lg">
               <span className="flex flex-col items-center gap-1"><FiMapPin size={14} /> Total: {closureSummary.totalClients}</span>
