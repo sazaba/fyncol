@@ -52,19 +52,53 @@ const COUNTRY_CODES = [
   { code: '+591', country: 'Bolivia', aliases: ['bolivia'] },
 ];
 
+// NUEVO: Diccionario para anclar la zona horaria real según el país
+const COUNTRY_TIMEZONES: Record<string, string> = {
+  'Colombia': 'America/Bogota',
+  'México': 'America/Mexico_City',
+  'Perú': 'America/Lima',
+  'Argentina': 'America/Argentina/Buenos_Aires',
+  'Chile': 'America/Santiago',
+  'Ecuador': 'America/Guayaquil',
+  'Venezuela': 'America/Caracas',
+  'Panamá': 'America/Panama',
+  'España': 'Europe/Madrid',
+  'USA/Canadá': 'America/New_York', 
+  'Brasil': 'America/Sao_Paulo', 
+  'Uruguay': 'America/Montevideo',
+  'Paraguay': 'America/Asuncion',
+  'Bolivia': 'America/La_Paz',
+};
+
 export default function NuevoCredito() {
-  const getTodayLocalFormatted = () => {
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
+  
+  // NUEVO HELPER: Calcula la fecha exacta basada en el país de la ruta
+  const getRouteDateStr = (countryStr?: string, addDays: number = 0) => {
+    let tz = Intl.DateTimeFormat().resolvedOptions().timeZone; // Fallback navegador
+    if (countryStr) {
+      const match = COUNTRY_CODES.find(c => c.aliases.some(alias => countryStr.toLowerCase().trim().includes(alias)));
+      if (match && COUNTRY_TIMEZONES[match.country]) {
+        tz = COUNTRY_TIMEZONES[match.country];
+      }
+    }
+    
+    // Obtenemos la hora actual en esa zona horaria específica
+    const nowStr = new Date().toLocaleString("en-US", { timeZone: tz });
+    const routeDate = new Date(nowStr);
+    
+    routeDate.setDate(routeDate.getDate() + addDays);
+    
+    const yyyy = routeDate.getFullYear();
+    const mm = String(routeDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(routeDate.getDate()).padStart(2, '0');
+    
     return `${yyyy}-${mm}-${dd}`;
   };
 
   const [formData, setFormData] = useState<ClientFormData>({
     name: '', documentId: '', phone: '', address: '', routeId: '',
     amount: '', installments: '', interestRate: '', 
-    periodicity: 'MENSUAL', firstPaymentDate: getTodayLocalFormatted() 
+    periodicity: 'MENSUAL', firstPaymentDate: getRouteDateStr() 
   });
   
   const [location, setLocation] = useState<LocationData>({ latitude: null, longitude: null });
@@ -173,23 +207,19 @@ export default function NuevoCredito() {
     }
   }, [rutaAsignada]);
 
+  // CORRECCIÓN: Calcular la fecha de primer pago usando el Timezone de la ruta
   useEffect(() => {
-    const today = new Date();
     let daysToAdd = 1; 
 
     if (formData.periodicity === 'QUINCENAL') daysToAdd = 15;
     if (formData.periodicity === 'MENSUAL') daysToAdd = 30;
 
-    today.setDate(today.getDate() + daysToAdd);
+    const newPaymentDate = getRouteDateStr(rutaAsignada?.country, daysToAdd);
     
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    
-    setFormData(prev => ({ ...prev, firstPaymentDate: `${yyyy}-${mm}-${dd}` }));
-  }, [formData.periodicity]);
+    setFormData(prev => ({ ...prev, firstPaymentDate: newPaymentDate }));
+  }, [formData.periodicity, rutaAsignada?.country]);
 
-  // --- FIX DE CÁLCULOS ALINEADOS CON EL BACKEND ---
+  // CORRECCIÓN: Base matemática alineada a la zona horaria
   const creditMetrics = useMemo(() => {
     const amountNum = parseFloat(formData.amount) || 0;
     const interestNum = parseFloat(formData.interestRate) || 0;
@@ -203,7 +233,10 @@ export default function NuevoCredito() {
     if (formData.periodicity === 'QUINCENAL') daysPerInstallment = 15;
     if (formData.periodicity === 'MENSUAL') daysPerInstallment = 30;
 
-    const today = new Date();
+    // Calculamos "Hoy" usando la zona de la ruta asignada
+    const todayStr = getRouteDateStr(rutaAsignada?.country, 0);
+    const [tYear, tMonth, tDay] = todayStr.split('-');
+    const today = new Date(parseInt(tYear), parseInt(tMonth) - 1, parseInt(tDay));
     today.setHours(0, 0, 0, 0);
     
     const [year, month, day] = formData.firstPaymentDate.split('-');
@@ -220,10 +253,7 @@ export default function NuevoCredito() {
 
     const exactProjectedTotal = amountNum + totalInterestExact;
     
-    // 1. Redondeamos la cuota al entero superior
     const installmentValue = Math.ceil(exactProjectedTotal / installmentsNum);
-    
-    // 2. Multiplicamos la cuota exacta por los meses para obtener el total a mostrar
     const total = installmentValue * installmentsNum;
 
     const schedule = [];
@@ -248,8 +278,7 @@ export default function NuevoCredito() {
       currentBalance -= installmentValue;
     }
     return { total, installmentValue, schedule };
-  }, [formData.amount, formData.interestRate, formData.installments, formData.periodicity, formData.firstPaymentDate]);
-  // ------------------------------------------------
+  }, [formData.amount, formData.interestRate, formData.installments, formData.periodicity, formData.firstPaymentDate, rutaAsignada?.country]);
 
   const handleGetLocation = () => {
     if (navigator.geolocation) {
@@ -289,8 +318,6 @@ export default function NuevoCredito() {
     return json.secure_url;
   };
 
-
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -322,14 +349,12 @@ export default function NuevoCredito() {
       const responseData = await response.json().catch(() => null);
       
       if (!response.ok) {
-        // Capturamos el error específico de la deuda activa
         if (responseData?.errorType === "ACTIVE_DEBT") {
           throw new Error(responseData.error);
         }
         throw new Error(responseData?.error || "Error del servidor");
       }
 
-      // Evaluamos si el cliente tiene deudas en otras oficinas (Punto 4)
       let titleMsg = "Crédito Registrado";
       let successMsg = "El cliente y su préstamo inicial se guardaron correctamente.";
       let alertVariant: AlertVariant = "success";
@@ -337,7 +362,7 @@ export default function NuevoCredito() {
       if (responseData.otherActiveLoansCount > 0) {
         titleMsg = "Crédito Creado con Alerta";
         successMsg = `El préstamo se registró. OJO: Este cliente tiene ${responseData.otherActiveLoansCount} crédito(s) activo(s) en otras oficinas.`;
-        alertVariant = "info"; // Usamos info para que sea visualmente diferente al éxito normal
+        alertVariant = "info"; 
       }
 
       openAlert({
@@ -347,10 +372,11 @@ export default function NuevoCredito() {
         confirmText: "Listo",
         onConfirm: () => {
           closeAlert();
+          // Reset formulario anclando la fecha de la nueva inserción al time zone actual
           setFormData({ 
             name: '', documentId: '', phone: '', address: '', routeId: rutaAsignada?.id.toString() || '', 
             amount: '', installments: '', interestRate: '', 
-            periodicity: 'DIARIO', firstPaymentDate: getTodayLocalFormatted()
+            periodicity: 'DIARIO', firstPaymentDate: getRouteDateStr(rutaAsignada?.country, 1)
           });
           setLocation({ latitude: null, longitude: null });
           setFile(null);
@@ -376,11 +402,6 @@ export default function NuevoCredito() {
       setIsSubmitting(false);
     }
   };
-
-
-
-
-
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
