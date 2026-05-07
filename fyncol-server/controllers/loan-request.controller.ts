@@ -1,4 +1,3 @@
-// fyncol-server/controllers/loan-request.controller.ts
 import { Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { AuthRequest } from "../middleware/auth.middleware";
@@ -7,14 +6,12 @@ const prisma = new PrismaClient();
 
 /**
  * 1. OBTENER SOLICITUDES PENDIENTES (PANEL ADMIN)
- * Lista todas las solicitudes de crédito que superaron el tope en las rutas de esta empresa.
  */
 export const getPendingRequests = async (req: AuthRequest, res: Response) => {
   try {
     const companyId = req.user?.companyId;
     if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
 
-    // Solo ADMIN o SUPERADMIN deberían ver este panel
     if (req.user?.role !== "ADMIN" && req.user?.role !== "SUPERADMIN") {
       return res.status(403).json({ error: "Acceso denegado. Requiere privilegios de administrador." });
     }
@@ -22,7 +19,7 @@ export const getPendingRequests = async (req: AuthRequest, res: Response) => {
     const requests = await prisma.loanRequest.findMany({
       where: {
         status: "PENDING",
-        route: { companyId } // BLINDAJE SAAS
+        route: { companyId }
       },
       include: {
         client: {
@@ -46,8 +43,7 @@ export const getPendingRequests = async (req: AuthRequest, res: Response) => {
 };
 
 /**
- * 2. APROBAR SOLICITUD DE CRÉDITO
- * Crea el Loan, genera la tabla de amortización y descuenta el capital.
+ * 2. APROBAR SOLICITUD DE CRÉDITO (CON AJUSTES)
  */
 export const approveRequest = async (req: AuthRequest, res: Response) => {
   try {
@@ -56,8 +52,10 @@ export const approveRequest = async (req: AuthRequest, res: Response) => {
 
     const requestId = parseInt(req.params.id as string);
 
+    // CAPTURAMOS AJUSTES OPCIONALES DESDE EL FRONTEND
+    const { adjustedAmount, adjustedInstallments, adjustedInterestRate } = req.body;
+
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Buscar la solicitud y validar
       const loanRequest = await tx.loanRequest.findFirst({
         where: { id: requestId, route: { companyId } },
         include: { route: true, client: true }
@@ -66,17 +64,16 @@ export const approveRequest = async (req: AuthRequest, res: Response) => {
       if (!loanRequest) throw new Error("Solicitud no encontrada o no autorizada.");
       if (loanRequest.status !== "PENDING") throw new Error("Esta solicitud ya fue procesada.");
 
-      const amountNum = Number(loanRequest.amount);
+      // USAMOS VALOR AJUSTADO O EL ORIGINAL DE LA SOLICITUD
+      const amountNum = adjustedAmount ? Number(adjustedAmount) : Number(loanRequest.amount);
+      const interestNum = adjustedInterestRate ? Number(adjustedInterestRate) : Number(loanRequest.interestRate);
+      const installmentsNum = adjustedInstallments ? Number(adjustedInstallments) : loanRequest.installments;
 
-      // 2. Validar que la ruta siga teniendo capital suficiente
       if (Number(loanRequest.route.availableCapital) < amountNum) {
         throw new Error(`La ruta no tiene capital suficiente. Disponible: ${loanRequest.route.availableCapital}`);
       }
 
-      // 3. REPLICA DE MATEMÁTICA FINANCIERA (Igual que en client.controller)
-      const interestNum = Number(loanRequest.interestRate);
-      const installmentsNum = loanRequest.installments;
-
+      // MATEMÁTICA FINANCIERA RECALCULADA
       let daysPerInstallment = 1; 
       if (loanRequest.periodicity === 'QUINCENAL') daysPerInstallment = 15;
       if (loanRequest.periodicity === 'MENSUAL') daysPerInstallment = 30;
@@ -116,17 +113,14 @@ export const approveRequest = async (req: AuthRequest, res: Response) => {
         else currentDate.setDate(currentDate.getDate() + 1);
       }
 
-      // 4. Verificar si es renovación o crédito nuevo
       const pastLoansCount = await tx.loan.count({ where: { clientId: loanRequest.clientId } });
       const isRenewal = pastLoansCount > 0;
 
-      // 5. MARCAR SOLICITUD COMO APROBADA
       await tx.loanRequest.update({
         where: { id: requestId },
         data: { status: "APPROVED" }
       });
 
-      // 6. CREAR EL PRÉSTAMO REAL
       const newLoan = await tx.loan.create({
         data: {
           clientId: loanRequest.clientId,
@@ -141,7 +135,6 @@ export const approveRequest = async (req: AuthRequest, res: Response) => {
         }
       });
 
-      // 7. DESCONTAR CAPITAL DE LA RUTA
       await tx.route.update({
         where: { id: loanRequest.routeId },
         data: { availableCapital: { decrement: amountNum } }
@@ -150,7 +143,7 @@ export const approveRequest = async (req: AuthRequest, res: Response) => {
       return newLoan;
     });
 
-    return res.status(200).json({ success: true, message: "Préstamo aprobado y capital asignado.", data: result });
+    return res.status(200).json({ success: true, message: "Préstamo aprobado con éxito.", data: result });
 
   } catch (error: any) {
     console.error("Error al aprobar solicitud:", error);
@@ -172,12 +165,8 @@ export const rejectRequest = async (req: AuthRequest, res: Response) => {
       where: { id: requestId, route: { companyId } }
     });
 
-    if (!loanRequest) {
-      return res.status(404).json({ error: "Solicitud no encontrada o no autorizada." });
-    }
-
-    if (loanRequest.status !== "PENDING") {
-      return res.status(400).json({ error: "Esta solicitud ya fue procesada anteriormente." });
+    if (!loanRequest || loanRequest.status !== "PENDING") {
+      return res.status(404).json({ error: "Solicitud no encontrada o ya procesada." });
     }
 
     const updatedRequest = await prisma.loanRequest.update({
@@ -185,10 +174,10 @@ export const rejectRequest = async (req: AuthRequest, res: Response) => {
       data: { status: "REJECTED" }
     });
 
-    return res.status(200).json({ success: true, message: "Solicitud rechazada correctamente.", data: updatedRequest });
+    return res.status(200).json({ success: true, message: "Solicitud rechazada.", data: updatedRequest });
 
   } catch (error: any) {
     console.error("Error al rechazar solicitud:", error);
-    return res.status(500).json({ error: "Error interno al rechazar la solicitud." });
+    return res.status(500).json({ error: "Error interno del servidor." });
   }
 };
