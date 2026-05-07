@@ -10,6 +10,7 @@ import capitalRoutes from './routes/capital.routes';
 import clientRoutes from './routes/client.routes';
 import closureRoutes from './routes/closure.routes';
 import monitoringRoutes from './routes/monitoring.routes';
+import { startCronJobs } from "./utils/cron.utils";
 
 dotenv.config();
 
@@ -34,6 +35,7 @@ app.use('/api/capital', capitalRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/closure', closureRoutes);
 app.use('/api/monitoring', monitoringRoutes);
+startCronJobs(); // <-- EJECUTA AQUÍ
 
 app.get("/", (_req: Request, res: Response) => {
   res.send("Fyncol API con Prisma 🚀 - Online");
