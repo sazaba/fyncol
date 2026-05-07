@@ -19,7 +19,8 @@ import {
   FiCreditCard,
   FiPhone,
   FiShield,
-  FiX
+  FiX,
+  FiActivity // <-- Añadido para el icono del tope de crédito
 } from "react-icons/fi";
 
 // --- Interfaces ---
@@ -41,6 +42,7 @@ interface Route {
   city: string;
   currency: string;
   assignedTo?: User | null;
+  maxLoanPerClient?: number; // <-- Añadido en la interfaz
 }
 
 type AlertVariant = "info" | "success" | "danger";
@@ -76,6 +78,7 @@ export default function Rutas() {
   const [selectedCity, setSelectedCity] = useState('');
   const [currency, setCurrency] = useState('');
   const [assignedToId, setAssignedToId] = useState('');
+  const [maxLoanPerClient, setMaxLoanPerClient] = useState(''); // <-- NUEVO ESTADO PARA EL TOPE
 
   const [alertState, setAlertState] = useState<PremiumAlertState>({ open: false, variant: "info", title: "", message: "" });
   
@@ -156,7 +159,8 @@ export default function Rutas() {
           country: Country.getCountryByCode(selectedCountry)?.name || '',
           city: selectedCity,
           currency,
-          assignedToId: assignedToId ? Number(assignedToId) : null
+          assignedToId: assignedToId ? Number(assignedToId) : null,
+          maxLoanPerClient: maxLoanPerClient ? Number(maxLoanPerClient) : 0 // <-- ENVIAR EL NUEVO TOPE AL BACKEND
         })
       });
 
@@ -164,6 +168,7 @@ export default function Rutas() {
         const result = await res.json();
         setRoutes([...routes, result.data || result]);
         setSelectedCountry(''); setSelectedState(''); setSelectedCity(''); setCurrency(''); setAssignedToId('');
+        setMaxLoanPerClient(''); // <-- Limpiar el campo
         openAlert({ variant: "success", title: "Éxito", message: "Ruta creada." });
       }
     } catch {
@@ -293,13 +298,32 @@ export default function Rutas() {
             <SearchableSelect label="País" icon={FiGlobe} options={countries} value={selectedCountry} onChange={handleCountryChange} />
             <SearchableSelect label="Estado" icon={FiMapPin} options={states} value={selectedState} onChange={(val: string) => {setSelectedState(val); setSelectedCity('');}} disabled={!selectedCountry} />
             <SearchableSelect label="Ciudad" icon={FiMap} options={cities} value={selectedCity} onChange={setSelectedCity} disabled={!selectedState} />
-            <div className="space-y-2 relative group">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1 font-sans">Divisa</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-blue-400/50"><FiDollarSign size={18} /></div>
-                <input type="text" value={currency} readOnly placeholder="Autocompletado" className="w-full bg-[#05050A]/40 border border-white/5 rounded-2xl pl-11 pr-4 py-3.5 text-base md:text-sm text-blue-400 font-bold outline-none cursor-not-allowed" />
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2 relative group">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1 font-sans">Divisa</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-blue-400/50"><FiDollarSign size={18} /></div>
+                  <input type="text" value={currency} readOnly placeholder="Auto" className="w-full bg-[#05050A]/40 border border-white/5 rounded-2xl pl-11 pr-4 py-3.5 text-base md:text-sm text-blue-400 font-bold outline-none cursor-not-allowed" />
+                </div>
+              </div>
+
+              {/* NUEVO CAMPO: TOPE DE CRÉDITO */}
+              <div className="space-y-2 relative group">
+                <label className="text-[10px] font-bold text-amber-500/80 uppercase tracking-widest pl-1 font-sans">Tope Crédito</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-amber-500/60"><FiActivity size={18} /></div>
+                  <input 
+                    type="number" 
+                    value={maxLoanPerClient} 
+                    onChange={(e) => setMaxLoanPerClient(e.target.value)}
+                    placeholder="Sin límite (0)" 
+                    className="w-full bg-[#0B1020]/50 border border-amber-500/20 rounded-2xl pl-11 pr-4 py-3.5 text-base md:text-sm text-white focus:border-amber-500/50 outline-none focus:ring-4 focus:ring-amber-500/10 transition-all shadow-inner" 
+                  />
+                </div>
               </div>
             </div>
+
             <SearchableSelect 
               label="Asignar Cobrador" icon={FiUser} 
               options={freeUsers.map(c => ({ label: c.name, value: c.id.toString() }))} 
@@ -329,7 +353,15 @@ export default function Rutas() {
                     Ruta {ruta.id}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="text-white font-bold text-lg truncate font-display">{ruta.city}, {ruta.country}</h4>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="text-white font-bold text-lg truncate font-display">{ruta.city}, {ruta.country}</h4>
+                      {/* INDICADOR DE TOPE EN LA LISTA */}
+                      {Number(ruta.maxLoanPerClient) > 0 && (
+                        <span className="text-[9px] font-bold bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20 uppercase tracking-wider flex items-center gap-1">
+                          <FiActivity /> Tope: {Number(ruta.maxLoanPerClient).toLocaleString('es-CO')}
+                        </span>
+                      )}
+                    </div>
                     <span className="text-[10px] font-black bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20 uppercase tracking-tighter">{ruta.currency}</span>
                   </div>
                   <div className="w-full md:w-64">

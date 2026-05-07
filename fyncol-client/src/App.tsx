@@ -15,6 +15,7 @@ const Rutas = lazy(() => import("./pages/admin/Rutas"));
 const GestionCapital = lazy(() => import("./pages/admin/GestionCapital"));
 const CierresDiarios = lazy(() => import("./pages/admin/CierresDiarios"));
 const Monitoreo = lazy(() => import("./pages/admin/Monitoreo"));
+const SolicitudesCredito = lazy(() => import("./pages/admin/SolicitudesCredito"));
 
 const NuevoCredito = lazy(() => import("./pages/cartera/NuevoCredito"));
 const CarteraActiva = lazy(() => import("./pages/cartera/CarteraActiva"));
@@ -56,6 +57,7 @@ export default function App() {
                 <Route path="/admin/capital" element={<GestionCapital />} />
                 <Route path="/admin/cierres" element={<CierresDiarios />} />
                 <Route path="/admin/monitoreo" element={<Monitoreo />} />
+                <Route path="/admin/solicitudes" element={<SolicitudesCredito />} />
               </Route>
 
             </Route>
