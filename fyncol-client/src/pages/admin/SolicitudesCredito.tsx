@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { FiCheck, FiX, FiClock, FiUser, FiDollarSign, FiMapPin, FiActivity, FiEdit3, FiPercent, FiHash } from 'react-icons/fi';
+import { FiCheck, FiX, FiClock, FiUser, FiDollarSign, FiMapPin, FiActivity, FiEdit3, FiPercent, FiHash, FiLoader } from 'react-icons/fi';
 
 interface LoanRequest {
   id: number;
@@ -8,7 +8,7 @@ interface LoanRequest {
   interestRate: number;
   periodicity: string;
   client: { name: string; documentId: string };
-  route: { id: number; city: string; availableCapital: number };
+  route: { id: number; city: string; availableCapital: number | string };
   requestedBy: { name: string };
   createdAt: string;
 }
@@ -28,10 +28,18 @@ const SolicitudesCredito: React.FC = () => {
 
   const fetchRequests = async () => {
     try {
-      const response = await fetch('/api/loan-requests/pending');
+      const token = localStorage.getItem("token");
+      const response = await fetch('/api/loan-requests/pending', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       const result = await response.json();
-      if (result.success) {
+      
+      if (result.success && Array.isArray(result.data)) {
         setRequests(result.data);
+      } else {
+        console.warn("La respuesta no contiene un array válido de data:", result);
       }
     } catch (error) {
       console.error("Error al cargar solicitudes:", error);
@@ -44,7 +52,7 @@ const SolicitudesCredito: React.FC = () => {
     setSelectedRequest(req);
     setEditForm({
       amount: Number(req.amount),
-      installments: req.installments,
+      installments: Number(req.installments),
       interest: Number(req.interestRate)
     });
   };
@@ -54,9 +62,13 @@ const SolicitudesCredito: React.FC = () => {
     setIsProcessing(true);
 
     try {
+      const token = localStorage.getItem("token");
       const response = await fetch(`/api/loan-requests/${selectedRequest.id}/approve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           adjustedAmount: editForm.amount,
           adjustedInstallments: editForm.installments,
@@ -70,10 +82,11 @@ const SolicitudesCredito: React.FC = () => {
         setRequests(prev => prev.filter(r => r.id !== selectedRequest.id));
         setSelectedRequest(null);
       } else {
-        alert(result.error || "Error al aprobar");
+        alert(result.error || "Error al aprobar la solicitud");
       }
     } catch (error) {
-      console.error("Error:", error);
+      console.error("Error al confirmar aprobación:", error);
+      alert("Error de conexión al aprobar.");
     } finally {
       setIsProcessing(false);
     }
@@ -82,12 +95,20 @@ const SolicitudesCredito: React.FC = () => {
   const handleReject = async (id: number) => {
     if (!window.confirm("¿Estás seguro de rechazar esta solicitud?")) return;
     try {
-      const response = await fetch(`/api/loan-requests/${id}/reject`, { method: 'POST' });
+      const token = localStorage.getItem("token");
+      const response = await fetch(`/api/loan-requests/${id}/reject`, { 
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
       if (response.ok) {
         setRequests(prev => prev.filter(r => r.id !== id));
+      } else {
+         const result = await response.json();
+         alert(result.error || "Error al rechazar");
       }
     } catch (error) {
-      console.error("Error:", error);
+      console.error("Error al rechazar:", error);
     }
   };
 
@@ -112,7 +133,7 @@ const SolicitudesCredito: React.FC = () => {
       {/* Lista */}
       {loading ? (
         <div className="flex justify-center py-20">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          <FiLoader className="animate-spin text-blue-500 h-8 w-8" />
         </div>
       ) : requests.length === 0 ? (
         <div className="text-center py-24 bg-white/[0.02] rounded-3xl border border-dashed border-white/10">
@@ -124,7 +145,7 @@ const SolicitudesCredito: React.FC = () => {
           {requests.map((req) => (
             <div
               key={req.id}
-              className="group bg-white/[0.03] border border-white/10 rounded-2xl p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6 hover:bg-white/[0.05] transition-all"
+              className="group bg-white/[0.03] border border-white/10 rounded-2xl p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6 hover:bg-white/[0.05] transition-all shadow-lg"
             >
               <div className="flex items-center gap-5">
                 <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
@@ -218,7 +239,7 @@ const SolicitudesCredito: React.FC = () => {
                 disabled={isProcessing}
                 className="w-full py-4 rounded-2xl bg-white text-black font-bold hover:bg-blue-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                {isProcessing ? <div className="animate-spin h-5 w-5 border-2 border-black border-t-transparent rounded-full" /> : <><FiCheck /> Confirmar Aprobación</>}
+                {isProcessing ? <FiLoader className="animate-spin h-5 w-5" /> : <><FiCheck /> Confirmar Aprobación</>}
               </button>
               <button 
                 onClick={() => setSelectedRequest(null)} 
