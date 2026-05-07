@@ -20,7 +20,9 @@ import {
   FiPhone,
   FiShield,
   FiX,
-  FiActivity // <-- Añadido para el icono del tope de crédito
+  FiActivity,
+  FiEdit2, // <-- Añadido para editar tope
+  FiSave   // <-- Añadido para guardar tope
 } from "react-icons/fi";
 
 // --- Interfaces ---
@@ -42,7 +44,7 @@ interface Route {
   city: string;
   currency: string;
   assignedTo?: User | null;
-  maxLoanPerClient?: number; // <-- Añadido en la interfaz
+  maxLoanPerClient?: number;
 }
 
 type AlertVariant = "info" | "success" | "danger";
@@ -78,7 +80,11 @@ export default function Rutas() {
   const [selectedCity, setSelectedCity] = useState('');
   const [currency, setCurrency] = useState('');
   const [assignedToId, setAssignedToId] = useState('');
-  const [maxLoanPerClient, setMaxLoanPerClient] = useState(''); // <-- NUEVO ESTADO PARA EL TOPE
+  const [maxLoanPerClient, setMaxLoanPerClient] = useState(''); 
+
+  // --- NUEVOS ESTADOS PARA EDICIÓN DE TOPE EN LISTA ---
+  const [editingLimitId, setEditingLimitId] = useState<number | null>(null);
+  const [tempLimit, setTempLimit] = useState<string>('');
 
   const [alertState, setAlertState] = useState<PremiumAlertState>({ open: false, variant: "info", title: "", message: "" });
   
@@ -160,7 +166,7 @@ export default function Rutas() {
           city: selectedCity,
           currency,
           assignedToId: assignedToId ? Number(assignedToId) : null,
-          maxLoanPerClient: maxLoanPerClient ? Number(maxLoanPerClient) : 0 // <-- ENVIAR EL NUEVO TOPE AL BACKEND
+          maxLoanPerClient: maxLoanPerClient ? Number(maxLoanPerClient) : 0 
         })
       });
 
@@ -168,12 +174,36 @@ export default function Rutas() {
         const result = await res.json();
         setRoutes([...routes, result.data || result]);
         setSelectedCountry(''); setSelectedState(''); setSelectedCity(''); setCurrency(''); setAssignedToId('');
-        setMaxLoanPerClient(''); // <-- Limpiar el campo
+        setMaxLoanPerClient(''); 
         openAlert({ variant: "success", title: "Éxito", message: "Ruta creada." });
       }
     } catch {
       openAlert({ variant: "danger", title: "Error", message: "Fallo al crear." });
     } finally { setIsSaving(false); }
+  };
+
+  // --- NUEVA FUNCIÓN PARA ACTUALIZAR EL TOPE EN EL BACKEND ---
+  const handleUpdateLimit = async (routeId: number) => {
+    setBusyId(routeId);
+    try {
+      const res = await fetch(`${API_URL}/rutas/${routeId}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ maxLoanPerClient: Number(tempLimit) || 0 })
+      });
+
+      if (res.ok) {
+        setRoutes(prev => prev.map(r => r.id === routeId ? { ...r, maxLoanPerClient: Number(tempLimit) } : r));
+        setEditingLimitId(null);
+        openAlert({ variant: "success", title: "Actualizado", message: "Tope de crédito actualizado." });
+      } else {
+        throw new Error("Error al actualizar la ruta en la base de datos.");
+      }
+    } catch (err: any) {
+      openAlert({ variant: "danger", title: "Error", message: err.message });
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const confirmReassign = (routeId: number, newUserId: string) => {
@@ -308,7 +338,6 @@ export default function Rutas() {
                 </div>
               </div>
 
-              {/* NUEVO CAMPO: TOPE DE CRÉDITO */}
               <div className="space-y-2 relative group">
                 <label className="text-[10px] font-bold text-amber-500/80 uppercase tracking-widest pl-1 font-sans">Tope Crédito</label>
                 <div className="relative">
@@ -353,13 +382,39 @@ export default function Rutas() {
                     Ruta {ruta.id}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h4 className="text-white font-bold text-lg truncate font-display">{ruta.city}, {ruta.country}</h4>
-                      {/* INDICADOR DE TOPE EN LA LISTA */}
-                      {Number(ruta.maxLoanPerClient) > 0 && (
-                        <span className="text-[9px] font-bold bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20 uppercase tracking-wider flex items-center gap-1">
-                          <FiActivity /> Tope: {Number(ruta.maxLoanPerClient).toLocaleString('es-CO')}
-                        </span>
+                      
+                      {/* --- INDICADOR DE TOPE EDITABLE EN LA LISTA --- */}
+                      {editingLimitId === ruta.id ? (
+                        <div className="flex items-center gap-1">
+                          <div className="relative">
+                            <FiActivity className="absolute left-2 top-1/2 -translate-y-1/2 text-amber-500/60" size={10} />
+                            <input
+                              type="number"
+                              autoFocus
+                              value={tempLimit}
+                              onChange={(e) => setTempLimit(e.target.value)}
+                              className="w-24 bg-amber-500/5 border border-amber-500/30 rounded-lg pl-6 pr-2 py-0.5 text-[10px] text-white outline-none focus:border-amber-500 transition-all font-bold"
+                              placeholder="Nuevo tope"
+                            />
+                          </div>
+                          <button onClick={() => handleUpdateLimit(ruta.id)} disabled={busyId === ruta.id} className="p-1 bg-emerald-500/20 text-emerald-400 rounded-md hover:bg-emerald-500/40 transition-all disabled:opacity-50 cursor-pointer"><FiSave size={12}/></button>
+                          <button onClick={() => setEditingLimitId(null)} disabled={busyId === ruta.id} className="p-1 bg-white/5 text-slate-400 rounded-md hover:bg-white/10 transition-all disabled:opacity-50 cursor-pointer"><FiX size={12}/></button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 group/editlimit">
+                          <span className="text-[9px] font-bold bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20 uppercase tracking-wider flex items-center gap-1">
+                            <FiActivity /> Tope: {Number(ruta.maxLoanPerClient || 0).toLocaleString('es-CO')}
+                          </span>
+                          <button
+                            onClick={() => { setEditingLimitId(ruta.id); setTempLimit(ruta.maxLoanPerClient?.toString() || '0'); }}
+                            className="opacity-0 group-hover/editlimit:opacity-100 p-1 text-slate-500 hover:text-amber-400 transition-all cursor-pointer"
+                            title="Editar Tope"
+                          >
+                            <FiEdit2 size={12} />
+                          </button>
+                        </div>
                       )}
                     </div>
                     <span className="text-[10px] font-black bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20 uppercase tracking-tighter">{ruta.currency}</span>

@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png"; 
 import { 
   FiHome, FiSettings, FiUsers, FiLogOut, FiChevronDown, FiX, 
-  FiGlobe, FiMap, FiDollarSign, FiBriefcase, FiUserPlus, FiCheckCircle, FiShield, FiActivity 
+  FiGlobe, FiMap, FiDollarSign, FiBriefcase, FiUserPlus, FiCheckCircle, FiShield, FiActivity, FiInbox 
 } from "react-icons/fi";
 
 export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (val: boolean) => void }) {
@@ -91,7 +91,7 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
                 <FiChevronDown className={`transition-transform duration-300 ${isAdminOpen ? "rotate-180 text-white" : ""}`} />
               </button>
 
-              <div className={`overflow-hidden transition-all duration-300 ${isAdminOpen ? "max-h-60 opacity-100" : "max-h-0 opacity-0"}`}> 
+              <div className={`overflow-hidden transition-all duration-300 ${isAdminOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"}`}> 
                 <div className="mt-1 ml-4 border-l border-white/10 pl-2 space-y-1">
                   <Link 
                     to="/admin/usuarios" 
@@ -122,6 +122,15 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
                     <FiCheckCircle size={16} /> Cierres Diarios
                   </Link>
                   
+                  {/* BOTÓN: SOLICITUDES CRÉDITO */}
+                  <Link 
+                    to="/admin/solicitudes" 
+                    onClick={() => setIsOpen(false)} 
+                    className={`flex items-center gap-2 w-full text-left rounded-lg px-3 py-2 text-sm ${isActive("/admin/solicitudes") ? "text-blue-400 bg-blue-500/10 font-medium" : "text-slate-500 hover:text-white hover:bg-white/5 transition-colors"}`}
+                  >
+                    <FiInbox size={16} /> Solicitudes Crédito
+                  </Link>
+
                   {/* BOTÓN: MONITOREO */}
                   <Link 
                     to="/admin/monitoreo" 
