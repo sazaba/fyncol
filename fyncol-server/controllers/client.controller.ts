@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from "../middleware/auth.middleware";
+import { getDayLimitsByOffset, COUNTRY_TIMEZONES } from '../utils/time.utils';
 
 const prisma = new PrismaClient();
 
@@ -312,13 +313,42 @@ export const updateInstallmentStatus = async (req: AuthRequest, res: Response) =
     const amountNum = parseFloat(paidAmount) || 0;
 
     const result = await prisma.$transaction(async (tx) => {
-      const installment = await tx.installment.findFirst({ // SAAS-BLINDAJE
+      const installment = await tx.installment.findFirst({ 
         where: { 
           id: parseInt(id),
-          loan: { client: { route: { companyId } } } // SAAS-BLINDAJE
+          loan: { client: { route: { companyId } } } 
         },
-        include: { loan: { include: { client: true } } }
+        // 👇 CAMBIO AQUÍ: Le decimos a Prisma que incluya al cliente Y a su ruta
+        include: { 
+          loan: { 
+            include: { 
+              client: { 
+                include: { route: true } 
+              } 
+            } 
+          } 
+        }
       });
+      if (!installment) throw new Error("La cuota no existe o no estás autorizado.");
+
+      // ==========================================
+      // BLINDAJE: VERIFICAR SI LA RUTA ESTÁ CERRADA HOY
+      // ==========================================
+      const routeCountry = installment.loan.client.route.country || 'Colombia'; // Asume Colombia por defecto si no hay país
+      const offset = COUNTRY_TIMEZONES[routeCountry] ?? -5;
+      const { startOfDay, endOfDay } = getDayLimitsByOffset(offset);
+
+      const routeIsClosed = await tx.dailyClosure.findFirst({
+        where: {
+          routeId: installment.loan.client.routeId,
+          closedAt: { gte: startOfDay, lte: endOfDay }
+        }
+      });
+
+      if (routeIsClosed) {
+        throw new Error("RUTA_CERRADA: La caja de esta ruta ya fue cerrada por el día de hoy. No se pueden registrar más pagos.");
+      }
+      // ==========================================
 
       if (!installment) throw new Error("La cuota no existe o no estás autorizado.");
 
@@ -682,8 +712,34 @@ export const liquidarPrestamo = async (req: AuthRequest, res: Response) => {
           id: loanId, 
           client: { route: { companyId } } 
         },
-        include: { client: true, installmentDetails: true }
+        // 👇 CAMBIO AQUÍ: Incluimos los detalles de la cuota y la ruta del cliente
+        include: { 
+          client: { 
+            include: { route: true } 
+          }, 
+          installmentDetails: true 
+        }
       });
+      if (!loan || !loan.isActive) throw new Error("Préstamo no existe o ya está cancelado.");
+
+      // ==========================================
+      // BLINDAJE: VERIFICAR SI LA RUTA ESTÁ CERRADA HOY
+      // ==========================================
+      const routeCountry = loan.client.route.country || 'Colombia';
+      const offset = COUNTRY_TIMEZONES[routeCountry] ?? -5;
+      const { startOfDay, endOfDay } = getDayLimitsByOffset(offset);
+
+      const routeIsClosed = await tx.dailyClosure.findFirst({
+        where: {
+          routeId: loan.client.routeId,
+          closedAt: { gte: startOfDay, lte: endOfDay }
+        }
+      });
+
+      if (routeIsClosed) {
+        throw new Error("RUTA_CERRADA: La caja de esta ruta ya fue cerrada por el día de hoy.");
+      }
+      // ==========================================
 
       if (!loan || !loan.isActive) throw new Error("Préstamo no existe o ya está cancelado.");
 

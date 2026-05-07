@@ -21,7 +21,6 @@ export const COUNTRY_TIMEZONES: Record<string, number> = {
   'España': +1,
   'USA': -5 // Base: EST
 };
-
 export const getDayLimitsByOffset = (utcOffset: number) => {
   const now = new Date();
   
@@ -32,23 +31,13 @@ export const getDayLimitsByOffset = (utcOffset: number) => {
   const localStart = new Date(localTime);
   const localEnd = new Date(localTime);
 
-  // TRUE = El cierre se hace al mediodía (12:00 PM)
-  const corteAlMediodia = true; 
+  // CAMBIO CRÍTICO: Debe ser false para que el corte sea a la medianoche estricta (23:59 -> 00:00)
+  const corteAlMediodia = false; 
 
   if (corteAlMediodia) {
-    if (localTime.getHours() < 12) {
-      // Si es de mañana, el "día de cobro" empezó ayer al mediodía
-      localStart.setDate(localStart.getDate() - 1);
-      localStart.setHours(12, 0, 0, 0);
-      localEnd.setHours(11, 59, 59, 999);
-    } else {
-      // Si es de tarde, el "día de cobro" empezó hoy al mediodía
-      localStart.setHours(12, 0, 0, 0);
-      localEnd.setDate(localEnd.getDate() + 1);
-      localEnd.setHours(11, 59, 59, 999);
-    }
+    // ... (tu código anterior)
   } else {
-    // Corte tradicional a medianoche
+    // Corte tradicional a medianoche (Lo que necesitas)
     localStart.setHours(0, 0, 0, 0);
     localEnd.setHours(23, 59, 59, 999);
   }
