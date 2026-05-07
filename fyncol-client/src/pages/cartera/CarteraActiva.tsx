@@ -41,7 +41,7 @@ function MapController({ coords, zoom }: { coords: [number, number] | null, zoom
   return null;
 }
 
-// NUEVO: Diccionarios de zonas horarias para blindar la fecha del dispositivo
+// Diccionarios de zonas horarias para blindar la fecha del dispositivo
 const COUNTRY_CODES = [
   { code: '+57', country: 'Colombia', aliases: ['colombia', 'col'] },
   { code: '+52', country: 'México', aliases: ['mexico', 'méxico', 'mex'] },
@@ -93,6 +93,38 @@ const getRouteTodayStr = (countryStr?: string) => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
+// HOOK DE RELOJ EN TIEMPO REAL SINCRONIZADO CON LA RUTA
+function useRouteClock(countryStr?: string) {
+  const [timeStr, setTimeStr] = useState('');
+
+  useEffect(() => {
+    const updateClock = () => {
+      let tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (countryStr) {
+        const match = COUNTRY_CODES.find(c => c.aliases.some(alias => countryStr.toLowerCase().trim().includes(alias)));
+        if (match && COUNTRY_TIMEZONES[match.country]) {
+          tz = COUNTRY_TIMEZONES[match.country];
+        }
+      }
+      
+      const nowStr = new Date().toLocaleString("es-CO", { 
+        timeZone: tz,
+        hour: '2-digit', 
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true 
+      });
+      setTimeStr(nowStr);
+    };
+
+    updateClock();
+    const interval = setInterval(updateClock, 1000);
+    return () => clearInterval(interval);
+  }, [countryStr]);
+
+  return timeStr;
+}
+
 export default function CarteraActiva() {
   const [clients, setClients] = useState<any[]>([]);
   const [routeInfo, setRouteInfo] = useState<any>(null);
@@ -132,6 +164,9 @@ export default function CarteraActiva() {
 
   const latestCoords = useRef<{lat: number, lng: number} | null>(null);
   const [gpsStatus, setGpsStatus] = useState<'SEARCHING' | 'ACTIVE' | 'ERROR'>('SEARCHING');
+
+  // Inicialización del reloj
+  const currentTime = useRouteClock(routeInfo?.country);
 
   useEffect(() => {
     const watchId = navigator.geolocation.watchPosition(
@@ -197,6 +232,7 @@ export default function CarteraActiva() {
 
   useEffect(() => { fetchCartera(); }, []);
 
+  // Bloqueo visual por LocalStorage (ahora respaldado por el Backend)
   useEffect(() => {
     if (routeInfo) {
       const todayStr = getRouteTodayStr(routeInfo.country);
@@ -321,6 +357,9 @@ export default function CarteraActiva() {
            const refreshedClient = updatedData.clients.find((c: any) => c.id === selectedClient.id);
            setSelectedClient(refreshedClient);
         }
+      } else {
+        const errData = await res.json();
+        alert(errData.error || "No se pudo procesar el pago");
       }
     } catch (error) {
       console.error("Error updating status");
@@ -403,7 +442,20 @@ export default function CarteraActiva() {
       <div className={`absolute md:relative inset-0 md:inset-auto w-full md:w-[420px] lg:w-[480px] h-full flex flex-col bg-[#05050A] border-r border-white/10 shrink-0 shadow-2xl transition-transform duration-300 ease-in-out z-[100] md:z-10 ${mobileView === 'MAP' ? '-translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
         <div className="p-5 border-b border-white/5 shrink-0 bg-[#0B0B12]">
           <div className="flex justify-between items-start mb-4">
-            <h1 className="text-xl font-bold text-white">Sistema Logístico</h1>
+            <div>
+              <h1 className="text-xl font-bold text-white mb-1">Sistema Logístico</h1>
+              {/* RELOJ PREMIUM GLASSMORPHISM */}
+              <div className="inline-flex items-center gap-2 bg-white/5 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)]">
+                <FiClock className="text-blue-400 animate-pulse" size={14} />
+                <span className="text-xs font-mono font-bold tracking-widest text-slate-200">
+                  {currentTime}
+                </span>
+                <span className="text-[9px] uppercase font-bold text-slate-500 ml-1">
+                  {routeInfo?.country || 'Local'}
+                </span>
+              </div>
+            </div>
+            
             <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest border ${gpsStatus === 'ACTIVE' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : gpsStatus === 'ERROR' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`}>
               {gpsStatus === 'ACTIVE' && <FiNavigation size={10} className="animate-pulse" />}
               {gpsStatus === 'ERROR' && <FiAlertTriangle size={10} />}
