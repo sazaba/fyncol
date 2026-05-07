@@ -52,7 +52,6 @@ const COUNTRY_CODES = [
   { code: '+591', country: 'Bolivia', aliases: ['bolivia'] },
 ];
 
-// NUEVO: Diccionario para anclar la zona horaria real según el país
 const COUNTRY_TIMEZONES: Record<string, string> = {
   'Colombia': 'America/Bogota',
   'México': 'America/Mexico_City',
@@ -72,9 +71,8 @@ const COUNTRY_TIMEZONES: Record<string, string> = {
 
 export default function NuevoCredito() {
   
-  // NUEVO HELPER: Calcula la fecha exacta basada en el país de la ruta
   const getRouteDateStr = (countryStr?: string, addDays: number = 0) => {
-    let tz = Intl.DateTimeFormat().resolvedOptions().timeZone; // Fallback navegador
+    let tz = Intl.DateTimeFormat().resolvedOptions().timeZone; 
     if (countryStr) {
       const match = COUNTRY_CODES.find(c => c.aliases.some(alias => countryStr.toLowerCase().trim().includes(alias)));
       if (match && COUNTRY_TIMEZONES[match.country]) {
@@ -82,7 +80,6 @@ export default function NuevoCredito() {
       }
     }
     
-    // Obtenemos la hora actual en esa zona horaria específica
     const nowStr = new Date().toLocaleString("en-US", { timeZone: tz });
     const routeDate = new Date(nowStr);
     
@@ -207,7 +204,6 @@ export default function NuevoCredito() {
     }
   }, [rutaAsignada]);
 
-  // CORRECCIÓN: Calcular la fecha de primer pago usando el Timezone de la ruta
   useEffect(() => {
     let daysToAdd = 1; 
 
@@ -219,7 +215,6 @@ export default function NuevoCredito() {
     setFormData(prev => ({ ...prev, firstPaymentDate: newPaymentDate }));
   }, [formData.periodicity, rutaAsignada?.country]);
 
-  // CORRECCIÓN: Base matemática alineada a la zona horaria
   const creditMetrics = useMemo(() => {
     const amountNum = parseFloat(formData.amount) || 0;
     const interestNum = parseFloat(formData.interestRate) || 0;
@@ -233,7 +228,6 @@ export default function NuevoCredito() {
     if (formData.periodicity === 'QUINCENAL') daysPerInstallment = 15;
     if (formData.periodicity === 'MENSUAL') daysPerInstallment = 30;
 
-    // Calculamos "Hoy" usando la zona de la ruta asignada
     const todayStr = getRouteDateStr(rutaAsignada?.country, 0);
     const [tYear, tMonth, tDay] = todayStr.split('-');
     const today = new Date(parseInt(tYear), parseInt(tMonth) - 1, parseInt(tDay));
@@ -348,6 +342,7 @@ export default function NuevoCredito() {
 
       const responseData = await response.json().catch(() => null);
       
+      // La clave de Axios/Fetch es que los códigos 2xx caen como response.ok = true
       if (!response.ok) {
         if (responseData?.errorType === "ACTIVE_DEBT") {
           throw new Error(responseData.error);
@@ -359,7 +354,12 @@ export default function NuevoCredito() {
       let successMsg = "El cliente y su préstamo inicial se guardaron correctamente.";
       let alertVariant: AlertVariant = "success";
 
-      if (responseData.otherActiveLoansCount > 0) {
+      // --- VERIFICACIÓN DE TOPE ALINEADA CON EL BACKEND (STATUS 202) ---
+      if (response.status === 202 || responseData?.status === 'PENDING' || responseData?.pendingApproval) {
+        titleMsg = "Enviado a Revisión";
+        successMsg = `El monto de $${Number(formData.amount).toLocaleString('es-CO')} supera el límite de tu ruta. La solicitud fue enviada al administrador y está pendiente de aprobación.`;
+        alertVariant = "info"; // Usamos 'info' (color azul) para advertir sin asustar
+      } else if (responseData?.otherActiveLoansCount > 0) {
         titleMsg = "Crédito Creado con Alerta";
         successMsg = `El préstamo se registró. OJO: Este cliente tiene ${responseData.otherActiveLoansCount} crédito(s) activo(s) en otras oficinas.`;
         alertVariant = "info"; 
@@ -372,7 +372,6 @@ export default function NuevoCredito() {
         confirmText: "Listo",
         onConfirm: () => {
           closeAlert();
-          // Reset formulario anclando la fecha de la nueva inserción al time zone actual
           setFormData({ 
             name: '', documentId: '', phone: '', address: '', routeId: rutaAsignada?.id.toString() || '', 
             amount: '', installments: '', interestRate: '', 
@@ -411,6 +410,10 @@ export default function NuevoCredito() {
     country.aliases.some(alias => alias.includes(phoneSearch.toLowerCase().trim())) || 
     country.code.includes(phoneSearch)
   );
+
+  // --- NUEVA LÓGICA DE UI PARA TOPE DE RUTA ---
+  const maxLoanLimit = Number(rutaAsignada?.maxLoanPerClient) || 0;
+  const isOverLimit = maxLoanLimit > 0 && Number(formData.amount) > maxLoanLimit;
 
   return (
     <div className="max-w-6xl mx-auto px-4 md:px-8 pt-8 md:pt-10 md:h-[calc(100dvh-90px)] md:overflow-y-auto md:[&::-webkit-scrollbar]:hidden md:[-ms-overflow-style:none] md:[scrollbar-width:none] pb-10">
@@ -655,11 +658,14 @@ export default function NuevoCredito() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">
-                  Monto a Prestar
+                <label className="flex items-center justify-between text-[10px] font-semibold text-slate-400 mb-1.5 uppercase tracking-widest">
+                  <span>Monto a Prestar</span>
+                  {maxLoanLimit > 0 && (
+                    <span className="text-amber-500/80">Tope: ${maxLoanLimit.toLocaleString('es-CO')}</span>
+                  )}
                 </label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
+                  <span className={`absolute left-4 top-1/2 -translate-y-1/2 font-medium ${isOverLimit ? 'text-amber-500' : 'text-slate-500'}`}>$</span>
                   <input 
                     required 
                     type="number" 
@@ -667,10 +673,20 @@ export default function NuevoCredito() {
                     value={formData.amount} 
                     onChange={handleChange} 
                     disabled={!rutaAsignada} 
-                    className="w-full bg-[#05050A]/50 border border-white/10 rounded-2xl pl-8 pr-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner" 
+                    className={`w-full bg-[#05050A]/50 border rounded-2xl pl-8 pr-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-inner ${
+                      isOverLimit 
+                        ? 'border-amber-500/50 focus:ring-1 focus:ring-amber-500/50' 
+                        : 'border-white/10 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50'
+                    }`} 
                     placeholder="0.00" 
                   />
                 </div>
+                {/* --- INDICADOR VISUAL PREVENTIVO --- */}
+                {isOverLimit && (
+                  <p className="text-[10px] text-amber-400 mt-2 flex items-center gap-1.5 font-medium">
+                    <FiAlertTriangle size={12} /> Se enviará a revisión de administración
+                  </p>
+                )}
               </div>
 
               <div>
@@ -787,7 +803,11 @@ export default function NuevoCredito() {
             <button 
               type="submit" 
               disabled={isSubmitting || !rutaAsignada} 
-              className="group relative w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 text-white rounded-2xl py-4 font-semibold transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_25px_rgba(37,99,235,0.5)]"
+              className={`group relative w-full flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 text-white rounded-2xl py-4 font-semibold transition-all ${
+                isOverLimit 
+                  ? 'bg-amber-600 hover:bg-amber-500 shadow-[0_0_20px_rgba(217,119,6,0.3)] hover:shadow-[0_0_25px_rgba(217,119,6,0.5)]'
+                  : 'bg-blue-600 hover:bg-blue-500 shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_25px_rgba(37,99,235,0.5)]'
+              }`}
             >
               {isSubmitting ? (
                 <>
@@ -797,7 +817,7 @@ export default function NuevoCredito() {
               ) : (
                 <>
                   <FiSave size={18} /> 
-                  Guardar Cliente y Crédito
+                  {isOverLimit ? "Enviar a Revisión de Admin" : "Guardar Cliente y Crédito"}
                 </>
               )}
             </button>
