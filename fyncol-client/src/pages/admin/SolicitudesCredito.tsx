@@ -20,7 +20,8 @@ export default function SolicitudesCredito() {
   
   // Estados para el Modal de Ajuste
   const [selectedRequest, setSelectedRequest] = useState<LoanRequest | null>(null);
-  const [editForm, setEditForm] = useState({ amount: 0, installments: 0, interest: 0 });
+  // FIX: Manejamos el estado inicial como strings para evitar errores al tipear
+  const [editForm, setEditForm] = useState({ amount: "", installments: "", interest: "" });
 
   // --- CONFIGURACIÓN DE URL DINÁMICA ---
   const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -55,11 +56,18 @@ export default function SolicitudesCredito() {
 
   const handleOpenModal = (req: LoanRequest) => {
     setSelectedRequest(req);
+    // FIX: Cargamos los valores convirtiéndolos a string de forma segura
     setEditForm({
-      amount: Number(req.amount),
-      installments: Number(req.installments),
-      interest: Number(req.interestRate)
+      amount: String(Number(req.amount)),
+      installments: String(Number(req.installments)),
+      interest: String(Number(req.interestRate))
     });
+  };
+
+  // FIX: Limpieza en tiempo real para evitar NaN
+  const handleNumberChange = (field: string, value: string) => {
+    const cleanValue = value.replace(/[^0-9]/g, '');
+    setEditForm({ ...editForm, [field]: cleanValue });
   };
 
   const handleConfirmApprove = async () => {
@@ -75,9 +83,9 @@ export default function SolicitudesCredito() {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          adjustedAmount: editForm.amount,
-          adjustedInstallments: editForm.installments,
-          adjustedInterestRate: editForm.interest
+          adjustedAmount: editForm.amount ? Number(editForm.amount) : 0,
+          adjustedInstallments: editForm.installments ? Number(editForm.installments) : 0,
+          adjustedInterestRate: editForm.interest ? Number(editForm.interest) : 0
         })
       });
 
@@ -232,9 +240,10 @@ export default function SolicitudesCredito() {
                 <div className="relative">
                   <FiDollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input 
-                    type="number" 
-                    value={editForm.amount} 
-                    onChange={e => setEditForm({...editForm, amount: Number(e.target.value)})}
+                    type="text" 
+                    inputMode="numeric"
+                    value={editForm.amount ? new Intl.NumberFormat('es-CO').format(Number(editForm.amount)) : ""} 
+                    onChange={e => handleNumberChange("amount", e.target.value)}
                     className="w-full bg-[#0B1020]/50 border border-blue-500/30 rounded-2xl py-4 pl-12 pr-4 outline-none focus:border-blue-500 transition-all font-mono text-blue-400 text-xl font-bold shadow-[inset_0_0_15px_rgba(37,99,235,0.1)]" 
                   />
                 </div>
@@ -246,9 +255,10 @@ export default function SolicitudesCredito() {
                   <div className="relative">
                     <FiHash className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input 
-                      type="number" 
+                      type="text" 
+                      inputMode="numeric"
                       value={editForm.installments} 
-                      onChange={e => setEditForm({...editForm, installments: Number(e.target.value)})}
+                      onChange={e => handleNumberChange("installments", e.target.value)}
                       className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 outline-none focus:border-blue-500 transition-all font-mono text-white" 
                     />
                   </div>
@@ -258,9 +268,10 @@ export default function SolicitudesCredito() {
                   <div className="relative">
                     <FiPercent className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input 
-                      type="number" 
+                      type="text" 
+                      inputMode="numeric"
                       value={editForm.interest} 
-                      onChange={e => setEditForm({...editForm, interest: Number(e.target.value)})}
+                      onChange={e => handleNumberChange("interest", e.target.value)}
                       className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 outline-none focus:border-blue-500 transition-all font-mono text-white" 
                     />
                   </div>
@@ -277,7 +288,7 @@ export default function SolicitudesCredito() {
               </button>
               <button 
                 onClick={handleConfirmApprove} 
-                disabled={isProcessing}
+                disabled={isProcessing || !editForm.amount || Number(editForm.amount) <= 0}
                 className="w-2/3 py-4 rounded-2xl bg-blue-600 text-white font-bold hover:bg-blue-500 transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)] flex items-center justify-center gap-2 uppercase tracking-widest text-[10px] disabled:opacity-50"
               >
                 {isProcessing ? <FiLoader className="animate-spin h-5 w-5" /> : <><FiCheck size={16} /> Confirmar</>}
