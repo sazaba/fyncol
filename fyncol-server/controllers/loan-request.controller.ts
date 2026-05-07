@@ -43,7 +43,7 @@ export const getPendingRequests = async (req: AuthRequest, res: Response) => {
 };
 
 /**
- * 2. APROBAR SOLICITUD DE CRÉDITO (CON AJUSTES)
+ * 2. APROBAR SOLICITUD DE CRÉDITO (CON AJUSTES Y TIMEOUT EXTENDIDO)
  */
 export const approveRequest = async (req: AuthRequest, res: Response) => {
   try {
@@ -51,10 +51,9 @@ export const approveRequest = async (req: AuthRequest, res: Response) => {
     if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
 
     const requestId = parseInt(req.params.id as string);
-
-    // CAPTURAMOS AJUSTES OPCIONALES DESDE EL FRONTEND
     const { adjustedAmount, adjustedInstallments, adjustedInterestRate } = req.body;
 
+    // FIX TIMEOUT: Añadimos tiempo de espera máximo a la transacción para evitar "Transaction closed"
     const result = await prisma.$transaction(async (tx) => {
       const loanRequest = await tx.loanRequest.findFirst({
         where: { id: requestId, route: { companyId } },
@@ -64,21 +63,19 @@ export const approveRequest = async (req: AuthRequest, res: Response) => {
       if (!loanRequest) throw new Error("Solicitud no encontrada o no autorizada.");
       if (loanRequest.status !== "PENDING") throw new Error("Esta solicitud ya fue procesada.");
 
-      // USAMOS VALOR AJUSTADO O EL ORIGINAL DE LA SOLICITUD Y LO FORZAMOS A NÚMERO
       const amountNum = (adjustedAmount !== undefined && adjustedAmount !== null) ? Number(adjustedAmount) : Number(loanRequest.amount);
       const interestNum = (adjustedInterestRate !== undefined && adjustedInterestRate !== null) ? Number(adjustedInterestRate) : Number(loanRequest.interestRate);
       const installmentsNum = (adjustedInstallments !== undefined && adjustedInstallments !== null) ? Number(adjustedInstallments) : Number(loanRequest.installments);
 
-      // BLINDAJE CONTRA ERRORES MATEMÁTICOS (NaN o valores corruptos)
       if (isNaN(amountNum) || amountNum <= 0) throw new Error("El monto ingresado es inválido.");
       if (isNaN(installmentsNum) || installmentsNum <= 0) throw new Error("El número de cuotas es inválido.");
       if (isNaN(interestNum) || interestNum < 0) throw new Error("La tasa de interés es inválida.");
 
       if (Number(loanRequest.route.availableCapital) < amountNum) {
-        throw new Error(`La ruta no tiene capital suficiente. Disponible: ${loanRequest.route.availableCapital}`);
+        throw new Error(`La ruta no tiene capital suficiente. Disponible: $${Number(loanRequest.route.availableCapital).toLocaleString('es-CO')}`);
       }
 
-      // MATEMÁTICA FINANCIERA RECALCULADA
+      // MATEMÁTICA FINANCIERA
       let daysPerInstallment = 1; 
       if (loanRequest.periodicity === 'QUINCENAL') daysPerInstallment = 15;
       if (loanRequest.periodicity === 'MENSUAL') daysPerInstallment = 30;
@@ -146,13 +143,20 @@ export const approveRequest = async (req: AuthRequest, res: Response) => {
       });
 
       return newLoan;
+
+    }, {
+      // CONFIGURACIÓN PARA EVITAR EL "TRANSACTION ALREADY CLOSED"
+      maxWait: 5000, 
+      timeout: 15000 
     });
 
     return res.status(200).json({ success: true, message: "Préstamo aprobado con éxito.", data: result });
 
   } catch (error: any) {
     console.error("Error al aprobar solicitud:", error);
-    return res.status(400).json({ error: error.message || "Error al procesar la aprobación." });
+    // Limpiar el mensaje de error para que no salga "Error: Error:..." en el frontend
+    const cleanMessage = error.message ? error.message.replace('Error: ', '') : "Error al procesar la aprobación.";
+    return res.status(400).json({ error: cleanMessage });
   }
 };
 
