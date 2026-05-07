@@ -64,10 +64,15 @@ export const approveRequest = async (req: AuthRequest, res: Response) => {
       if (!loanRequest) throw new Error("Solicitud no encontrada o no autorizada.");
       if (loanRequest.status !== "PENDING") throw new Error("Esta solicitud ya fue procesada.");
 
-      // USAMOS VALOR AJUSTADO O EL ORIGINAL DE LA SOLICITUD
-      const amountNum = adjustedAmount ? Number(adjustedAmount) : Number(loanRequest.amount);
-      const interestNum = adjustedInterestRate ? Number(adjustedInterestRate) : Number(loanRequest.interestRate);
-      const installmentsNum = adjustedInstallments ? Number(adjustedInstallments) : loanRequest.installments;
+      // USAMOS VALOR AJUSTADO O EL ORIGINAL DE LA SOLICITUD Y LO FORZAMOS A NÚMERO
+      const amountNum = (adjustedAmount !== undefined && adjustedAmount !== null) ? Number(adjustedAmount) : Number(loanRequest.amount);
+      const interestNum = (adjustedInterestRate !== undefined && adjustedInterestRate !== null) ? Number(adjustedInterestRate) : Number(loanRequest.interestRate);
+      const installmentsNum = (adjustedInstallments !== undefined && adjustedInstallments !== null) ? Number(adjustedInstallments) : Number(loanRequest.installments);
+
+      // BLINDAJE CONTRA ERRORES MATEMÁTICOS (NaN o valores corruptos)
+      if (isNaN(amountNum) || amountNum <= 0) throw new Error("El monto ingresado es inválido.");
+      if (isNaN(installmentsNum) || installmentsNum <= 0) throw new Error("El número de cuotas es inválido.");
+      if (isNaN(interestNum) || interestNum < 0) throw new Error("La tasa de interés es inválida.");
 
       if (Number(loanRequest.route.availableCapital) < amountNum) {
         throw new Error(`La ruta no tiene capital suficiente. Disponible: ${loanRequest.route.availableCapital}`);
