@@ -22,7 +22,8 @@ interface InstallmentInput {
 export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
   try {
     const companyId = req.user?.companyId; 
-    if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
+    const userId = req.user?.id;
+    if (!companyId || !userId) return res.status(403).json({ error: "Acceso denegado." });
 
     const {
       name, documentId, phone, address, latitude, longitude, documentUrl, routeId,
@@ -123,58 +124,103 @@ export const createClientAndLoan = async (req: AuthRequest, res: Response) => {
     const result = await prisma.$transaction(async (tx) => {
       const route = await tx.route.findFirst({ where: { id: routeIdInt, companyId } });
       if (!route) throw new Error("La ruta especificada no existe o no estás autorizado");
-      if (Number(route.availableCapital) < amountNum) throw new Error("Capital insuficiente en esta ruta");
+      
+      // 1. VALIDACIÓN DEL TOPE DE CRÉDITO
+      const limiteRuta = Number(route.maxLoanPerClient || 0);
+      const requiereAutorizacion = limiteRuta > 0 && amountNum > limiteRuta;
+
+      if (!requiereAutorizacion && Number(route.availableCapital) < amountNum) {
+        throw new Error("Capital insuficiente en esta ruta");
+      }
 
       let processedClient;
 
       if (clientSameRoute) {
-        // RENOVACIÓN EN LA MISMA RUTA (Actualiza datos y añade préstamo isRenewal: true)
-        processedClient = await tx.client.update({
-          where: { id: clientSameRoute.id },
-          data: {
-            name, phone, address, latitude, longitude,
-            documentUrl: documentUrl || clientSameRoute.documentUrl,
-            loans: {
-              create: {
-                amount: amountNum, installments: installmentsNum, interestRate: interestNum,
-                periodicity: periodicity, firstPaymentDate: firstPayment, projectedTotal: projectedTotal,
-                isRenewal: true, 
-                installmentDetails: { create: installmentsArray }
+        // RENOVACIÓN EN LA MISMA RUTA
+        if (requiereAutorizacion) {
+          // A. ACTUALIZA CLIENTE Y CREA SOLICITUD (NO CREA PRESTAMO AÚN)
+          processedClient = await tx.client.update({
+            where: { id: clientSameRoute.id },
+            data: {
+              name, phone, address, latitude, longitude, documentUrl: documentUrl || clientSameRoute.documentUrl,
+              loanRequests: { // <-- Enviar al modelo aislado
+                create: {
+                  amount: amountNum, installments: installmentsNum, interestRate: interestNum,
+                  periodicity, firstPaymentDate: firstPayment, routeId: routeIdInt, requestedById: userId
+                }
               }
             }
-          },
-          include: { loans: { include: { installmentDetails: true } } }
-        });
+          });
+        } else {
+          // B. FLUJO NORMAL (CREA PRESTAMO Y DESCUENTA CAPITAL)
+          processedClient = await tx.client.update({
+            where: { id: clientSameRoute.id },
+            data: {
+              name, phone, address, latitude, longitude, documentUrl: documentUrl || clientSameRoute.documentUrl,
+              loans: {
+                create: {
+                  amount: amountNum, installments: installmentsNum, interestRate: interestNum,
+                  periodicity, firstPaymentDate: firstPayment, projectedTotal, isRenewal: true, 
+                  installmentDetails: { create: installmentsArray }
+                }
+              }
+            },
+            include: { loans: { include: { installmentDetails: true } } }
+          });
+          await tx.route.update({ where: { id: routeIdInt }, data: { availableCapital: { decrement: amountNum } } });
+        }
       } else {
-        // CLIENTE NUEVO PARA ESTA RUTA ESPECÍFICA (pero dentro de la misma empresa)
-        processedClient = await tx.client.create({
-          data: {
-            name, documentId: cleanDocumentId, phone, address, latitude, longitude, documentUrl, routeId: routeIdInt,
-            loans: {
-              create: {
-                amount: amountNum, installments: installmentsNum, interestRate: interestNum,
-                periodicity: periodicity, firstPaymentDate: firstPayment, projectedTotal: projectedTotal,
-                isRenewal: false,
-                installmentDetails: { create: installmentsArray }
-              }
-            }
-          },
-          include: { loans: { include: { installmentDetails: true } } } 
-        });
+        // CLIENTE NUEVO PARA ESTA RUTA
+        if (requiereAutorizacion) {
+            // A. CREA CLIENTE Y SOLICITUD (NO DESCUENTA CAPITAL)
+            processedClient = await tx.client.create({
+                data: {
+                  name, documentId: cleanDocumentId, phone, address, latitude, longitude, documentUrl, routeId: routeIdInt,
+                  loanRequests: {
+                    create: {
+                      amount: amountNum, installments: installmentsNum, interestRate: interestNum,
+                      periodicity, firstPaymentDate: firstPayment, routeId: routeIdInt, requestedById: userId
+                    }
+                  }
+                }
+            });
+        } else {
+            // B. FLUJO NORMAL (CREA PRESTAMO Y DESCUENTA CAPITAL)
+            processedClient = await tx.client.create({
+              data: {
+                name, documentId: cleanDocumentId, phone, address, latitude, longitude, documentUrl, routeId: routeIdInt,
+                loans: {
+                  create: {
+                    amount: amountNum, installments: installmentsNum, interestRate: interestNum,
+                    periodicity, firstPaymentDate: firstPayment, projectedTotal, isRenewal: false,
+                    installmentDetails: { create: installmentsArray }
+                  }
+                }
+              },
+              include: { loans: { include: { installmentDetails: true } } } 
+            });
+            await tx.route.update({ where: { id: routeIdInt }, data: { availableCapital: { decrement: amountNum } } });
+        }
       }
 
-      await tx.route.update({
-        where: { id: routeIdInt },
-        data: { availableCapital: { decrement: amountNum } }
-      });
-
-      return processedClient;
+      return { processedClient, requiereAutorizacion };
     }, { maxWait: 5000, timeout: 20000 });
+
+    // EVALUAR LA RESPUESTA PARA EL FRONTEND
+    if (result.requiereAutorizacion) {
+      return res.status(202).json({
+        message: "El monto supera el límite de la ruta. La solicitud fue enviada al administrador para su aprobación.",
+        otherActiveLoansCount: activeLoansOtherCompanies,
+        isPendingApproval: true,
+        data: result.processedClient
+      });
+    }
 
     return res.status(201).json({
       message: clientSameRoute ? "Crédito renovado exitosamente" : "Cliente y préstamo creados exitosamente",
-      otherActiveLoansCount: activeLoansOtherCompanies, // <--- Envía la alerta azul para otras empresas
-      data: result
+      otherActiveLoansCount: activeLoansOtherCompanies, 
+      isPendingApproval: false,
+      data: result.processedClient
     });
 
   } catch (error: any) {
@@ -833,7 +879,8 @@ export const getClientsByRoute = async (req: AuthRequest, res: Response) => {
 export const addLoanToExistingClient = async (req: AuthRequest, res: Response) => {
   try {
     const companyId = req.user?.companyId; // SAAS-BLINDAJE
-    if (!companyId) return res.status(403).json({ error: "Acceso denegado." });
+    const userId = req.user?.id;
+    if (!companyId || !userId) return res.status(403).json({ error: "Acceso denegado." });
 
     const clientId = req.params.clientId as string; 
     const { amount, installments, interestRate, periodicity, firstPaymentDate } = req.body;
@@ -860,8 +907,9 @@ export const addLoanToExistingClient = async (req: AuthRequest, res: Response) =
     const interestPerDay = (interestNum / 100 / 30) * amountNum;
     const totalInterest = interestPerDay * totalDays;
     
-    const projectedTotal = amountNum + totalInterest;
-    const installmentValue = projectedTotal / installmentsNum;
+    const exactProjectedTotal = amountNum + totalInterest;
+    const installmentValue = Math.ceil(exactProjectedTotal / installmentsNum);
+    const projectedTotal = installmentValue * installmentsNum;
 
     const installmentsArray: any[] = [];
     let currentDate = new Date(firstPayment);
@@ -870,7 +918,7 @@ export const addLoanToExistingClient = async (req: AuthRequest, res: Response) =
       installmentsArray.push({
         installmentNumber: i,
         dueDate: new Date(currentDate),
-        expectedAmount: Number(installmentValue.toFixed(2)),
+        expectedAmount: installmentValue,
         paidAmount: 0,
         status: "PENDING",
       });
@@ -890,31 +938,73 @@ export const addLoanToExistingClient = async (req: AuthRequest, res: Response) =
       if (!client) throw new Error("El cliente no existe o no autorizado.");
 
       const route = await tx.route.findUnique({ where: { id: client.routeId } });
-      if (Number(route?.availableCapital) < amountNum) throw new Error("Capital insuficiente en esta ruta.");
+      
+      // 1. VALIDACIÓN DEL TOPE DE CRÉDITO (IGUAL QUE EN CLIENTE NUEVO)
+      const limiteRuta = Number(route?.maxLoanPerClient || 0);
+      const requiereAutorizacion = limiteRuta > 0 && amountNum > limiteRuta;
 
-      const newLoan = await tx.loan.create({
-        data: {
-          clientId: client.id,
-          amount: amountNum,
-          installments: installmentsNum,
-          interestRate: interestNum,
-          periodicity: periodicity,
-          firstPaymentDate: firstPayment,
-          projectedTotal: Number(projectedTotal.toFixed(2)),
-          isRenewal: true,
-          installmentDetails: { create: installmentsArray }
-        }
-      });
+      if (!requiereAutorizacion && Number(route?.availableCapital) < amountNum) {
+        throw new Error("Capital insuficiente en esta ruta.");
+      }
 
-      await tx.route.update({
-        where: { id: client.routeId },
-        data: { availableCapital: { decrement: amountNum } }
-      });
+      if (requiereAutorizacion) {
+          // A. CREAR SOLICITUD DE CRÉDITO (NO CREA PRÉSTAMO, NO DESCUENTA CAPITAL)
+          const newLoanRequest = await tx.loanRequest.create({
+            data: {
+              clientId: client.id,
+              amount: amountNum,
+              installments: installmentsNum,
+              interestRate: interestNum,
+              periodicity: periodicity,
+              firstPaymentDate: firstPayment,
+              routeId: client.routeId,
+              requestedById: userId
+            }
+          });
+          return { isPendingApproval: true, data: newLoanRequest };
 
-      return newLoan;
+      } else {
+          // B. FLUJO NORMAL: CREAR PRÉSTAMO Y DESCONTAR CAPITAL
+          const newLoan = await tx.loan.create({
+            data: {
+              clientId: client.id,
+              amount: amountNum,
+              installments: installmentsNum,
+              interestRate: interestNum,
+              periodicity: periodicity,
+              firstPaymentDate: firstPayment,
+              projectedTotal: projectedTotal, // Usar el recalculado exacto
+              isRenewal: true,
+              installmentDetails: { create: installmentsArray }
+            }
+          });
+
+          await tx.route.update({
+            where: { id: client.routeId },
+            data: { availableCapital: { decrement: amountNum } }
+          });
+
+          return { isPendingApproval: false, data: newLoan };
+      }
     });
 
-    return res.status(201).json({ success: true, message: "Préstamo agregado", data: result });
+    // EVALUAR LA RESPUESTA PARA EL FRONTEND
+    if (result.isPendingApproval) {
+        return res.status(202).json({ 
+            success: true, 
+            isPendingApproval: true, 
+            message: "El monto supera el límite de la ruta. La solicitud fue enviada al administrador.", 
+            data: result.data 
+        });
+    }
+
+    return res.status(201).json({ 
+        success: true, 
+        isPendingApproval: false, 
+        message: "Préstamo agregado exitosamente", 
+        data: result.data 
+    });
+
   } catch (error: any) {
     return res.status(400).json({ error: error.message || "Error interno" });
   }

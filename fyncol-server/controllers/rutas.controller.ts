@@ -75,7 +75,8 @@ export const crearRuta = async (req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
-    const { country, city, currency, assignedToId } = req.body;
+    // EXTRAER EL NUEVO CAMPO DEL BODY
+    const { country, city, currency, assignedToId, maxLoanPerClient } = req.body;
     
     if (assignedToId) {
       const rutaExistente = await prisma.route.findFirst({
@@ -92,7 +93,9 @@ export const crearRuta = async (req: AuthRequest, res: Response): Promise<void> 
             data: {
               country, city, currency,
               assignedToId: Number(assignedToId),
-              companyId 
+              companyId,
+              // GUARDAR EL NUEVO TOPE DE CREDITO
+              maxLoanPerClient: maxLoanPerClient ? Number(maxLoanPerClient) : 0 
             },
             include: { assignedTo: true }
           })
@@ -107,7 +110,9 @@ export const crearRuta = async (req: AuthRequest, res: Response): Promise<void> 
       data: {
         country, city, currency,
         assignedToId: assignedToId ? Number(assignedToId) : null,
-        companyId 
+        companyId,
+        // GUARDAR EL NUEVO TOPE DE CREDITO
+        maxLoanPerClient: maxLoanPerClient ? Number(maxLoanPerClient) : 0 
       },
       include: { assignedTo: true }
     });
