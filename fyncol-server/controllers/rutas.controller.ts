@@ -1,4 +1,3 @@
-// fyncol-server/controllers/rutas.controller.ts
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth.middleware'; 
@@ -175,6 +174,42 @@ export const obtenerRutas = async (req: AuthRequest, res: Response): Promise<voi
   }
 };
 
+// NUEVA FUNCIÓN PARA ACTUALIZAR DATOS GENERALES (E.g. Tope de Crédito)
+export const actualizarRuta = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const companyId = req.user?.companyId;
+    const { maxLoanPerClient } = req.body;
+
+    if (!companyId) {
+      res.status(403).json({ error: "Acceso denegado." });
+      return;
+    }
+
+    const rutaExistente = await prisma.route.findFirst({
+      where: { id: Number(id), companyId }
+    });
+
+    if (!rutaExistente) {
+      res.status(404).json({ error: 'Ruta no encontrada o no autorizada.' });
+      return;
+    }
+
+    const rutaActualizada = await prisma.route.update({
+      where: { id: Number(id) },
+      data: {
+        // Actualiza el tope si viene en el request, de lo contrario lo deja igual
+        maxLoanPerClient: maxLoanPerClient !== undefined ? Number(maxLoanPerClient) : rutaExistente.maxLoanPerClient
+      }
+    });
+
+    res.json({ success: true, data: rutaActualizada });
+  } catch (error) {
+    console.error("Error al actualizar la ruta:", error);
+    res.status(500).json({ error: 'Error interno al actualizar la ruta' });
+  }
+};
+
 export const reasignarRuta = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const companyId = req.user?.companyId;
@@ -293,7 +328,7 @@ export const eliminarRuta = async (req: AuthRequest, res: Response): Promise<voi
 };
 
 // ==========================================
-// CONTROLADORES DE MONITOREO (REESCRITOS)
+// CONTROLADORES DE MONITOREO
 // ==========================================
 
 export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -322,7 +357,6 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
     const clientesDeHoyRaw = await prisma.client.findMany({
       where: {
         routeId: Number(id),
-        // FIX: Traemos los préstamos activos O los que se liquidaron hoy (inactivos con pago hoy)
         loans: { 
           some: { 
             OR: [
