@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { FiCheck, FiX, FiClock, FiUser, FiDollarSign, FiMapPin, FiActivity, FiEdit3, FiPercent, FiHash, FiLoader } from 'react-icons/fi';
+import { useEffect, useState } from 'react';
+import { FiCheck, FiX, FiClock, FiUser, FiDollarSign, FiMapPin, FiActivity, FiEdit3, FiPercent, FiHash, FiLoader, FiAlertCircle } from 'react-icons/fi';
 
 interface LoanRequest {
   id: number;
@@ -8,12 +8,12 @@ interface LoanRequest {
   interestRate: number;
   periodicity: string;
   client: { name: string; documentId: string };
-  route: { id: number; city: string; availableCapital: number | string };
+  route: { id: number; city: string; availableCapital: number | string; maxLoanPerClient: number | string };
   requestedBy: { name: string };
   createdAt: string;
 }
 
-const SolicitudesCredito: React.FC = () => {
+export default function SolicitudesCredito() {
   const [requests, setRequests] = useState<LoanRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -22,6 +22,10 @@ const SolicitudesCredito: React.FC = () => {
   const [selectedRequest, setSelectedRequest] = useState<LoanRequest | null>(null);
   const [editForm, setEditForm] = useState({ amount: 0, installments: 0, interest: 0 });
 
+  // --- CONFIGURACIÓN DE URL DINÁMICA ---
+  const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  const API_URL = BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`;
+
   useEffect(() => {
     fetchRequests();
   }, []);
@@ -29,9 +33,10 @@ const SolicitudesCredito: React.FC = () => {
   const fetchRequests = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch('/api/loan-requests/pending', {
+      const response = await fetch(`${API_URL}/loan-requests/pending`, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
       const result = await response.json();
@@ -39,7 +44,7 @@ const SolicitudesCredito: React.FC = () => {
       if (result.success && Array.isArray(result.data)) {
         setRequests(result.data);
       } else {
-        console.warn("La respuesta no contiene un array válido de data:", result);
+        console.warn("Error en la respuesta del backend:", result);
       }
     } catch (error) {
       console.error("Error al cargar solicitudes:", error);
@@ -63,7 +68,7 @@ const SolicitudesCredito: React.FC = () => {
 
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`/api/loan-requests/${selectedRequest.id}/approve`, {
+      const response = await fetch(`${API_URL}/loan-requests/${selectedRequest.id}/approve`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -96,9 +101,12 @@ const SolicitudesCredito: React.FC = () => {
     if (!window.confirm("¿Estás seguro de rechazar esta solicitud?")) return;
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`/api/loan-requests/${id}/reject`, { 
+      const response = await fetch(`${API_URL}/loan-requests/${id}/reject`, { 
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        }
       });
       
       if (response.ok) {
@@ -113,70 +121,79 @@ const SolicitudesCredito: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#05050A] text-white p-8">
+    <div className="max-w-6xl mx-auto px-4 md:px-8 pt-8 md:pt-10 pb-20 relative">
       {/* Header */}
       <div className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Solicitudes de Crédito</h1>
-          <p className="text-gray-500 mt-2 text-sm font-light">
+          <h1 className="text-3xl font-bold text-white tracking-tight font-display">Solicitudes de Crédito</h1>
+          <p className="text-sm text-slate-400 mt-1 font-sans">
             Aprobación manual para créditos que superan el tope de ruta.
           </p>
         </div>
         <div className="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-2xl border border-white/10 backdrop-blur-md">
           <FiActivity className="text-blue-500" />
-          <span className="text-sm font-medium">{requests.length} Pendientes</span>
+          <span className="text-sm font-medium text-white">{requests.length} Pendientes</span>
         </div>
       </div>
 
-      <hr className="border-white/5 mb-10" />
-
       {/* Lista */}
       {loading ? (
-        <div className="flex justify-center py-20">
-          <FiLoader className="animate-spin text-blue-500 h-8 w-8" />
+        <div className="flex flex-col items-center justify-center py-20 bg-[#0B1020]/20 rounded-[32px] border border-white/5">
+          <FiLoader className="animate-spin text-blue-500 h-10 w-10 mb-4" />
+          <p className="text-slate-400">Buscando solicitudes...</p>
         </div>
       ) : requests.length === 0 ? (
-        <div className="text-center py-24 bg-white/[0.02] rounded-3xl border border-dashed border-white/10">
-          <FiClock className="mx-auto text-4xl text-gray-700 mb-4" />
-          <p className="text-gray-500">No hay solicitudes pendientes en este momento.</p>
+        <div className="text-center py-24 bg-white/[0.02] rounded-[32px] border border-dashed border-white/10">
+          <FiClock className="mx-auto text-4xl text-slate-600 mb-4" />
+          <p className="text-slate-400 font-medium">No hay solicitudes pendientes en este momento.</p>
         </div>
       ) : (
         <div className="grid gap-4">
           {requests.map((req) => (
             <div
               key={req.id}
-              className="group bg-white/[0.03] border border-white/10 rounded-2xl p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6 hover:bg-white/[0.05] transition-all shadow-lg"
+              className="group bg-[#0B1020]/40 backdrop-blur-md border border-white/10 rounded-[32px] p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6 hover:bg-white/[0.05] transition-all shadow-xl hover:border-white/20"
             >
-              <div className="flex items-center gap-5">
-                <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
-                  <FiUser className="text-blue-400 text-xl" />
+              <div className="flex items-start lg:items-center gap-5">
+                <div className="w-14 h-14 shrink-0 rounded-2xl bg-gradient-to-br from-blue-600/20 to-indigo-600/20 flex items-center justify-center border border-blue-500/30">
+                  <FiUser className="text-blue-400 text-2xl" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-medium">{req.client.name}</h3>
-                  <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
-                    <span className="flex items-center gap-1 text-emerald-400 font-mono">
-                      <FiDollarSign /> {new Intl.NumberFormat().format(req.amount)}
+                  <h3 className="text-xl font-bold text-white font-display mb-1">{req.client.name}</h3>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 font-medium">
+                    
+                    {/* Monto Solicitado */}
+                    <span className="flex items-center gap-1 text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                      <FiDollarSign /> {new Intl.NumberFormat('es-CO').format(req.amount)}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <FiMapPin /> {req.route.city}
+                    
+                    {/* Información de la Ruta y el Tope */}
+                    <span className="flex items-center gap-1.5 text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                      <FiMapPin /> 
+                      Ruta {req.route.id} ({req.route.city}) 
+                      <span className="opacity-50">|</span> 
+                      Tope: ${new Intl.NumberFormat('es-CO').format(Number(req.route.maxLoanPerClient))}
                     </span>
-                    <span className="italic text-gray-600">Por: {req.requestedBy.name}</span>
+
+                    <span className="italic bg-white/5 px-2.5 py-1 rounded-lg border border-white/5">
+                      Cobrador: {req.requestedBy.name}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 w-full lg:w-auto mt-2 lg:mt-0">
                 <button
                   onClick={() => handleReject(req.id)}
-                  className="px-5 py-2.5 rounded-xl border border-white/5 text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-all font-medium"
+                  className="flex-1 lg:flex-none px-6 py-3 rounded-xl border border-white/5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all font-bold uppercase tracking-wider text-[10px]"
                 >
-                  <FiX className="inline mr-2" /> Rechazar
+                  <FiX className="inline mr-1 text-base -mt-0.5" /> Rechazar
                 </button>
                 <button
                   onClick={() => handleOpenModal(req)}
-                  className="px-6 py-2.5 rounded-xl bg-white text-black font-bold hover:shadow-[0_0_20px_rgba(255,255,255,0.15)] transition-all flex items-center gap-2"
+                  className="flex-1 lg:flex-none px-6 py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-500 shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all flex items-center justify-center gap-2 uppercase tracking-wider text-[10px]"
                 >
-                  <FiEdit3 /> Revisar y Aprobar
+                  <FiEdit3 className="text-base" /> Aprobar / Editar
                 </button>
               </div>
             </div>
@@ -186,66 +203,84 @@ const SolicitudesCredito: React.FC = () => {
 
       {/* Modal de Ajuste (Glassmorphism) */}
       {selectedRequest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="bg-[#0A0A0F] border border-white/10 w-full max-w-md rounded-[2.5rem] p-10 shadow-2xl relative">
-            <h2 className="text-2xl font-bold mb-1 text-white">Ajustar Crédito</h2>
-            <p className="text-gray-500 text-sm mb-8">Revisión para {selectedRequest.client.name}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md px-4">
+          <div className="bg-[#05050A] border border-white/10 w-full max-w-md rounded-[40px] p-8 shadow-2xl relative animate-[slideUp_0.2s_ease-out]">
+            <button 
+              onClick={() => setSelectedRequest(null)} 
+              className="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors"
+            >
+              <FiX size={24} />
+            </button>
+            
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                <FiAlertCircle className="text-blue-500" />
+                Ajustar Crédito
+              </h2>
+              <p className="text-slate-400 text-sm mt-1">Revisión para <strong className="text-white">{selectedRequest.client.name}</strong></p>
+            </div>
 
-            <div className="space-y-6">
+            <div className="space-y-5">
+              <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl mb-2">
+                <p className="text-xs text-amber-400 font-medium">
+                  El cobrador solicitó <strong>${new Intl.NumberFormat('es-CO').format(selectedRequest.amount)}</strong>, pero el límite de la Ruta {selectedRequest.route.id} es de <strong>${new Intl.NumberFormat('es-CO').format(Number(selectedRequest.route.maxLoanPerClient))}</strong>.
+                </p>
+              </div>
+
               <div className="space-y-2">
-                <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold ml-1">Monto a Aprobar</label>
+                <label className="text-[10px] uppercase tracking-widest text-slate-500 font-bold ml-1">Monto Final a Aprobar</label>
                 <div className="relative">
-                  <FiDollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <FiDollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input 
                     type="number" 
                     value={editForm.amount} 
                     onChange={e => setEditForm({...editForm, amount: Number(e.target.value)})}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 outline-none focus:border-blue-500 transition-all font-mono text-emerald-400 text-xl" 
+                    className="w-full bg-[#0B1020]/50 border border-blue-500/30 rounded-2xl py-4 pl-12 pr-4 outline-none focus:border-blue-500 transition-all font-mono text-blue-400 text-xl font-bold shadow-[inset_0_0_15px_rgba(37,99,235,0.1)]" 
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold ml-1">Cuotas</label>
+                  <label className="text-[10px] uppercase tracking-widest text-slate-500 font-bold ml-1">Cuotas</label>
                   <div className="relative">
-                    <FiHash className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <FiHash className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input 
                       type="number" 
                       value={editForm.installments} 
                       onChange={e => setEditForm({...editForm, installments: Number(e.target.value)})}
-                      className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 outline-none focus:border-blue-500 transition-all font-mono" 
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 outline-none focus:border-blue-500 transition-all font-mono text-white" 
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold ml-1">Interés %</label>
+                  <label className="text-[10px] uppercase tracking-widest text-slate-500 font-bold ml-1">Interés %</label>
                   <div className="relative">
-                    <FiPercent className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <FiPercent className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input 
                       type="number" 
                       value={editForm.interest} 
                       onChange={e => setEditForm({...editForm, interest: Number(e.target.value)})}
-                      className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 outline-none focus:border-blue-500 transition-all font-mono" 
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 outline-none focus:border-blue-500 transition-all font-mono text-white" 
                     />
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 mt-10">
+            <div className="flex gap-3 mt-8">
+              <button 
+                onClick={() => setSelectedRequest(null)} 
+                className="w-1/3 py-4 rounded-2xl border border-white/10 text-slate-400 hover:bg-white/5 transition-all font-bold uppercase tracking-widest text-[10px]"
+              >
+                Cancelar
+              </button>
               <button 
                 onClick={handleConfirmApprove} 
                 disabled={isProcessing}
-                className="w-full py-4 rounded-2xl bg-white text-black font-bold hover:bg-blue-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-2/3 py-4 rounded-2xl bg-blue-600 text-white font-bold hover:bg-blue-500 transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)] flex items-center justify-center gap-2 uppercase tracking-widest text-[10px] disabled:opacity-50"
               >
-                {isProcessing ? <FiLoader className="animate-spin h-5 w-5" /> : <><FiCheck /> Confirmar Aprobación</>}
-              </button>
-              <button 
-                onClick={() => setSelectedRequest(null)} 
-                className="w-full py-4 rounded-2xl text-gray-500 hover:text-white transition-all font-medium"
-              >
-                Cancelar
+                {isProcessing ? <FiLoader className="animate-spin h-5 w-5" /> : <><FiCheck size={16} /> Confirmar</>}
               </button>
             </div>
           </div>
@@ -253,6 +288,4 @@ const SolicitudesCredito: React.FC = () => {
       )}
     </div>
   );
-};
-
-export default SolicitudesCredito;
+}
