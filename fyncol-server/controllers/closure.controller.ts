@@ -68,6 +68,11 @@ export const getClosureSummary = async (req: AuthRequest, res: Response) => {
       .filter(t => t.type === 'RETIRO')
       .reduce((acc, t) => acc + Number(t.amount), 0);
 
+    // NUEVO: Gastos operativos del día
+    const totalGastos = capitalTransactionsToday
+      .filter(t => t.type === 'GASTO')
+      .reduce((acc, t) => acc + Number(t.amount), 0);
+
     const paymentsToday = await prisma.payment.findMany({
       where: {
         createdAt: { gte: start, lte: end },
@@ -148,7 +153,8 @@ export const getClosureSummary = async (req: AuthRequest, res: Response) => {
         totalPortfolio,
         totalCollected,
         totalInversiones, 
-        totalRetiros,     
+        totalRetiros,   
+        totalGastos, // <-- AGREGADO AL SUMMARY QUE SE ENVÍA AL FRONTEND
         newSales,
         renewals,
         totalClients,
@@ -173,8 +179,6 @@ export const confirmDailyClosure = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id;
     if (!companyId || !userId) return res.status(403).json({ error: "Acceso denegado." });
 
-    // FIX PROFUNDO: En tu frontend estás mandando "body: JSON.stringify({ summary: closureSummary })"
-    // Por lo que los datos vienen anidados en req.body.summary. Nos aseguramos de leerlo bien.
     const summaryData = req.body.summary || req.body;
 
     if (!summaryData || summaryData.availableCapital === undefined) {
@@ -252,7 +256,8 @@ export const confirmDailyClosure = async (req: AuthRequest, res: Response) => {
           collectedClients: Number(summaryData.collectedClients || 0),
           overdueClients: Number(summaryData.overdueClients || 0) + Number(summaryData.renegotiatedClients || 0),
           totalInversiones: Number(summaryData.totalInversiones || 0), 
-          totalRetiros: Number(summaryData.totalRetiros || 0) 
+          totalRetiros: Number(summaryData.totalRetiros || 0),
+          totalGastos: Number(summaryData.totalGastos || 0) // <-- GUARDAMOS EN BD
         }
       });
 
@@ -335,15 +340,9 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
     const localStart = new Date(localTime);
     const localEnd = new Date(localTime);
     
-    if (localTime.getHours() < 12) {
-      localStart.setDate(localStart.getDate() - 1);
-      localStart.setHours(12, 0, 0, 0);
-      localEnd.setHours(11, 59, 59, 999);
-    } else {
-      localStart.setHours(12, 0, 0, 0);
-      localEnd.setDate(localEnd.getDate() + 1);
-      localEnd.setHours(11, 59, 59, 999);
-    }
+    // FIX MANTENIMIENTO: Actualizado a la medianoche estricta para evitar desfases
+    localStart.setHours(0, 0, 0, 0);
+    localEnd.setHours(23, 59, 59, 999);
     
     const start = new Date(localStart.getTime() - (offset * 3600000));
     const end = new Date(localEnd.getTime() - (offset * 3600000));

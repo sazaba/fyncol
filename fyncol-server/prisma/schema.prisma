@@ -231,6 +231,7 @@ model DailyClosure {
 
   totalInversiones Decimal @default(0) @map("total_inversiones")
   totalRetiros     Decimal @default(0) @map("total_retiros")
+  totalGastos      Decimal @default(0) @map("total_gastos") // <-- NUEVO CAMPO AÑADIDO
 
   @@map("daily_closures")
 }
@@ -245,6 +246,7 @@ enum Role {
 enum TransactionType {
   INVERSION
   RETIRO
+  GASTO // <-- NUEVO ENUM AÑADIDO
 }
 
 enum SubscriptionStatus {

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getCapitalByRoute, addCapital, withdrawCapital } from '../controllers/capital.controller';
+import { getCapitalByRoute, addCapital, withdrawCapital, registerExpense } from '../controllers/capital.controller';
 import { verifyToken } from '../middleware/auth.middleware'; // Importación corregida
 
 const router = Router();
@@ -11,5 +11,6 @@ router.use(verifyToken);
 router.get('/', getCapitalByRoute);
 router.post('/invest', addCapital);
 router.post('/withdraw', withdrawCapital);
+router.post("/expense", registerExpense);
 
 export default router;

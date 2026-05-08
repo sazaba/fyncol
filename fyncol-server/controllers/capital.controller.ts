@@ -6,15 +6,18 @@ const prisma = new PrismaClient();
 
 export const getCapitalByRoute = async (req: AuthRequest, res: Response) => {
   try {
-    const companyId = req.user?.companyId; // SAAS-BLINDAJE
-    if (!companyId) return res.status(403).json({ success: false, message: "Acceso denegado: No tienes empresa asignada." });
+    if (!req.user || !req.user.companyId) {
+      return res.status(403).json({ success: false, message: "Acceso denegado: No tienes empresa asignada." });
+    }
 
-    if (req.user?.role !== "ADMIN") {
+    if (req.user.role !== "ADMIN") {
       return res.status(403).json({ success: false, message: "Acceso denegado. Requiere rol ADMIN." });
     }
 
+    const companyId = req.user.companyId;
+
     const routes = await prisma.route.findMany({
-      where: { companyId }, // SAAS-BLINDAJE: Solo las rutas de la empresa
+      where: { companyId }, 
       include: {
         assignedTo: {
           select: { id: true, name: true, email: true }
@@ -31,21 +34,22 @@ export const getCapitalByRoute = async (req: AuthRequest, res: Response) => {
 
 export const addCapital = async (req: AuthRequest, res: Response) => {
   try {
-    const companyId = req.user?.companyId; // SAAS-BLINDAJE
-    if (!companyId) return res.status(403).json({ success: false, message: "Acceso denegado." });
+    if (!req.user || !req.user.companyId) {
+      return res.status(403).json({ success: false, message: "Acceso denegado." });
+    }
 
-    if (req.user?.role !== "ADMIN") {
+    if (req.user.role !== "ADMIN") {
       return res.status(403).json({ success: false, message: "Acceso denegado. Requiere rol ADMIN." });
     }
 
-    const { routeId, amount, description } = req.body;
+    const companyId = req.user.companyId;
     const adminId = req.user.id;
+    const { routeId, amount, description } = req.body;
 
     if (!routeId || !amount || amount <= 0) {
       return res.status(400).json({ success: false, message: "Ruta y monto válido (mayor a 0) son requeridos." });
     }
 
-    // SAAS-BLINDAJE: Cambiamos findUnique por findFirst para poder validar el companyId
     const route = await prisma.route.findFirst({ 
       where: { id: Number(routeId), companyId } 
     });
@@ -82,21 +86,22 @@ export const addCapital = async (req: AuthRequest, res: Response) => {
 
 export const withdrawCapital = async (req: AuthRequest, res: Response) => {
   try {
-    const companyId = req.user?.companyId; // SAAS-BLINDAJE
-    if (!companyId) return res.status(403).json({ success: false, message: "Acceso denegado." });
+    if (!req.user || !req.user.companyId) {
+      return res.status(403).json({ success: false, message: "Acceso denegado." });
+    }
 
-    if (req.user?.role !== "ADMIN") {
+    if (req.user.role !== "ADMIN") {
       return res.status(403).json({ success: false, message: "Acceso denegado. Requiere rol ADMIN." });
     }
 
-    const { routeId, amount, description } = req.body;
+    const companyId = req.user.companyId;
     const adminId = req.user.id;
+    const { routeId, amount, description } = req.body;
 
     if (!routeId || !amount || amount <= 0) {
       return res.status(400).json({ success: false, message: "Ruta y monto válido (mayor a 0) son requeridos." });
     }
 
-    // SAAS-BLINDAJE
     const route = await prisma.route.findFirst({ 
       where: { id: Number(routeId), companyId } 
     });
@@ -135,5 +140,62 @@ export const withdrawCapital = async (req: AuthRequest, res: Response) => {
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: "Error al retirar capital", error: error.message });
+  }
+};
+
+// NUEVO CONTROLADOR: Registrar Gasto Operativo (Permitido para Cobradores)
+export const registerExpense = async (req: AuthRequest, res: Response) => {
+  try {
+    // FIX: Validación temprana y estricta para resolver el error de TS
+    if (!req.user || !req.user.companyId || !req.user.id) {
+      return res.status(403).json({ success: false, message: "Acceso denegado." });
+    }
+
+    const companyId = req.user.companyId;
+    const userId = req.user.id;
+    const { amount, description } = req.body;
+
+    if (!amount || amount <= 0 || !description) {
+      return res.status(400).json({ success: false, message: "Monto válido y rubro son requeridos." });
+    }
+
+    const route = await prisma.route.findFirst({ 
+      where: { assignedToId: userId, companyId } 
+    });
+    
+    if (!route) {
+      return res.status(404).json({ success: false, message: "No tienes una ruta asignada para registrar gastos." });
+    }
+
+    if (Number(route.availableCapital) < Number(amount)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `La caja no tiene fondos suficientes. Disponible: ${route.availableCapital} ${route.currency}` 
+      });
+    }
+
+    const result = await prisma.$transaction([
+      prisma.route.update({
+        where: { id: route.id },
+        data: { availableCapital: { decrement: amount } }
+      }),
+      prisma.capitalTransaction.create({
+        data: {
+          routeId: route.id,
+          type: "GASTO",
+          amount: amount,
+          description: `Gastos: ${description}`, 
+          createdBy: userId
+        }
+      })
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      message: "Gasto registrado correctamente.",
+      data: result[0] 
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: "Error al registrar gasto", error: error.message });
   }
 };
