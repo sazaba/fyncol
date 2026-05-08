@@ -1,3 +1,5 @@
+// utils/time.utils.ts
+
 // Diccionario base de países y sus UTC offsets
 export const COUNTRY_TIMEZONES: Record<string, number> = {
   'Colombia': -5,
@@ -23,18 +25,19 @@ export const COUNTRY_TIMEZONES: Record<string, number> = {
 };
 
 export const getDayLimitsByOffset = (utcOffset: number) => {
-  const now = new Date();
+  // now.getTime() SIEMPRE devuelve milisegundos en UTC absoluto, sin importar dónde estés
+  const nowUtcEpoch = new Date().getTime();
   
-  // 1. Encontramos la hora local exacta del país de la ruta
-  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const localTime = new Date(utcTime + (utcOffset * 3600000));
+  // 1. Proyectamos el tiempo UTC absoluto hacia la hora local del país destino
+  const localTime = new Date(nowUtcEpoch + (utcOffset * 3600000));
 
+  // 2. CORTE A LA MEDIANOCHE ESTRICTA (00:00:00 a 23:59:59)
+  // CRÍTICO: Usamos setUTCHours para que Node.js no aplique la zona horaria del servidor
   const localStart = new Date(localTime);
-  const localEnd = new Date(localTime);
+  localStart.setUTCHours(0, 0, 0, 0);
 
-  // 2. CORTE A LA MEDIANOCHE ESTRICTA (00:00:00 a 23:59:59 locales)
-  localStart.setHours(0, 0, 0, 0);
-  localEnd.setHours(23, 59, 59, 999);
+  const localEnd = new Date(localTime);
+  localEnd.setUTCHours(23, 59, 59, 999);
 
   // 3. Convertimos las fechas de nuevo a UTC universal para que Prisma filtre correctamente en la BD
   return { 
