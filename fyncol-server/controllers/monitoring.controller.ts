@@ -34,7 +34,8 @@ export const getDashboardStats = async (req: Request, res: Response): Promise<an
       overdueInstallments,
       clientsPaidToday,
       carteraActualQuery,
-      nuevaDeudaQuery
+      nuevaDeudaQuery,
+      gastosHoyQuery // NUEVA CONSULTA: Gastos operativos aprobados hoy
     ] = await Promise.all([
       prisma.payment.aggregate({
         _sum: { amount: true },
@@ -74,6 +75,12 @@ export const getDashboardStats = async (req: Request, res: Response): Promise<an
       prisma.installment.aggregate({
         _sum: { expectedAmount: true },
         where: { loan: { client: { routeId }, createdAt: dateFilter } }
+      }),
+
+      // Consultamos las transacciones de capital tipo GASTO para esta ruta hoy
+      prisma.capitalTransaction.aggregate({
+        _sum: { amount: true },
+        where: { routeId, type: 'GASTO', createdAt: dateFilter }
       })
     ]);
 
@@ -92,9 +99,13 @@ export const getDashboardStats = async (req: Request, res: Response): Promise<an
 
     const recaudoDia = Number(paymentsToday._sum.amount || 0);
     const saldoDisponible = Number(route.availableCapital);
+    const totalGastos = Number(gastosHoyQuery._sum.amount || 0);
 
     const prestamosTotalesDia = nuevosCreditosAmount + renovacionesAmount;
-    const cajaInicial = saldoDisponible + prestamosTotalesDia - recaudoDia;
+    
+    // LÓGICA CONTABLE AJUSTADA: 
+    // Caja Inicial = Lo que tengo hoy + Lo que salió (Préstamos + Gastos) - Lo que entró (Recaudos)
+    const cajaInicial = saldoDisponible + prestamosTotalesDia + totalGastos - recaudoDia;
 
     const carteraEsperada = Number(carteraActualQuery._sum.expectedAmount || 0);
     const carteraPagada = Number(carteraActualQuery._sum.paidAmount || 0);
@@ -117,6 +128,7 @@ export const getDashboardStats = async (req: Request, res: Response): Promise<an
         nuevosCreditosAmount,
         renovacionesAmount,
         recaudoDia,
+        totalGastos, // Añadido al payload
         carteraInicial,
         carteraFinal,
         clientesQuePagaron,
