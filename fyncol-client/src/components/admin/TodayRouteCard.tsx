@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { FiMapPin, FiUser, FiNavigation, FiLoader, FiCheckCircle } from "react-icons/fi";
+import { FiMapPin, FiUser, FiNavigation, FiLoader, FiCheckCircle, FiAlertTriangle } from "react-icons/fi";
 
 const clientIcon = new L.Icon({
   iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
@@ -32,6 +32,41 @@ const cobradorIcon = new L.Icon({
   shadowSize: [41, 41]
 });
 
+// Helper de Zonas Horarias
+const COUNTRY_TIMEZONES: Record<string, string> = {
+  'Colombia': 'America/Bogota',
+  'México': 'America/Mexico_City',
+  'Perú': 'America/Lima',
+  'Argentina': 'America/Argentina/Buenos_Aires',
+  'Chile': 'America/Santiago',
+  'Ecuador': 'America/Guayaquil',
+  'Venezuela': 'America/Caracas',
+  'Panamá': 'America/Panama',
+  'España': 'Europe/Madrid',
+  'USA': 'America/New_York', 
+  'Brasil': 'America/Sao_Paulo', 
+  'Uruguay': 'America/Montevideo',
+  'Paraguay': 'America/Asuncion',
+  'Bolivia': 'America/La_Paz',
+};
+
+// Calcula la fecha local estricta basada en el país
+const getRouteTodayStr = (countryStr?: string) => {
+  let tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (countryStr && COUNTRY_TIMEZONES[countryStr]) {
+    tz = COUNTRY_TIMEZONES[countryStr];
+  }
+  
+  const nowStr = new Date().toLocaleString("en-US", { timeZone: tz });
+  const routeDate = new Date(nowStr);
+  
+  const yyyy = routeDate.getFullYear();
+  const mm = String(routeDate.getMonth() + 1).padStart(2, '0');
+  const dd = String(routeDate.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+
 function MapFocusController({ coords }: { coords: [number, number] | null }) {
   const map = useMap();
   useEffect(() => {
@@ -45,6 +80,7 @@ function MapFocusController({ coords }: { coords: [number, number] | null }) {
 export default function TodayRouteCard({ routeId }: { routeId: number }) {
   const [clients, setClients] = useState<any[]>([]);
   const [cobradorData, setCobradorData] = useState<any>(null);
+  const [routeData, setRouteData] = useState<any>(null); // Añadido para capturar datos de la ruta
   const [focusCoords, setFocusCoords] = useState<[number, number] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [mobileView, setMobileView] = useState<'LIST' | 'MAP'>('LIST');
@@ -73,6 +109,8 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
       
       if (data.success) {
         setClients(data.clientes || []);
+        // Asumiendo que tu backend envía info de la ruta, sino usaremos un default 'Colombia'
+        setRouteData(data.ruta || { country: 'Colombia' }); 
         
         if (data.cobrador && data.cobrador.latitude && data.cobrador.longitude) {
             setCobradorData(data.cobrador);
@@ -123,6 +161,9 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
   
   const isMapVisible = mobileView === 'MAP' || (typeof window !== 'undefined' && window.innerWidth >= 1024);
 
+  // Calculamos HOY basado en la zona horaria de la ruta
+  const todayStr = getRouteTodayStr(routeData?.country);
+
   return (
     <div className="bg-[#0B1020]/60 border border-white/10 rounded-3xl shadow-2xl backdrop-blur-xl flex flex-col mb-8 overflow-hidden w-full">
       
@@ -145,10 +186,15 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
         
         {/* SECCIÓN IZQUIERDA */}
         <div className={`w-full lg:w-1/3 flex-col border-r border-white/10 p-5 flex-shrink-0 ${mobileView === 'MAP' ? 'hidden lg:flex' : 'flex'} h-full`}>
-          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 shrink-0">
-            <FiMapPin className="text-blue-400" />
-            Ruta de Hoy
-          </h3>
+          <div className="flex justify-between items-center mb-4">
+             <h3 className="text-lg font-bold text-white flex items-center gap-2 shrink-0">
+               <FiMapPin className="text-blue-400" />
+               Ruta de Hoy
+             </h3>
+             <span className="text-[9px] uppercase font-bold text-slate-500 tracking-widest bg-white/5 px-2 py-1 rounded">
+                {todayStr}
+             </span>
+          </div>
           
           <div className="flex-1 overflow-y-auto pr-2 space-y-3 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/10">
             {isLoading && clients.length === 0 ? (
@@ -159,16 +205,27 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
               <p className="text-slate-400 text-sm text-center mt-10">No hay cobros pendientes o pagados para hoy.</p>
             ) : (
               clients.map((client) => {
-                const estadoStr = (client.estado || '').toUpperCase();
+                // LÓGICA REFINADA: Evaluamos si el cliente pagó basado en la fecha de la transacción enviada o si el backend manda un flag fuerte.
+                // Dependeremos del estado que mande el backend asumiendo que tu backend ya cruza fechas.
+                let estadoStr = (client.estado || 'PENDIENTE').toUpperCase();
+                
+                // Sin embargo, si quieres asegurar el cruce visual como pediste:
+                if (client.fechaUltimoPago && client.fechaUltimoPago.split('T')[0] === todayStr) {
+                   estadoStr = 'PAGADO';
+                }
+
                 let estadoClasses = 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
                 let estadoText = 'PENDIENTE';
 
                 if (estadoStr === 'PAGADO') {
                   estadoClasses = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
                   estadoText = 'PAGADO';
-                } else if (estadoStr === 'MORA') {
+                } else if (estadoStr === 'MORA' || estadoStr === 'OVERDUE') {
                   estadoClasses = 'bg-red-500/10 text-red-400 border-red-500/20';
                   estadoText = 'MORA';
+                } else if (estadoStr === 'RENEGOTIATED') {
+                  estadoClasses = 'bg-orange-500/10 text-orange-400 border-orange-500/20';
+                  estadoText = 'ACUERDO';
                 }
 
                 return (
@@ -180,13 +237,15 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
                         setMobileView('MAP'); 
                       }
                     }}
-                    className={`border rounded-2xl p-4 transition-colors cursor-pointer group flex flex-col gap-2 ${estadoStr === 'PAGADO' ? 'bg-emerald-900/10 border-emerald-500/10 hover:bg-emerald-900/20' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}
+                    className={`border rounded-2xl p-4 transition-all cursor-pointer group flex flex-col gap-2 ${estadoStr === 'PAGADO' ? 'bg-emerald-900/10 border-emerald-500/10 hover:bg-emerald-900/20' : estadoStr === 'MORA' || estadoStr === 'OVERDUE' ? 'bg-red-900/10 border-red-500/10 hover:bg-red-900/20' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}
                   >
                     <div className="flex justify-between items-start gap-2">
                       <div className="min-w-0">
                         <p className="font-semibold text-sm text-white flex items-center gap-2 overflow-hidden">
                           {estadoStr === 'PAGADO' ? (
                             <FiCheckCircle className="text-emerald-500 shrink-0" size={14} />
+                          ) : estadoStr === 'MORA' || estadoStr === 'OVERDUE' ? (
+                            <FiAlertTriangle className="text-red-400 shrink-0" size={14} />
                           ) : (
                             <FiUser className="text-slate-400 group-hover:text-blue-400 transition-colors shrink-0" size={14} />
                           )}
@@ -207,7 +266,7 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
                     <div className="flex justify-between items-end border-t border-white/5 pt-2 mt-1">
                       <div>
                         <p className="text-[9px] text-slate-500 uppercase font-bold tracking-widest mb-0.5">Cuota</p>
-                        <p className={`text-xs font-bold ${estadoStr === 'PAGADO' ? 'text-emerald-400' : 'text-blue-400'}`}>
+                        <p className={`text-xs font-bold ${estadoStr === 'PAGADO' ? 'text-emerald-400' : estadoStr === 'MORA' || estadoStr === 'OVERDUE' ? 'text-red-400' : 'text-blue-400'}`}>
                           {formatCurrency(client.cuotaDia)}
                         </p>
                       </div>
@@ -258,7 +317,11 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
               <MapFocusController coords={focusCoords} />
 
               {clients.map((client) => {
-                const estadoStr = (client.estado || '').toUpperCase();
+                let estadoStr = (client.estado || 'PENDIENTE').toUpperCase();
+                if (client.fechaUltimoPago && client.fechaUltimoPago.split('T')[0] === todayStr) {
+                   estadoStr = 'PAGADO';
+                }
+
                 return client.latitude && client.longitude && (
                   <Marker 
                     key={client.id} 
@@ -268,7 +331,7 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
                     <Popup>
                       <strong className="text-[#0B1020]">{client.name}</strong><br/>
                       <span className="text-slate-600 text-xs">{client.address}</span><br/>
-                      <span className={`text-[10px] font-bold ${estadoStr === 'PAGADO' ? 'text-emerald-500' : 'text-blue-500'}`}>
+                      <span className={`text-[10px] font-bold ${estadoStr === 'PAGADO' ? 'text-emerald-500' : estadoStr === 'MORA' ? 'text-red-500' : 'text-blue-500'}`}>
                         {estadoStr === 'PAGADO' ? 'Pagado Hoy' : `Deuda: ${formatCurrency(client.deudaTotal)}`}
                       </span>
                     </Popup>
