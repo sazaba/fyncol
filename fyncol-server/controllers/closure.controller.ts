@@ -1,3 +1,4 @@
+// controllers/closure.controller.ts
 import { Response } from "express";
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from "../middleware/auth.middleware"; 
@@ -68,7 +69,7 @@ export const getClosureSummary = async (req: AuthRequest, res: Response) => {
       .filter(t => t.type === 'RETIRO')
       .reduce((acc, t) => acc + Number(t.amount), 0);
 
-    // NUEVO: Gastos operativos del día
+    // Gastos operativos del día
     const totalGastos = capitalTransactionsToday
       .filter(t => t.type === 'GASTO')
       .reduce((acc, t) => acc + Number(t.amount), 0);
@@ -154,7 +155,7 @@ export const getClosureSummary = async (req: AuthRequest, res: Response) => {
         totalCollected,
         totalInversiones, 
         totalRetiros,   
-        totalGastos, // <-- AGREGADO AL SUMMARY QUE SE ENVÍA AL FRONTEND
+        totalGastos, 
         newSales,
         renewals,
         totalClients,
@@ -257,7 +258,7 @@ export const confirmDailyClosure = async (req: AuthRequest, res: Response) => {
           overdueClients: Number(summaryData.overdueClients || 0) + Number(summaryData.renegotiatedClients || 0),
           totalInversiones: Number(summaryData.totalInversiones || 0), 
           totalRetiros: Number(summaryData.totalRetiros || 0),
-          totalGastos: Number(summaryData.totalGastos || 0) // <-- GUARDAMOS EN BD
+          totalGastos: Number(summaryData.totalGastos || 0) 
         }
       });
 
@@ -349,6 +350,7 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
 
     const { dueDateStart, dueDateEnd } = getDueDateLimits(start, offset);
 
+    // ACTUALIZACIÓN: Incluir toda la tabla de amortización para el frontend
     const installments = await prisma.installment.findMany({
       where: {
         loan: { 
@@ -362,7 +364,11 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
       },
       include: {
         loan: {
-          include: { client: { select: { name: true, phone: true } } }
+          include: { 
+            client: true, // Trae nombre, teléfono, lat, lng, etc.
+            installmentDetails: { orderBy: { installmentNumber: 'asc' } }, // Plan completo
+            payments: { orderBy: { createdAt: 'desc' } } // Recibos
+          }
         }
       },
       orderBy: { dueDate: 'asc' } 
@@ -404,9 +410,13 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
 
     const uniqueInstallments = Array.from(loanMap.values());
 
+    // ACTUALIZACIÓN: Mapear los detalles inyectando número de cuota, cliente y loan
     const details = uniqueInstallments.map((inst: any) => ({
       id: inst.id,
-      clientName: `${inst.loan.client.name} (Préstamo #${inst.loanId})`, 
+      installmentNumber: inst.installmentNumber, 
+      clientName: inst.loan.client.name, 
+      client: inst.loan.client,                  
+      loan: inst.loan,                           
       status: inst.status,
       expectedAmount: inst.aggregatedExpected, 
       paidAmount: inst.aggregatedPaid,         
