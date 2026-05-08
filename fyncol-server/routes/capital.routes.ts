@@ -6,7 +6,8 @@ import {
   requestExpense, 
   getPendingExpenses, 
   approveExpense, 
-  rejectExpense 
+  rejectExpense,
+  getRouteCapitalHistory
 } from '../controllers/capital.controller';
 import { verifyToken } from '../middleware/auth.middleware'; 
 
@@ -18,6 +19,7 @@ router.use(verifyToken);
 
 // Rutas de inyección de capital (Admin)
 router.get('/', getCapitalByRoute);
+router.get('/:routeId/history', getRouteCapitalHistory);
 router.post('/invest', addCapital);
 router.post('/withdraw', withdrawCapital);
 

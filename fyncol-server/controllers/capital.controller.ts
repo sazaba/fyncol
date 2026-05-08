@@ -298,3 +298,53 @@ export const rejectExpense = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ success: false, message: "Error al rechazar el gasto", error: error.message });
   }
 };
+
+// ==========================================
+// MÓDULO DE HISTORIAL Y AUDITORÍA
+// ==========================================
+
+export const getRouteCapitalHistory = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || !req.user.companyId) {
+      return res.status(403).json({ success: false, message: "Acceso denegado." });
+    }
+
+    if (req.user.role !== "ADMIN" && req.user.role !== "SUPERADMIN") {
+      return res.status(403).json({ success: false, message: "Acceso denegado. Requiere rol ADMIN." });
+    }
+
+    const companyId = req.user.companyId;
+    const routeId = Number(req.params.routeId);
+
+    if (!routeId) {
+      return res.status(400).json({ success: false, message: "ID de ruta inválido." });
+    }
+
+    // Validar que la ruta le pertenezca a la empresa del Admin
+    const route = await prisma.route.findFirst({
+      where: { id: routeId, companyId }
+    });
+
+    if (!route) {
+      return res.status(404).json({ success: false, message: "Ruta no encontrada o no autorizada." });
+    }
+
+    // Extraer todo el historial de transacciones de capital ordenado por fecha (más reciente primero)
+    const history = await prisma.capitalTransaction.findMany({
+      where: { routeId },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return res.status(200).json({ 
+      success: true, 
+      data: history 
+    });
+
+  } catch (error: any) {
+    return res.status(500).json({ 
+      success: false, 
+      message: "Error al obtener el historial de capital", 
+      error: error.message 
+    });
+  }
+};
