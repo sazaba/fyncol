@@ -1,3 +1,5 @@
+// controllers/rutas.controller.ts
+
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth.middleware'; 
@@ -31,9 +33,8 @@ const COUNTRY_TIMEZONES: Record<string, number> = {
 };
 
 const getDayLimitsByOffset = (utcOffset: number) => {
-  const now = new Date();
-  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const localTime = new Date(utcTime + (utcOffset * 3600000));
+  const nowUtcEpoch = new Date().getTime();
+  const localTime = new Date(nowUtcEpoch + (utcOffset * 3600000));
 
   const localStart = new Date(localTime);
   const localEnd = new Date(localTime);
@@ -41,18 +42,18 @@ const getDayLimitsByOffset = (utcOffset: number) => {
   const corteAlMediodia = true; // TRUE = Cierra a las 12:00 PM
 
   if (corteAlMediodia) {
-    if (localTime.getHours() < 12) {
-      localStart.setDate(localStart.getDate() - 1);
-      localStart.setHours(12, 0, 0, 0);
-      localEnd.setHours(11, 59, 59, 999);
+    if (localTime.getUTCHours() < 12) {
+      localStart.setUTCDate(localStart.getUTCDate() - 1);
+      localStart.setUTCHours(12, 0, 0, 0);
+      localEnd.setUTCHours(11, 59, 59, 999);
     } else {
-      localStart.setHours(12, 0, 0, 0);
-      localEnd.setDate(localEnd.getDate() + 1);
-      localEnd.setHours(11, 59, 59, 999);
+      localStart.setUTCHours(12, 0, 0, 0);
+      localEnd.setUTCDate(localEnd.getUTCDate() + 1);
+      localEnd.setUTCHours(11, 59, 59, 999);
     }
   } else {
-    localStart.setHours(0, 0, 0, 0);
-    localEnd.setHours(23, 59, 59, 999);
+    localStart.setUTCHours(0, 0, 0, 0);
+    localEnd.setUTCHours(23, 59, 59, 999);
   }
 
   return { 
@@ -74,7 +75,6 @@ export const crearRuta = async (req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
-    // EXTRAER EL NUEVO CAMPO DEL BODY
     const { country, city, currency, assignedToId, maxLoanPerClient } = req.body;
     
     if (assignedToId) {
@@ -93,7 +93,6 @@ export const crearRuta = async (req: AuthRequest, res: Response): Promise<void> 
               country, city, currency,
               assignedToId: Number(assignedToId),
               companyId,
-              // GUARDAR EL NUEVO TOPE DE CREDITO
               maxLoanPerClient: maxLoanPerClient ? Number(maxLoanPerClient) : 0 
             },
             include: { assignedTo: true }
@@ -110,7 +109,6 @@ export const crearRuta = async (req: AuthRequest, res: Response): Promise<void> 
         country, city, currency,
         assignedToId: assignedToId ? Number(assignedToId) : null,
         companyId,
-        // GUARDAR EL NUEVO TOPE DE CREDITO
         maxLoanPerClient: maxLoanPerClient ? Number(maxLoanPerClient) : 0 
       },
       include: { assignedTo: true }
@@ -174,7 +172,6 @@ export const obtenerRutas = async (req: AuthRequest, res: Response): Promise<voi
   }
 };
 
-// NUEVA FUNCIÓN PARA ACTUALIZAR DATOS GENERALES (E.g. Tope de Crédito)
 export const actualizarRuta = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -198,7 +195,6 @@ export const actualizarRuta = async (req: AuthRequest, res: Response): Promise<v
     const rutaActualizada = await prisma.route.update({
       where: { id: Number(id) },
       data: {
-        // Actualiza el tope si viene en el request, de lo contrario lo deja igual
         maxLoanPerClient: maxLoanPerClient !== undefined ? Number(maxLoanPerClient) : rutaExistente.maxLoanPerClient
       }
     });
@@ -399,6 +395,7 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
       let hasMora = false;
       let hasPaymentToday = false;
       let needsToVisitToday = false; 
+      let hasUnpaidInstallmentTodayOrBefore = false; // NUEVA VARIABLE CLAVE
 
       for (const loan of client.loans) {
         if (loan.payments.length > 0) {
@@ -406,12 +403,14 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
         }
 
         for (const inst of loan.installmentDetails) {
-          if (['PENDING', 'PARTIAL', 'OVERDUE', 'RENEGOTIATED'].includes(inst.status)) {
-            deudaTotal += (Number(inst.expectedAmount) - Number(inst.paidAmount));
-          }
-
           const dueDate = new Date(inst.dueDate);
           const isDueToday = dueDate >= hoyInicio && dueDate <= hoyFin;
+          const isDueBeforeToday = dueDate < hoyInicio;
+          const isPendingStatus = ['PENDING', 'PARTIAL', 'OVERDUE', 'RENEGOTIATED'].includes(inst.status);
+
+          if (isPendingStatus) {
+            deudaTotal += (Number(inst.expectedAmount) - Number(inst.paidAmount));
+          }
 
           if (isDueToday) {
             cuotaDia += Number(inst.expectedAmount);
@@ -419,6 +418,11 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
 
           if (inst.status === 'OVERDUE') {
             hasMora = true;
+          }
+
+          // Si hay una cuota vencida o de hoy que no se ha pagado completamente
+          if (isPendingStatus && (isDueToday || isDueBeforeToday)) {
+             hasUnpaidInstallmentTodayOrBefore = true;
           }
 
           if (
@@ -438,10 +442,15 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
       if (needsToVisitToday) {
         let estado = 'PENDIENTE';
         
-        if (hasPaymentToday) {
+        // LÓGICA CORREGIDA:
+        // Solo es 'PAGADO' si hizo un pago hoy Y NO tiene cuotas vivas de hoy o días anteriores.
+        if (hasPaymentToday && !hasUnpaidInstallmentTodayOrBefore) {
           estado = 'PAGADO'; 
         } else if (hasMora) {
           estado = 'MORA';   
+        } else if (hasPaymentToday && hasUnpaidInstallmentTodayOrBefore) {
+          // Si pagó algo pero sigue debiendo, lo dejamos como PENDIENTE (o ABONO)
+          estado = 'PENDIENTE'; 
         }
 
         clientesProcesados.push({
@@ -460,6 +469,7 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
     res.json({ 
       success: true, 
       clientes: clientesProcesados,
+      ruta: { country: ruta.country }, // Mandamos el país para que el frontend pueda calcular el hoy
       cobrador: ruta.assignedTo ? {
         id: ruta.assignedTo.id,
         name: ruta.assignedTo.name,
@@ -528,6 +538,7 @@ export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise
           let needsToVisitToday = false;
           let hasPaymentToday = false;
           let hasMora = false;
+          let hasUnpaidInstallmentTodayOrBefore = false;
 
           client.loans.forEach((loan: any) => {
             if (loan.payments.length > 0) {
@@ -540,9 +551,15 @@ export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise
             loan.installmentDetails.forEach((inst: any) => {
               const dueDate = new Date(inst.dueDate);
               const isDueToday = dueDate >= hoyInicio && dueDate <= hoyFin;
+              const isDueBeforeToday = dueDate < hoyInicio;
+              const isPendingStatus = ['PENDING', 'PARTIAL', 'OVERDUE', 'RENEGOTIATED'].includes(inst.status);
 
               if (inst.status === 'OVERDUE') {
                 hasMora = true;
+              }
+
+              if (isPendingStatus && (isDueToday || isDueBeforeToday)) {
+                 hasUnpaidInstallmentTodayOrBefore = true;
               }
 
               if (
@@ -562,7 +579,8 @@ export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise
           if (needsToVisitToday) {
             clientesTotales++;
             
-            if (hasPaymentToday) {
+            // LÓGICA CORREGIDA PARA EL RESUMEN:
+            if (hasPaymentToday && !hasUnpaidInstallmentTodayOrBefore) {
               clientesCobrados++; 
             } else if (hasMora) {
               clientesMora++;     
