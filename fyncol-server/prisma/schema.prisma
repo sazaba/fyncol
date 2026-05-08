@@ -71,9 +71,10 @@ model User {
   companyId Int?     @map("company_id")
   company   Company? @relation(fields: [companyId], references: [id])
 
-  route         Route?
-  dailyClosures DailyClosure[]
-  loanRequests  LoanRequest[]
+  route           Route?
+  dailyClosures   DailyClosure[]
+  loanRequests    LoanRequest[]
+  expenseRequests ExpenseRequest[] // <-- RELACIÓN AÑADIDA
 
   @@map("users")
 }
@@ -97,9 +98,10 @@ model Route {
   availableCapital Decimal              @default(0) @map("available_capital")
   transactions     CapitalTransaction[]
 
-  clients       Client[]
-  dailyClosures DailyClosure[]
-  loanRequests  LoanRequest[]
+  clients         Client[]
+  dailyClosures   DailyClosure[]
+  loanRequests    LoanRequest[]
+  expenseRequests ExpenseRequest[] // <-- RELACIÓN AÑADIDA
 
   @@map("routes")
 }
@@ -158,7 +160,6 @@ model Loan {
   @@map("loans")
 }
 
-// NUEVO MODELO AISLADO
 model LoanRequest {
   id               Int      @id @default(autoincrement())
   amount           Decimal
@@ -180,6 +181,23 @@ model LoanRequest {
   requestedBy   User @relation(fields: [requestedById], references: [id])
 
   @@map("loan_requests")
+}
+
+
+model ExpenseRequest {
+  id          Int      @id @default(autoincrement())
+  amount      Decimal
+  description String   @db.VarChar(255)
+  status      String   @default("PENDING") @db.VarChar(20) // PENDING, APPROVED, REJECTED
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  routeId Int   @map("route_id")
+  route   Route @relation(fields: [routeId], references: [id])
+
+  requestedById Int  @map("requested_by_id")
+  requestedBy   User @relation(fields: [requestedById], references: [id])
+
+  @@map("expense_requests")
 }
 
 model Payment {
@@ -231,7 +249,7 @@ model DailyClosure {
 
   totalInversiones Decimal @default(0) @map("total_inversiones")
   totalRetiros     Decimal @default(0) @map("total_retiros")
-  totalGastos      Decimal @default(0) @map("total_gastos") // <-- NUEVO CAMPO AÑADIDO
+  totalGastos      Decimal @default(0) @map("total_gastos")
 
   @@map("daily_closures")
 }
@@ -246,7 +264,7 @@ enum Role {
 enum TransactionType {
   INVERSION
   RETIRO
-  GASTO // <-- NUEVO ENUM AÑADIDO
+  GASTO 
 }
 
 enum SubscriptionStatus {
