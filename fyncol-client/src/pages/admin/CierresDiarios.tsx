@@ -98,43 +98,47 @@ export default function CierresDiarios() {
                   </tr>
                 </thead>
                 <tbody className="text-sm divide-y divide-white/5">
-                  {closures.map((closure) => (
-                    <tr key={closure.id} className="hover:bg-white/[0.02] transition-colors">
-                      <td className="p-4">
-                        <div className="flex items-center gap-2">
-                          <FiCalendar className="text-slate-500" />
-                          <div>
-                            <p className="font-semibold text-white">{new Date(closure.closedAt).toLocaleDateString('es-CO')}</p>
-                            <p className="text-xs text-slate-400">{new Date(closure.closedAt).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</p>
+                  {closures.map((closure) => {
+                     // Efectivo que el cobrador realmente devuelve en base
+                     const efectivoNeto = Number(closure.totalCollected || 0) - Number(closure.totalGastos || 0);
+                     return (
+                      <tr key={closure.id} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                            <FiCalendar className="text-slate-500" />
+                            <div>
+                              <p className="font-semibold text-white">{new Date(closure.closedAt).toLocaleDateString('es-CO')}</p>
+                              <p className="text-xs text-slate-400">{new Date(closure.closedAt).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</p>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 bg-blue-500/10 text-blue-400 rounded-full flex items-center justify-center font-bold text-xs">
-                            {closure.closedBy?.name?.charAt(0).toUpperCase() || <FiUser />}
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                            <div className="h-8 w-8 bg-blue-500/10 text-blue-400 rounded-full flex items-center justify-center font-bold text-xs">
+                              {closure.closedBy?.name?.charAt(0).toUpperCase() || <FiUser />}
+                            </div>
+                            <span className="font-medium">{closure.closedBy?.name || 'Desconocido'}</span>
                           </div>
-                          <span className="font-medium">{closure.closedBy?.name || 'Desconocido'}</span>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <span className="flex items-center gap-1.5 text-slate-300">
-                          <FiMap className="text-slate-500" /> {closure.route?.city || 'N/A'}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right font-bold text-emerald-400">
-                        ${Math.round(Number(closure.totalCollected) || 0).toLocaleString('es-CO')}
-                      </td>
-                      <td className="p-4 text-center">
-                        <button 
-                          onClick={() => handleOpenTicket(closure)}
-                          className="px-3 py-1.5 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 rounded-lg text-xs font-semibold transition-colors border border-blue-500/20 flex items-center justify-center gap-1.5 mx-auto"
-                        >
-                          <FiEye /> Auditoría
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="p-4">
+                          <span className="flex items-center gap-1.5 text-slate-300">
+                            <FiMap className="text-slate-500" /> {closure.route?.city || 'N/A'}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right font-bold text-emerald-400">
+                          ${Math.round(efectivoNeto).toLocaleString('es-CO')}
+                        </td>
+                        <td className="p-4 text-center">
+                          <button 
+                            onClick={() => handleOpenTicket(closure)}
+                            className="px-3 py-1.5 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 rounded-lg text-xs font-semibold transition-colors border border-blue-500/20 flex items-center justify-center gap-1.5 mx-auto"
+                          >
+                            <FiEye /> Auditoría
+                          </button>
+                        </td>
+                      </tr>
+                     );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -173,25 +177,40 @@ export default function CierresDiarios() {
             {/* Contenido Scrollable */}
             <div className="p-6 overflow-y-auto [&::-webkit-scrollbar]:hidden">
               
-              {/* TAB 1: RESUMEN FINANCIERO */}
+              {/* TAB 1: RESUMEN FINANCIERO ACTUALIZADO CON GASTOS */}
               {modalTab === 'RESUMEN' && (
                 <div className="animate-[fadeIn_0.2s_ease-out]">
 
                   <div className="grid grid-cols-2 gap-3 mb-6">
-                    {/* Tarjeta Principal: Recaudo */}
-                    <div className="bg-[#0B0B12] border border-white/5 p-4 rounded-xl col-span-2 text-center shadow-inner">
-                      <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Efectivo Entregado (Recaudo)</p>
-                      <p className="text-3xl font-bold text-emerald-400">${Math.round(Number(selectedClosure.totalCollected || 0)).toLocaleString('es-CO')}</p>
+                    {/* Tarjeta Principal: Recaudo Neto */}
+                    <div className="bg-[#0B0B12] border border-white/5 p-4 rounded-xl col-span-2 text-center shadow-inner relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-emerald-400"></div>
+                      <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1 mt-1">Efectivo Entregado en Base</p>
+                      <p className="text-3xl font-bold text-emerald-400">
+                        ${Math.round(Number(selectedClosure.totalCollected || 0) - Number(selectedClosure.totalGastos || 0)).toLocaleString('es-CO')}
+                      </p>
+                    </div>
+
+                    {/* Tarjeta de Recaudo Real y Gastos */}
+                    <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl col-span-2 flex justify-between items-center">
+                       <div className="text-center w-1/2 border-r border-white/10">
+                         <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider mb-1">Recaudo Bruto</p>
+                         <p className="text-sm font-bold text-white">+${Math.round(Number(selectedClosure.totalCollected || 0)).toLocaleString('es-CO')}</p>
+                       </div>
+                       <div className="text-center w-1/2">
+                         <p className="text-[10px] text-red-500/80 font-bold uppercase tracking-wider mb-1">Gastos Operativos</p>
+                         <p className="text-sm font-bold text-red-400">-${Math.round(Number(selectedClosure.totalGastos || 0)).toLocaleString('es-CO')}</p>
+                       </div>
                     </div>
 
                     {/* Tarjeta Combinada: Inversiones y Retiros Históricos */}
-                    <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl col-span-2 flex justify-between items-center">
+                    <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl col-span-2 flex justify-between items-center mt-[-4px]">
                        <div className="text-center w-1/2 border-r border-white/10">
-                         <p className="text-[10px] text-emerald-500/80 font-bold uppercase tracking-wider mb-1">Inversiones en esta fecha</p>
+                         <p className="text-[10px] text-emerald-500/80 font-bold uppercase tracking-wider mb-1">Inversiones Recibidas</p>
                          <p className="text-sm font-bold text-white">+${Math.round(Number(selectedClosure.totalInversiones || 0)).toLocaleString('es-CO')}</p>
                        </div>
                        <div className="text-center w-1/2">
-                         <p className="text-[10px] text-red-500/80 font-bold uppercase tracking-wider mb-1">Retiros en esta fecha</p>
+                         <p className="text-[10px] text-red-500/80 font-bold uppercase tracking-wider mb-1">Retiros del Admin</p>
                          <p className="text-sm font-bold text-white">-${Math.round(Number(selectedClosure.totalRetiros || 0)).toLocaleString('es-CO')}</p>
                        </div>
                     </div>
@@ -251,7 +270,6 @@ export default function CierresDiarios() {
                         const expected = Math.round(Number(detail.expectedAmount || 0));
                         const isPaid = paid >= expected && detail.status === 'PAID';
                         
-                        // NUEVO: Verificamos si en la observación del backend dice la palabra "liquid" (liquidado/liquidación)
                         const isRealLiquidation = isPaid && detail.observation?.toLowerCase().includes('liquid');
 
                         return (
@@ -280,7 +298,6 @@ export default function CierresDiarios() {
                               </div>
                             </div>
 
-                            {/* TEXTO DE AUDITORÍA (Descripción exacta enviada por el Cobrador) */}
                             <div className={`text-[11px] font-medium p-2.5 rounded-lg flex items-start gap-2 border ${detail.status === 'OVERDUE' ? 'bg-red-500/10 border-red-500/20 text-red-300' : detail.status === 'RENEGOTIATED' ? 'bg-orange-500/10 border-orange-500/20 text-orange-300' : isPaid ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' : 'bg-blue-500/5 border-blue-500/20 text-blue-300'}`}>
                               {detail.status === 'OVERDUE' ? <FiAlertTriangle className="shrink-0 mt-0.5" /> : detail.status === 'RENEGOTIATED' ? <FiClock className="shrink-0 mt-0.5" /> : isPaid ? <FiCheckCircle className="shrink-0 mt-0.5" /> : <FiInfo className="shrink-0 mt-0.5" />}
                               <span className="leading-relaxed">{detail.observation}</span>

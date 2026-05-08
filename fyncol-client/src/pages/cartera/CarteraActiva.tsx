@@ -3,7 +3,7 @@ import {
   FiDollarSign, FiMapPin, FiSearch, 
   FiAlertTriangle, FiX, FiLoader, FiNavigation,
   FiSun, FiMoon, FiCheckCircle, FiExternalLink, FiMap, FiCalendar, FiLock, FiClock, FiInfo,
-  FiList
+  FiList, FiTrendingDown
 } from 'react-icons/fi';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
@@ -41,7 +41,6 @@ function MapController({ coords, zoom }: { coords: [number, number] | null, zoom
   return null;
 }
 
-// Diccionarios de zonas horarias para blindar la fecha del dispositivo
 const COUNTRY_CODES = [
   { code: '+57', country: 'Colombia', aliases: ['colombia', 'col'] },
   { code: '+52', country: 'México', aliases: ['mexico', 'méxico', 'mex'] },
@@ -93,7 +92,6 @@ const getRouteTodayStr = (countryStr?: string) => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-// HOOK DE RELOJ EN TIEMPO REAL SINCRONIZADO CON LA RUTA
 function useRouteClock(countryStr?: string) {
   const [timeStr, setTimeStr] = useState('');
 
@@ -165,7 +163,20 @@ export default function CarteraActiva() {
   const latestCoords = useRef<{lat: number, lng: number} | null>(null);
   const [gpsStatus, setGpsStatus] = useState<'SEARCHING' | 'ACTIVE' | 'ERROR'>('SEARCHING');
 
-  // Inicialización del reloj
+  // --- NUEVOS ESTADOS PARA GASTOS ---
+  const [expenseModalOpen, setExpenseModalOpen] = useState(false);
+  const [expenseAmount, setExpenseAmount] = useState("");
+  const [expenseCategory, setExpenseCategory] = useState("Azulejos");
+  const [isRegisteringExpense, setIsRegisteringExpense] = useState(false);
+
+  const GASTOS_CATEGORIES = [
+    "Azulejos", "Comisión", "Sueldo Ayudante", "Sueldo Revisador", 
+    "Varios", "Oficina", "Transporte", "Mto. Moto", "Gasolina", 
+    "Ayudante", "Arriendo", "Seguro", "Medico", "Rep. Tarjetas", 
+    "Tramites", "Alimentación", "Rec-Cel-Cob", "Papeleria", 
+    "Vales", "VendaMais"
+  ];
+
   const currentTime = useRouteClock(routeInfo?.country);
 
   useEffect(() => {
@@ -232,7 +243,6 @@ export default function CarteraActiva() {
 
   useEffect(() => { fetchCartera(); }, []);
 
-  // Bloqueo visual por LocalStorage (ahora respaldado por el Backend)
   useEffect(() => {
     if (routeInfo) {
       const todayStr = getRouteTodayStr(routeInfo.country);
@@ -289,6 +299,44 @@ export default function CarteraActiva() {
       setFocusCoords(routePolylineCoords[0]);
     }
   }, [routePolylineCoords]);
+
+  // --- LÓGICA DE REGISTRO DE GASTOS ---
+  const handleRegisterExpense = async () => {
+    setIsRegisteringExpense(true);
+    try {
+      const token = localStorage.getItem("token");
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const cleanAmount = Number(expenseAmount.replace(/[^0-9]/g, ''));
+
+      if (cleanAmount <= 0) {
+        alert("Ingresa un monto válido mayor a 0");
+        setIsRegisteringExpense(false);
+        return;
+      }
+
+      const res = await fetch(`${baseUrl}/api/capital/expense`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ amount: cleanAmount, description: expenseCategory })
+      });
+      const data = await res.json();
+      
+      if (res.ok && data.success) {
+        setExpenseModalOpen(false);
+        setExpenseAmount("");
+        await fetchCartera(); // Recargamos para ver el saldo de capital descontado
+      } else {
+        alert(data.message || data.error || "No se pudo registrar el gasto");
+      }
+    } catch (error) {
+      alert("Error de conexión al registrar el gasto");
+    } finally {
+      setIsRegisteringExpense(false);
+    }
+  };
 
   const handleLiquidarDeudaTotal = async (loanId: number) => {
     if(isRouteClosed) return; 
@@ -476,10 +524,15 @@ export default function CarteraActiva() {
                   <span className="text-sm font-bold text-green-400">${Math.round(Number(routeInfo.availableCapital) || 0).toLocaleString('es-CO')}</span>
                 </div>
               </div>
+              
+              {/* BOTONERA GASTOS / CIERRE */}
               {isRouteClosed ? (
                 <button disabled className="w-full bg-[#0B0B12] text-slate-500 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border border-white/5 cursor-not-allowed"><FiLock size={16} /> Ruta Cerrada por Hoy</button>
               ) : (
-                <button onClick={handleOpenClosure} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-emerald-900/20 transition-all flex items-center justify-center gap-2 border border-emerald-500/30"><FiCheckCircle size={16} /> Cerrar Ruta de Hoy</button>
+                <div className="flex gap-2">
+                  <button onClick={() => setExpenseModalOpen(true)} className="flex-1 bg-red-600/10 hover:bg-red-600/20 border border-red-500/30 text-red-400 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-1.5"><FiTrendingDown size={14} /> Gasto</button>
+                  <button onClick={handleOpenClosure} className="flex-[2] bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-emerald-900/20 transition-all flex items-center justify-center gap-2 border border-emerald-500/30"><FiCheckCircle size={16} /> Cerrar Ruta</button>
+                </div>
               )}
             </div>
           )}
@@ -671,6 +724,56 @@ export default function CarteraActiva() {
         </MapContainer>
       </div>
 
+      {/* MODAL REGISTRAR GASTOS OPERATIVOS */}
+      {expenseModalOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-[#05050A] border border-white/10 rounded-3xl p-7 shadow-2xl animate-[slideUp_0.18s_ease-out]">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2"><FiTrendingDown className="text-red-400" /> Registrar Gasto</h3>
+              <button onClick={() => setExpenseModalOpen(false)} className="text-slate-500 hover:text-white"><FiX size={20}/></button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-1 block">Rubro del Gasto</label>
+                <select 
+                  value={expenseCategory} 
+                  onChange={(e) => setExpenseCategory(e.target.value)}
+                  className="w-full bg-[#0B1020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-red-500 transition-colors"
+                >
+                  {GASTOS_CATEGORIES.map(cat => <option key={cat} value={cat}>Gastos: {cat}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-1 block">Monto a retirar</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
+                  <input 
+                    type="text" 
+                    inputMode="numeric"
+                    value={expenseAmount ? new Intl.NumberFormat('es-CO').format(Number(expenseAmount.replace(/[^0-9]/g, ''))) : ''} 
+                    onChange={(e) => setExpenseAmount(e.target.value)} 
+                    className="w-full bg-[#0B1020] border border-white/10 rounded-xl pl-8 pr-4 py-3 text-lg font-bold text-red-400 outline-none shadow-inner focus:border-red-500 transition-colors" 
+                    placeholder="0" 
+                  />
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1.5 flex items-center gap-1"><FiInfo/> Este dinero se descontará de la ruta.</p>
+              </div>
+            </div>
+
+            <button 
+              onClick={handleRegisterExpense}
+              disabled={isRegisteringExpense || !expenseAmount}
+              className="w-full mt-6 py-3.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-red-600/20 disabled:opacity-50 flex items-center justify-center gap-2 uppercase tracking-widest"
+            >
+              {isRegisteringExpense ? <FiLoader className="animate-spin" /> : 'Confirmar Gasto'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* DEMÁS MODALES INTACTOS */}
       {confirmPayModal.open && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-[#05050A] border border-white/10 rounded-3xl p-7 shadow-2xl text-center animate-[slideUp_0.18s_ease-out]">
@@ -802,11 +905,10 @@ export default function CarteraActiva() {
         );
       })()}
 
-      {/* POPUP INTELIGENTE DE ABONOS CON LIQUIDACIÓN TOTAL INCLUIDA */}
       {manualPayModal.open && (() => {
         const inst = manualPayModal.inst;
         const faltante = Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount || 0));
-        const abonoValue = parseFloat(manualAmount) || 0;
+        const abonoValue = parseFloat(manualAmount.replace(/[^0-9.-]+/g,"")) || 0;
         
         const diferencia = Math.abs(faltante - abonoValue);
         const esParcial = abonoValue > 0 && abonoValue < faltante;
@@ -847,7 +949,7 @@ export default function CarteraActiva() {
 
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
-                  <input type="number" value={manualAmount} onChange={(e) => setManualAmount(e.target.value)} className={`w-full bg-[#0B0B12] border ${esExcedente ? 'border-emerald-500 focus:border-emerald-400 text-emerald-400' : 'border-white/10 focus:border-blue-500 text-white'} rounded-2xl pl-8 pr-4 py-4 text-2xl font-bold outline-none shadow-inner transition-colors text-center`} placeholder="0.00" autoFocus />
+                  <input type="text" inputMode="numeric" value={manualAmount ? new Intl.NumberFormat('es-CO').format(Number(manualAmount.replace(/[^0-9]/g, ''))) : ''} onChange={(e) => setManualAmount(e.target.value)} className={`w-full bg-[#0B0B12] border ${esExcedente ? 'border-emerald-500 focus:border-emerald-400 text-emerald-400' : 'border-white/10 focus:border-blue-500 text-white'} rounded-2xl pl-8 pr-4 py-4 text-2xl font-bold outline-none shadow-inner transition-colors text-center`} placeholder="0" autoFocus />
                 </div>
               </div>
 
@@ -989,7 +1091,6 @@ export default function CarteraActiva() {
         );
       })()}
 
-      {/* MODAL: HISTORIAL DEL CLIENTE */}
       {selectedClient && (
         <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setSelectedClient(null)}>
           <div className="w-full max-w-2xl bg-[#05050A] border border-white/10 rounded-[30px] shadow-2xl flex flex-col max-h-[85dvh] animate-[slideUp_0.18s_ease-out]" onClick={e => e.stopPropagation()}>
@@ -1114,7 +1215,7 @@ export default function CarteraActiva() {
         </div>
       )}
 
-      {/* MODAL DE ARQUEO DE CAJA (CIERRE DIARIO) */}
+      {/* MODAL DE ARQUEO DE CAJA (CIERRE DIARIO ACTUALIZADO CON GASTOS) */}
       {closureModalOpen && closureSummary && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-md bg-[#05050A] border border-white/10 rounded-3xl p-7 shadow-2xl animate-[slideUp_0.18s_ease-out]">
@@ -1124,32 +1225,47 @@ export default function CarteraActiva() {
               <p className="text-sm text-slate-400">Verifica los valores antes de entregar el efectivo.</p>
             </div>
 
-     <div className="grid grid-cols-2 gap-3 mb-6">
-              {/* Tarjeta Principal: Recaudo */}
-              <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl col-span-2 text-center shadow-inner">
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Efectivo a entregar (Recaudo)</p>
-                <p className="text-3xl font-bold text-emerald-400">${closureSummary.totalCollected?.toLocaleString('es-CO')}</p>
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              {/* Tarjeta Principal: Efectivo Final */}
+              <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl col-span-2 text-center shadow-inner relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-emerald-400"></div>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1 mt-1">Efectivo a entregar en base</p>
+                <p className="text-3xl font-bold text-emerald-400">
+                  {/* Se resta el totalGastos al Efectivo recolectado para dar el número exacto que debe devolver */}
+                  ${(closureSummary.totalCollected - (closureSummary.totalGastos || 0)).toLocaleString('es-CO')}
+                </p>
               </div>
 
-              {/* Tarjeta de Inversiones y Retiros combinada */}
+              {/* Tarjeta de Recaudo Real y Gastos */}
               <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl col-span-2 flex justify-between items-center">
                  <div className="text-center w-1/2 border-r border-white/10">
-                   <p className="text-[10px] text-emerald-500/80 font-bold uppercase tracking-wider mb-1">Inversiones Hoy</p>
+                   <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider mb-1">Recaudo Bruto</p>
+                   <p className="text-sm font-bold text-white">+${(closureSummary.totalCollected || 0).toLocaleString('es-CO')}</p>
+                 </div>
+                 <div className="text-center w-1/2">
+                   <p className="text-[10px] text-red-500/80 font-bold uppercase tracking-wider mb-1">Gastos Operativos</p>
+                   <p className="text-sm font-bold text-red-400">-${(closureSummary.totalGastos || 0).toLocaleString('es-CO')}</p>
+                 </div>
+              </div>
+
+              {/* Tarjeta de Inversiones y Retiros */}
+              <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl col-span-2 flex justify-between items-center mt-[-4px]">
+                 <div className="text-center w-1/2 border-r border-white/10">
+                   <p className="text-[10px] text-emerald-500/80 font-bold uppercase tracking-wider mb-1">Inversión Recibida</p>
                    <p className="text-sm font-bold text-white">+${(closureSummary.totalInversiones || 0).toLocaleString('es-CO')}</p>
                  </div>
                  <div className="text-center w-1/2">
-                   <p className="text-[10px] text-red-500/80 font-bold uppercase tracking-wider mb-1">Retiros Hoy</p>
+                   <p className="text-[10px] text-red-500/80 font-bold uppercase tracking-wider mb-1">Retiros del Admin</p>
                    <p className="text-sm font-bold text-white">-${(closureSummary.totalRetiros || 0).toLocaleString('es-CO')}</p>
                  </div>
               </div>
 
-              {/* Tarjetas Secundarias */}
               <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl">
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Disponible en ruta</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Disponible Ruta</p>
                 <p className="text-sm font-bold text-blue-400">${closureSummary.availableCapital?.toLocaleString('es-CO')}</p>
               </div>
               <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl">
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Cartera en la calle</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Cartera en calle</p>
                 <p className="text-sm font-bold text-white">${closureSummary.totalPortfolio?.toLocaleString('es-CO')}</p>
               </div>
               <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl">
