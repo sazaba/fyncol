@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FiCheckCircle, FiLoader, FiMap, FiCalendar, FiUser, FiEye, FiX, FiAlertTriangle, FiClock, FiInfo } from 'react-icons/fi';
+import { FiCheckCircle, FiLoader, FiMap, FiCalendar, FiUser, FiEye, FiX, FiAlertTriangle, FiClock, FiInfo, FiDollarSign } from 'react-icons/fi';
 
 const traducirEstado = (status: string) => {
   switch (status) {
@@ -21,6 +21,10 @@ export default function CierresDiarios() {
   
   const [closureDetails, setClosureDetails] = useState<any[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+
+  // Estados para el Modal de Auditoría de Cliente (Tabla de Amortización)
+  const [selectedClientModal, setSelectedClientModal] = useState<any>(null);
+  const [clientModalTab, setClientModalTab] = useState<'PLAN' | 'RECIBOS'>('PLAN');
 
   useEffect(() => {
     const fetchClosures = async () => {
@@ -63,6 +67,13 @@ export default function CierresDiarios() {
       console.error("Error fetching closure details");
     } finally {
       setIsLoadingDetails(false);
+    }
+  };
+
+  const openClientAmortization = (detail: any) => {
+    if (detail.loan && detail.client) {
+      setSelectedClientModal(detail);
+      setClientModalTab('PLAN');
     }
   };
 
@@ -147,7 +158,7 @@ export default function CierresDiarios() {
 
       </div>
 
-      {/* MODAL: DETALLE DEL CIERRE Y AUDITORÍA */}
+      {/* MODAL PRINCIPAL: DETALLE DEL CIERRE */}
       {selectedClosure && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 text-left" onClick={() => setSelectedClosure(null)}>
           <div className="w-full max-w-lg bg-[#05050A] border border-white/10 rounded-[30px] shadow-2xl animate-[slideUp_0.18s_ease-out] flex flex-col max-h-[90dvh]" onClick={e => e.stopPropagation()}>
@@ -177,12 +188,11 @@ export default function CierresDiarios() {
             {/* Contenido Scrollable */}
             <div className="p-6 overflow-y-auto [&::-webkit-scrollbar]:hidden">
               
-              {/* TAB 1: RESUMEN FINANCIERO ACTUALIZADO CON GASTOS */}
+              {/* TAB 1: RESUMEN FINANCIERO */}
               {modalTab === 'RESUMEN' && (
                 <div className="animate-[fadeIn_0.2s_ease-out]">
 
                   <div className="grid grid-cols-2 gap-3 mb-6">
-                    {/* Tarjeta Principal: Recaudo Neto */}
                     <div className="bg-[#0B0B12] border border-white/5 p-4 rounded-xl col-span-2 text-center shadow-inner relative overflow-hidden">
                       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-emerald-400"></div>
                       <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1 mt-1">Efectivo Entregado en Base</p>
@@ -191,7 +201,6 @@ export default function CierresDiarios() {
                       </p>
                     </div>
 
-                    {/* Tarjeta de Recaudo Real y Gastos */}
                     <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl col-span-2 flex justify-between items-center">
                        <div className="text-center w-1/2 border-r border-white/10">
                          <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider mb-1">Recaudo Bruto</p>
@@ -203,7 +212,6 @@ export default function CierresDiarios() {
                        </div>
                     </div>
 
-                    {/* Tarjeta Combinada: Inversiones y Retiros Históricos */}
                     <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl col-span-2 flex justify-between items-center mt-[-4px]">
                        <div className="text-center w-1/2 border-r border-white/10">
                          <p className="text-[10px] text-emerald-500/80 font-bold uppercase tracking-wider mb-1">Inversiones Recibidas</p>
@@ -215,7 +223,6 @@ export default function CierresDiarios() {
                        </div>
                     </div>
 
-                    {/* Tarjetas Secundarias */}
                     <div className="bg-[#0B0B12] border border-white/5 p-3 rounded-xl">
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Disponible en ruta</p>
                       <p className="text-sm font-bold text-blue-400">${Math.round(Number(selectedClosure.availableCapital || 0)).toLocaleString('es-CO')}</p>
@@ -251,7 +258,7 @@ export default function CierresDiarios() {
                 </div>
               )}
 
-              {/* TAB 2: DETALLES DE GESTIÓN */}
+              {/* TAB 2: DETALLES DE GESTIÓN DE CLIENTES */}
               {modalTab === 'DETALLES' && (
                 <div className="animate-[fadeIn_0.2s_ease-out]">
                   {isLoadingDetails ? (
@@ -269,24 +276,33 @@ export default function CierresDiarios() {
                         const paid = Math.round(Number(detail.paidAmount || 0));
                         const expected = Math.round(Number(detail.expectedAmount || 0));
                         const isPaid = paid >= expected && detail.status === 'PAID';
-                        
                         const isRealLiquidation = isPaid && detail.observation?.toLowerCase().includes('liquid');
 
                         return (
-                          <div key={detail.id} className={`p-4 rounded-2xl border transition-colors ${detail.status === 'RENEGOTIATED' ? 'bg-orange-500/5 border-orange-500/20' : detail.status === 'OVERDUE' ? 'bg-red-500/5 border-red-500/20' : detail.status === 'PAID' ? 'bg-emerald-500/5 border-emerald-500/20' : detail.status === 'PARTIAL' ? 'bg-blue-500/5 border-blue-500/20' : 'bg-[#0B0B12] border-white/10'}`}>
-                            
+                          <div 
+                            key={detail.id} 
+                            onClick={() => openClientAmortization(detail)}
+                            className={`p-4 rounded-2xl border transition-all cursor-pointer hover:border-blue-500/40 hover:shadow-lg hover:-translate-y-0.5 group ${detail.status === 'RENEGOTIATED' ? 'bg-orange-500/5 border-orange-500/20' : detail.status === 'OVERDUE' ? 'bg-red-500/5 border-red-500/20' : detail.status === 'PAID' ? 'bg-emerald-500/5 border-emerald-500/20' : detail.status === 'PARTIAL' ? 'bg-blue-500/5 border-blue-500/20' : 'bg-[#0B0B12] border-white/10'}`}
+                          >
                             <div className="flex justify-between items-start mb-3">
                               <div>
-                                <h4 className="font-bold text-sm text-white mb-0.5">{detail.clientName}</h4>
-                                {isPaid ? (
-                                  <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-400 flex items-center gap-1">
-                                    <FiCheckCircle size={10}/> {isRealLiquidation ? 'Liquidación Total' : 'Pago Completo'}
-                                  </span>
-                                ) : (
-                                  <span className={`text-[9px] font-bold uppercase tracking-widest ${detail.status === 'RENEGOTIATED' ? 'text-orange-400' : detail.status === 'OVERDUE' ? 'text-red-400' : detail.status === 'PARTIAL' ? 'text-blue-400' : 'text-slate-400'}`}>
-                                    {traducirEstado(detail.status)}
-                                  </span>
-                                )}
+                                <h4 className="font-bold text-sm text-white mb-1 group-hover:text-blue-400 transition-colors">{detail.clientName}</h4>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {detail.installmentNumber && (
+                                    <span className="bg-white/10 border border-white/5 px-1.5 py-0.5 rounded text-[10px] font-bold text-white uppercase tracking-wider">
+                                      Cuota #{detail.installmentNumber}
+                                    </span>
+                                  )}
+                                  {isPaid ? (
+                                    <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-400 flex items-center gap-1">
+                                      <FiCheckCircle size={10}/> {isRealLiquidation ? 'Liquidación Total' : 'Pago Completo'}
+                                    </span>
+                                  ) : (
+                                    <span className={`text-[9px] font-bold uppercase tracking-widest ${detail.status === 'RENEGOTIATED' ? 'text-orange-400' : detail.status === 'OVERDUE' ? 'text-red-400' : detail.status === 'PARTIAL' ? 'text-blue-400' : 'text-slate-400'}`}>
+                                      {traducirEstado(detail.status)}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                               <div className="text-right">
                                 <p className={`font-bold text-base ${paid > 0 ? 'text-emerald-400' : 'text-white'}`}>
@@ -310,11 +326,99 @@ export default function CierresDiarios() {
                   )}
                 </div>
               )}
-
             </div>
           </div>
         </div>
       )}
+
+      {/* MODAL SECUNDARIO: AUDITORÍA DE CLIENTE (TABLA DE AMORTIZACIÓN) */}
+      {selectedClientModal && selectedClientModal.client && selectedClientModal.loan && (
+        <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4" onClick={() => setSelectedClientModal(null)}>
+          <div className="w-full max-w-2xl bg-[#05050A] border border-white/10 rounded-[30px] shadow-2xl flex flex-col max-h-[85dvh] animate-[slideUp_0.18s_ease-out]" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-white/10 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-blue-500/10 text-blue-400 rounded-xl flex items-center justify-center font-bold text-lg border border-blue-500/20">
+                  {selectedClientModal.client.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white leading-tight">{selectedClientModal.client.name}</h3>
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest">Auditoría Financiera Histórica</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedClientModal(null)} className="p-2 bg-[#0B0B12] border border-white/5 rounded-full text-slate-400 hover:text-white transition-colors"><FiX size={18} /></button>
+            </div>
+            
+            <div className="flex border-b border-white/5 bg-[#0B0B12] px-6 shrink-0">
+              <button onClick={() => setClientModalTab('PLAN')} className={`py-4 px-2 mr-6 text-xs font-bold uppercase tracking-wider border-b-2 transition-all ${clientModalTab === 'PLAN' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>Plan de Cuotas</button>
+              <button onClick={() => setClientModalTab('RECIBOS')} className={`py-4 px-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all ${clientModalTab === 'RECIBOS' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>Historial de Pagos</button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              {clientModalTab === 'PLAN' && (
+                selectedClientModal.loan.installmentDetails?.map((inst: any) => {
+                  const faltanteActual = Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount || 0));
+                  return (
+                    <div key={inst.id} className={`flex flex-col gap-3 p-4 rounded-2xl border transition-colors ${inst.status === 'RENEGOTIATED' ? 'bg-orange-500/5 border-orange-500/10' : inst.status === 'PAID' ? 'bg-emerald-500/5 border-emerald-500/10' : inst.status === 'PARTIAL' ? 'bg-blue-500/5 border-blue-500/10' : 'bg-[#0B0B12] border-white/5'}`}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-slate-400 font-medium mb-0.5">Cuota #{inst.installmentNumber}</p>
+                          <div className="flex flex-col">
+                             <p className={`text-sm font-semibold ${inst.promiseDate ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
+                               {new Date(inst.dueDate).toLocaleDateString('es-CO')}
+                             </p>
+                             {inst.promiseDate && (
+                                <p className="text-sm font-bold text-orange-400">
+                                  {new Date(inst.promiseDate).toLocaleDateString('es-CO')}
+                                </p>
+                             )}
+                          </div>
+                        </div>
+                        <div className="text-right flex flex-col items-end">
+                           <p className={`font-bold text-base ${inst.status === 'RENEGOTIATED' ? 'text-orange-400' : inst.status === 'PAID' ? 'text-emerald-400' : inst.status === 'OVERDUE' ? 'text-red-400' : 'text-white'}`}>
+                             ${inst.status === 'PAID' ? Math.round(Number(inst.expectedAmount) || 0).toLocaleString('es-CO') : faltanteActual.toLocaleString('es-CO')}
+                           </p>
+                           <p className={`text-[10px] uppercase font-bold tracking-wider mt-1 ${inst.status === 'RENEGOTIATED' ? 'text-orange-400' : inst.status === 'PARTIAL' ? 'text-blue-400' : 'text-slate-500'}`}>
+                             {traducirEstado(inst.status)}
+                           </p>
+                        </div>
+                      </div>
+
+                      {inst.actionDescription && (
+                        <div className="mt-1 text-[10px] font-medium text-slate-400 bg-white/5 p-2 rounded flex items-start gap-1.5 border border-white/5 italic">
+                          <FiClock className="shrink-0 mt-0.5 text-blue-400" />
+                          <span>{inst.actionDescription}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+              {clientModalTab === 'RECIBOS' && (
+                selectedClientModal.loan.payments?.length > 0 ? (
+                  selectedClientModal.loan.payments.map((payment: any) => (
+                    <div key={payment.id} className="flex items-center justify-between p-4 rounded-2xl bg-[#0B0B12] border border-white/5">
+                      <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center justify-center text-emerald-400 shrink-0"><FiCheckCircle size={16} /></div>
+                        <div>
+                          <p className="text-xs text-slate-400 font-medium mb-0.5">Recibo #{payment.id}</p>
+                          <p className="text-xs font-semibold text-slate-200">{new Date(payment.createdAt).toLocaleDateString('es-CO')} - {new Date(payment.createdAt).toLocaleTimeString('es-CO', {hour: '2-digit', minute:'2-digit'})}</p>
+                        </div>
+                      </div>
+                      <p className="font-bold text-emerald-400 text-base">+${Math.round(Number(payment.amount) || 0).toLocaleString('es-CO')}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="py-12 flex flex-col items-center justify-center border border-dashed border-white/10 rounded-2xl bg-white/[0.02]">
+                     <div className="h-12 w-12 bg-white/5 rounded-full flex items-center justify-center text-slate-500 mb-3"><FiDollarSign size={20} /></div>
+                     <p className="text-slate-300 text-sm font-medium">No hay pagos registrados</p>
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
