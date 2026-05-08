@@ -300,7 +300,7 @@ export default function CarteraActiva() {
     }
   }, [routePolylineCoords]);
 
-  // --- LÓGICA DE REGISTRO DE GASTOS ---
+  // --- LÓGICA DE REGISTRO DE SOLICITUD DE GASTOS ---
   const handleRegisterExpense = async () => {
     setIsRegisteringExpense(true);
     try {
@@ -314,7 +314,7 @@ export default function CarteraActiva() {
         return;
       }
 
-      const res = await fetch(`${baseUrl}/api/capital/expense`, {
+      const res = await fetch(`${baseUrl}/api/capital/expense/request`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -327,12 +327,13 @@ export default function CarteraActiva() {
       if (res.ok && data.success) {
         setExpenseModalOpen(false);
         setExpenseAmount("");
-        await fetchCartera(); // Recargamos para ver el saldo de capital descontado
+        alert(data.message || "Solicitud enviada al administrador.");
+        await fetchCartera(); 
       } else {
-        alert(data.message || data.error || "No se pudo registrar el gasto");
+        alert(data.message || data.error || "No se pudo solicitar el gasto");
       }
     } catch (error) {
-      alert("Error de conexión al registrar el gasto");
+      alert("Error de conexión al solicitar el gasto");
     } finally {
       setIsRegisteringExpense(false);
     }
@@ -492,7 +493,6 @@ export default function CarteraActiva() {
           <div className="flex justify-between items-start mb-4">
             <div>
               <h1 className="text-xl font-bold text-white mb-1">Sistema Logístico</h1>
-              {/* RELOJ PREMIUM GLASSMORPHISM */}
               <div className="inline-flex items-center gap-2 bg-white/5 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)]">
                 <FiClock className="text-blue-400 animate-pulse" size={14} />
                 <span className="text-xs font-mono font-bold tracking-widest text-slate-200">
@@ -525,7 +525,6 @@ export default function CarteraActiva() {
                 </div>
               </div>
               
-              {/* BOTONERA GASTOS / CIERRE */}
               {isRouteClosed ? (
                 <button disabled className="w-full bg-[#0B0B12] text-slate-500 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border border-white/5 cursor-not-allowed"><FiLock size={16} /> Ruta Cerrada por Hoy</button>
               ) : (
@@ -724,12 +723,12 @@ export default function CarteraActiva() {
         </MapContainer>
       </div>
 
-      {/* MODAL REGISTRAR GASTOS OPERATIVOS */}
+      {/* MODAL REGISTRAR SOLICITUD DE GASTOS */}
       {expenseModalOpen && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-[#05050A] border border-white/10 rounded-3xl p-7 shadow-2xl animate-[slideUp_0.18s_ease-out]">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2"><FiTrendingDown className="text-red-400" /> Registrar Gasto</h3>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2"><FiTrendingDown className="text-red-400" /> Solicitar Gasto</h3>
               <button onClick={() => setExpenseModalOpen(false)} className="text-slate-500 hover:text-white"><FiX size={20}/></button>
             </div>
 
@@ -758,7 +757,7 @@ export default function CarteraActiva() {
                     placeholder="0" 
                   />
                 </div>
-                <p className="text-[10px] text-slate-500 mt-1.5 flex items-center gap-1"><FiInfo/> Este dinero se descontará de la ruta.</p>
+                <p className="text-[10px] text-slate-500 mt-1.5 flex items-center gap-1"><FiInfo/> Requiere aprobación del administrador para ser descontado.</p>
               </div>
             </div>
 
@@ -767,13 +766,12 @@ export default function CarteraActiva() {
               disabled={isRegisteringExpense || !expenseAmount}
               className="w-full mt-6 py-3.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-red-600/20 disabled:opacity-50 flex items-center justify-center gap-2 uppercase tracking-widest"
             >
-              {isRegisteringExpense ? <FiLoader className="animate-spin" /> : 'Confirmar Gasto'}
+              {isRegisteringExpense ? <FiLoader className="animate-spin" /> : 'Solicitar Gasto'}
             </button>
           </div>
         </div>
       )}
 
-      {/* DEMÁS MODALES INTACTOS */}
       {confirmPayModal.open && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-[#05050A] border border-white/10 rounded-3xl p-7 shadow-2xl text-center animate-[slideUp_0.18s_ease-out]">

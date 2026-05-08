@@ -9,13 +9,14 @@ import Landing from "./pages/Landing";
 import Register from "./pages/Register";
 import Dashboard from "./pages/dashboard/Dashboard";
 
-// VISTAS PESADAS (Lazy Loading) - Estas solo se descargarán si el usuario entra a esa pantalla
+// VISTAS PESADAS (Lazy Loading)
 const UsersPage = lazy(() => import("./pages/admin/UsersPage"));
 const Rutas = lazy(() => import("./pages/admin/Rutas")); 
 const GestionCapital = lazy(() => import("./pages/admin/GestionCapital"));
 const CierresDiarios = lazy(() => import("./pages/admin/CierresDiarios"));
 const Monitoreo = lazy(() => import("./pages/admin/Monitoreo"));
 const SolicitudesCredito = lazy(() => import("./pages/admin/SolicitudesCredito"));
+const SolicitudesGastos = lazy(() => import("./pages/admin/SolicitudesGastos")); // <-- NUEVA IMPORTACIÓN
 
 const NuevoCredito = lazy(() => import("./pages/cartera/NuevoCredito"));
 const CarteraActiva = lazy(() => import("./pages/cartera/CarteraActiva"));
@@ -58,6 +59,7 @@ export default function App() {
                 <Route path="/admin/cierres" element={<CierresDiarios />} />
                 <Route path="/admin/monitoreo" element={<Monitoreo />} />
                 <Route path="/admin/solicitudes" element={<SolicitudesCredito />} />
+                <Route path="/admin/gastos" element={<SolicitudesGastos />} /> {/* <-- NUEVA RUTA */}
               </Route>
 
             </Route>
