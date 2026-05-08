@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { 
   FiDollarSign, FiTrendingUp, FiUsers, FiAlertTriangle, 
   FiPieChart, FiActivity, FiRefreshCw, FiTarget, FiLoader, FiMap,
-  FiChevronRight, FiUser, FiArrowLeft, FiMapPin, FiChevronDown
+  FiChevronRight, FiUser, FiArrowLeft, FiMapPin, FiChevronDown, FiTrendingDown
 } from 'react-icons/fi';
 
 import TodayRouteCard from "@/components/admin/TodayRouteCard";
@@ -29,6 +29,7 @@ interface DashboardData {
   nuevosCreditosAmount: number;
   renovacionesAmount: number;
   recaudoDia: number;
+  totalGastos: number; // NUEVO CAMPO
   carteraInicial: number;
   carteraFinal: number;
   clientesQuePagaron: number;
@@ -338,10 +339,12 @@ export default function Monitoreo() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
+              {/* GRID MODIFICADO: Ahora de 4 columnas para incluir Gastos */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
                 <StatCard title="Caja Inicial" value={formatCurrency(dashboardData.cajaInicial)} icon={FiDollarSign} colorClass="text-white" />
                 <StatCard title="Saldo Disponible" value={formatCurrency(dashboardData.saldoDisponible)} icon={FiPieChart} colorClass="text-blue-400" subtitle="Capital actual en la calle" />
                 <StatCard title="Recaudo del Día" value={formatCurrency(dashboardData.recaudoDia)} icon={FiTrendingUp} colorClass="text-emerald-400" />
+                <StatCard title="Gastos Aprobados" value={formatCurrency(dashboardData.totalGastos)} icon={FiTrendingDown} colorClass="text-rose-400" subtitle="Operativos y de ruta" />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
