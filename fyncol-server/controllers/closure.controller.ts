@@ -47,7 +47,7 @@ export const getClosureSummary = async (req: AuthRequest, res: Response) => {
     const offset = COUNTRY_TIMEZONES[route.country] ?? -5;
     const { startOfDay: start, endOfDay: end } = getDayLimitsByOffset(offset);
     
-    // CORRECCIÓN: Obtenemos el límite de medianoche para las cuotas
+    // Obtenemos el límite de medianoche para las cuotas
     const { dueDateEnd } = getDueDateLimits(start, offset);
 
     const routeId = route.id;
@@ -173,9 +173,11 @@ export const confirmDailyClosure = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id;
     if (!companyId || !userId) return res.status(403).json({ error: "Acceso denegado." });
 
-    const summaryData = req.body.summary; 
+    // FIX PROFUNDO: En tu frontend estás mandando "body: JSON.stringify({ summary: closureSummary })"
+    // Por lo que los datos vienen anidados en req.body.summary. Nos aseguramos de leerlo bien.
+    const summaryData = req.body.summary || req.body;
 
-    if (!summaryData) {
+    if (!summaryData || summaryData.availableCapital === undefined) {
       return res.status(400).json({ error: "Faltan los datos del resumen de cierre." });
     }
 
@@ -194,7 +196,7 @@ export const confirmDailyClosure = async (req: AuthRequest, res: Response) => {
       const offset = COUNTRY_TIMEZONES[route.country] ?? -5;
       const { startOfDay: start, endOfDay: end } = getDayLimitsByOffset(offset);
       
-      // CORRECCIÓN: Obtenemos el límite de medianoche para barrer morosos
+      // Obtenemos el límite de medianoche para barrer morosos
       const { dueDateEnd } = getDueDateLimits(start, offset);
 
       const existingClosure = await tx.dailyClosure.findFirst({
@@ -236,18 +238,19 @@ export const confirmDailyClosure = async (req: AuthRequest, res: Response) => {
         });
       }
 
+      // GUARDADO DEFINITIVO DE LA TABLA (Asegurando la conversión a números)
       const closure = await tx.dailyClosure.create({
         data: {
           routeId: route.id,
           closedById: userId,
-          availableCapital: Number(summaryData.availableCapital),
-          totalPortfolio: Number(summaryData.totalPortfolio),
-          totalCollected: Number(summaryData.totalCollected),
-          newSales: Number(summaryData.newSales),
-          renewals: Number(summaryData.renewals),
-          totalClients: Number(summaryData.totalClients),
-          collectedClients: Number(summaryData.collectedClients),
-          overdueClients: Number(summaryData.overdueClients) + Number(summaryData.renegotiatedClients),
+          availableCapital: Number(summaryData.availableCapital || 0),
+          totalPortfolio: Number(summaryData.totalPortfolio || 0),
+          totalCollected: Number(summaryData.totalCollected || 0),
+          newSales: Number(summaryData.newSales || 0),
+          renewals: Number(summaryData.renewals || 0),
+          totalClients: Number(summaryData.totalClients || 0),
+          collectedClients: Number(summaryData.collectedClients || 0),
+          overdueClients: Number(summaryData.overdueClients || 0) + Number(summaryData.renegotiatedClients || 0),
           totalInversiones: Number(summaryData.totalInversiones || 0), 
           totalRetiros: Number(summaryData.totalRetiros || 0) 
         }
@@ -345,7 +348,6 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
     const start = new Date(localStart.getTime() - (offset * 3600000));
     const end = new Date(localEnd.getTime() - (offset * 3600000));
 
-    // CORRECCIÓN: Límites exactos del día para no mezclar cuotas
     const { dueDateStart, dueDateEnd } = getDueDateLimits(start, offset);
 
     const installments = await prisma.installment.findMany({
@@ -354,7 +356,7 @@ export const getClosureDetails = async (req: AuthRequest, res: Response) => {
           client: { routeId: closure.routeId }
         },
         OR: [
-          { dueDate: { gte: dueDateStart, lte: dueDateEnd } }, // Solo traemos cuotas limitadas al día local
+          { dueDate: { gte: dueDateStart, lte: dueDateEnd } }, 
           { paidAt: { gte: start, lte: end } },  
           { status: { in: ['OVERDUE', 'RENEGOTIATED'] } } 
         ]
