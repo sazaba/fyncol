@@ -21,6 +21,7 @@ export const COUNTRY_TIMEZONES: Record<string, number> = {
   'España': +1,
   'USA': -5 // Base: EST
 };
+
 export const getDayLimitsByOffset = (utcOffset: number) => {
   const now = new Date();
   
@@ -31,18 +32,11 @@ export const getDayLimitsByOffset = (utcOffset: number) => {
   const localStart = new Date(localTime);
   const localEnd = new Date(localTime);
 
-  // CAMBIO CRÍTICO: Debe ser false para que el corte sea a la medianoche estricta (23:59 -> 00:00)
-  const corteAlMediodia = false; 
+  // 2. CORTE A LA MEDIANOCHE ESTRICTA (00:00:00 a 23:59:59 locales)
+  localStart.setHours(0, 0, 0, 0);
+  localEnd.setHours(23, 59, 59, 999);
 
-  if (corteAlMediodia) {
-    // ... (tu código anterior)
-  } else {
-    // Corte tradicional a medianoche (Lo que necesitas)
-    localStart.setHours(0, 0, 0, 0);
-    localEnd.setHours(23, 59, 59, 999);
-  }
-
-  // 2. Convertimos las fechas de nuevo a UTC universal para que Prisma filtre correctamente en la BD
+  // 3. Convertimos las fechas de nuevo a UTC universal para que Prisma filtre correctamente en la BD
   return { 
     startOfDay: new Date(localStart.getTime() - (utcOffset * 3600000)), 
     endOfDay: new Date(localEnd.getTime() - (utcOffset * 3600000)) 
