@@ -1299,9 +1299,6 @@
 
 
 
-
-
-
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   FiDollarSign, FiMapPin, FiSearch, 
@@ -1382,7 +1379,7 @@ const COUNTRY_TIMEZONES: Record<string, string> = {
 const getRouteTodayStr = (countryStr?: string) => {
   let tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   if (countryStr) {
-    const match = COUNTRY_CODES.find(c => c.aliases.some(alias => countryStr.toLowerCase().trim().includes(alias)));
+    const match = COUNTRY_CODES.find((c: any) => c.aliases.some((alias: string) => countryStr.toLowerCase().trim().includes(alias)));
     if (match && COUNTRY_TIMEZONES[match.country]) {
       tz = COUNTRY_TIMEZONES[match.country];
     }
@@ -1403,7 +1400,7 @@ function useRouteClock(countryStr?: string) {
     const updateClock = () => {
       let tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (countryStr) {
-        const match = COUNTRY_CODES.find(c => c.aliases.some(alias => countryStr.toLowerCase().trim().includes(alias)));
+        const match = COUNTRY_CODES.find((c: any) => c.aliases.some((alias: string) => countryStr.toLowerCase().trim().includes(alias)));
         if (match && COUNTRY_TIMEZONES[match.country]) {
           tz = COUNTRY_TIMEZONES[match.country];
         }
@@ -1449,12 +1446,6 @@ export default function CarteraActiva() {
   const [manualPayModal, setManualPayModal] = useState<{open: boolean, inst: any, loan: any}>({ open: false, inst: null, loan: null });
   const [manualAmount, setManualAmount] = useState("");
   
-  const [saldoAction, setSaldoAction] = useState<'MANTENER' | 'PROXIMA_CUOTA' | 'DIFERIR' | 'CUOTA_ESPECIFICA'>('MANTENER');
-  
-  // Excedente fijado internamente en REDUCE_TIME para restar siempre a la última cuota
-const overpaymentAction = 'REDUCE_TIME';
-  const [targetInstallmentNum, setTargetInstallmentNum] = useState<number>(0);
-
   const [overdueModal, setOverdueModal] = useState<{open: boolean, inst: any, loan: any}>({ open: false, inst: null, loan: null });
   const [overdueAction, setOverdueAction] = useState<'SOLO_MORA' | 'PROXIMA_CUOTA' | 'DIFERIR' | 'CUOTA_ESPECIFICA' | 'CUOTA_EXTRA'>('SOLO_MORA');
   const [overdueTargetInst, setOverdueTargetInst] = useState<number>(0);
@@ -1491,7 +1482,7 @@ const overpaymentAction = 'REDUCE_TIME';
           lat: position.coords.latitude,
           lng: position.coords.longitude
         };
-        setGpsStatus(prev => prev !== 'ACTIVE' ? 'ACTIVE' : prev);
+        setGpsStatus((prev: 'SEARCHING' | 'ACTIVE' | 'ERROR') => prev !== 'ACTIVE' ? 'ACTIVE' : prev);
       },
       (error) => {
         console.error("Error al obtener GPS:", error);
@@ -1560,7 +1551,7 @@ const overpaymentAction = 'REDUCE_TIME';
   const filteredData = useMemo(() => {
     const todayStr = getRouteTodayStr(routeInfo?.country);
 
-    return clients.filter(client => {
+    return clients.filter((client: any) => {
       const loan = client.loans[0];
       const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase());
       if (!matchesSearch) return false;
@@ -1596,7 +1587,7 @@ const overpaymentAction = 'REDUCE_TIME';
   }, [clients, searchTerm, filter, routeInfo?.country]);
 
   const routePolylineCoords = useMemo(() => {
-    return filteredData.filter(c => c.latitude && c.longitude).map(c => [c.latitude, c.longitude] as [number, number]);
+    return filteredData.filter((c: any) => c.latitude && c.longitude).map((c: any) => [c.latitude, c.longitude] as [number, number]);
   }, [filteredData]);
 
   useEffect(() => {
@@ -1698,7 +1689,6 @@ const overpaymentAction = 'REDUCE_TIME';
         setManualPayModal({ open: false, inst: null, loan: null });
         setOverdueModal({ open: false, inst: null, loan: null });
         setManualAmount("");
-        setSaldoAction('MANTENER');
         setPromiseDate(''); 
         await fetchCartera();
         
@@ -1840,11 +1830,11 @@ const overpaymentAction = 'REDUCE_TIME';
 
           <div className="relative mb-3">
             <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input type="text" placeholder="Buscar cliente..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-[#05050A] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all"/>
+            <input type="text" placeholder="Buscar cliente..." value={searchTerm} onChange={(e: any) => setSearchTerm(e.target.value)} className="w-full bg-[#05050A] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all"/>
           </div>
 
           <div className="flex bg-[#05050A] p-1 rounded-xl border border-white/10">
-            {[ { id: 'HOY', label: 'Ruta' }, { id: 'PENDIENTES', label: 'Mora' }, { id: 'TODOS', label: 'Todos' } ].map((btn) => (
+            {[ { id: 'HOY', label: 'Ruta' }, { id: 'PENDIENTES', label: 'Mora' }, { id: 'TODOS', label: 'Todos' } ].map((btn: any) => (
               <button key={btn.id} onClick={() => setFilter(btn.id as any)} className={`flex-1 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${filter === btn.id ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>{btn.label}</button>
             ))}
           </div>
@@ -1856,7 +1846,7 @@ const overpaymentAction = 'REDUCE_TIME';
           ) : filteredData.length === 0 ? (
             <div className="p-10 text-center text-slate-500 text-sm">No hay clientes que coincidan con los filtros.</div>
           ) : (
-            filteredData.map((client, index) => {
+            filteredData.map((client: any, index: number) => {
               const loan = client.loans?.[0];
               if (!loan) return null;
               
@@ -1969,7 +1959,7 @@ const overpaymentAction = 'REDUCE_TIME';
                             <div className="flex gap-1.5 mt-3">
                               {cuotaActiva.status !== 'RENEGOTIATED' && (
                                 <button 
-                                  onClick={(e) => {
+                                  onClick={(e: any) => {
                                     e.stopPropagation();
                                     setConfirmPayModal({ open: true, inst: cuotaActiva, faltante: faltanteActual });
                                   }} 
@@ -1979,11 +1969,10 @@ const overpaymentAction = 'REDUCE_TIME';
                                 </button>
                               )}
                               <button 
-                                onClick={(e) => { 
+                                onClick={(e: any) => { 
                                   e.stopPropagation(); 
                                   setManualPayModal({ open: true, inst: cuotaActiva, loan }); 
                                   setManualAmount(""); 
-                                  setSaldoAction('MANTENER'); 
                                 }}
                                 className="flex-1 bg-white/10 hover:bg-white/20 py-2 rounded-lg text-white text-xs font-bold flex justify-center items-center transition-all border border-white/10"
                               >
@@ -1991,7 +1980,7 @@ const overpaymentAction = 'REDUCE_TIME';
                               </button>
                               {cuotaActiva.status !== 'RENEGOTIATED' && (
                                 <button 
-                                  onClick={(e) => { 
+                                  onClick={(e: any) => { 
                                     e.stopPropagation(); 
                                     setOverdueModal({ open: true, inst: cuotaActiva, loan: loan }); 
                                     const isDiario = loan.periodicity === 'DIARIO';
@@ -2009,9 +1998,9 @@ const overpaymentAction = 'REDUCE_TIME';
                     )}
 
                     <div className="flex gap-2 mt-3">
-                      <button onClick={(e) => { e.stopPropagation(); openClientModal(client); }} className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 bg-white/5 border border-white/10 px-2 py-1 rounded-md transition-colors"><FiCalendar size={10} /> Historial</button>
+                      <button onClick={(e: any) => { e.stopPropagation(); openClientModal(client); }} className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 bg-white/5 border border-white/10 px-2 py-1 rounded-md transition-colors"><FiCalendar size={10} /> Historial</button>
                       {client.latitude && (
-                        <button onClick={(e) => { e.stopPropagation(); openNavigationApp(client.latitude, client.longitude); }} className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-blue-500/10 border border-blue-500/20 px-2 py-1 rounded-md transition-colors"><FiNavigation size={10} /> GPS</button>
+                        <button onClick={(e: any) => { e.stopPropagation(); openNavigationApp(client.latitude, client.longitude); }} className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-blue-500/10 border border-blue-500/20 px-2 py-1 rounded-md transition-colors"><FiNavigation size={10} /> GPS</button>
                       )}
                     </div>
                   </div>
@@ -2023,13 +2012,13 @@ const overpaymentAction = 'REDUCE_TIME';
       </div>
 
       <div className="flex-1 h-full relative z-0">
-        <button onClick={() => setMapTheme(prev => prev === 'light' ? 'dark' : 'light')} className="absolute top-4 right-4 z-[400] p-2.5 bg-[#05050A]/80 backdrop-blur-md text-white rounded-lg shadow-xl border border-white/10 hover:bg-white/5 transition-all" title="Alternar estilo de mapa">
+        <button onClick={() => setMapTheme((prev: 'light' | 'dark') => prev === 'light' ? 'dark' : 'light')} className="absolute top-4 right-4 z-[400] p-2.5 bg-[#05050A]/80 backdrop-blur-md text-white rounded-lg shadow-xl border border-white/10 hover:bg-white/5 transition-all" title="Alternar estilo de mapa">
           {mapTheme === 'light' ? <FiMoon size={18} className="text-blue-400" /> : <FiSun size={18} className="text-yellow-400" />}
         </button>
         <MapContainer center={[6.2442, -75.5812]} zoom={13} style={{ height: '100%', width: '100%', zIndex: 1 }} zoomControl={false}>
           <TileLayer key={mapTheme} url={mapTheme === 'light' ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"} />
           {filter !== 'TODOS' && routePolylineCoords.length > 1 && (<Polyline positions={routePolylineCoords} pathOptions={{ color: '#3b82f6', weight: 4, opacity: 0.6, dashArray: '10, 10' }} />)}
-          {filteredData.map(client => {
+          {filteredData.map((client: any) => {
             const todayStr = getRouteTodayStr(routeInfo?.country);
             const loan = client.loans?.[0];
             const hasPaidToday = loan?.installmentDetails ? loan.installmentDetails.some((i: any) => i.dueDate.startsWith(todayStr) && i.status === 'PAID') : false;
@@ -2062,10 +2051,10 @@ const overpaymentAction = 'REDUCE_TIME';
                 <label className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-1 block">Rubro del Gasto</label>
                 <select 
                   value={expenseCategory} 
-                  onChange={(e) => setExpenseCategory(e.target.value)}
+                  onChange={(e: any) => setExpenseCategory(e.target.value)}
                   className="w-full bg-[#0B1020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-red-500 transition-colors"
                 >
-                  {GASTOS_CATEGORIES.map(cat => <option key={cat} value={cat}>Gastos: {cat}</option>)}
+                  {GASTOS_CATEGORIES.map((cat: string) => <option key={cat} value={cat}>Gastos: {cat}</option>)}
                 </select>
               </div>
 
@@ -2077,7 +2066,7 @@ const overpaymentAction = 'REDUCE_TIME';
                     type="text" 
                     inputMode="numeric"
                     value={expenseAmount ? new Intl.NumberFormat('es-CO').format(Number(expenseAmount.replace(/[^0-9]/g, ''))) : ''} 
-                    onChange={(e) => setExpenseAmount(e.target.value)} 
+                    onChange={(e: any) => setExpenseAmount(e.target.value)} 
                     className="w-full bg-[#0B1020] border border-white/10 rounded-xl pl-8 pr-4 py-3 text-lg font-bold text-red-400 outline-none shadow-inner focus:border-red-500 transition-colors" 
                     placeholder="0" 
                   />
@@ -2138,7 +2127,7 @@ const overpaymentAction = 'REDUCE_TIME';
                       {overdueAction === 'SOLO_MORA' && (
                         <div className="mt-3 p-3 bg-black/20 rounded-xl border border-white/5">
                           <label className="text-xs text-slate-400 font-semibold uppercase tracking-widest">Agendar nueva visita (Opcional)</label>
-                          <input type="date" value={promiseDate} onChange={e => setPromiseDate(e.target.value)} min={getRouteTodayStr(routeInfo?.country)} className="w-full mt-1 bg-[#05050A] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-red-500 outline-none [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert" />
+                          <input type="date" value={promiseDate} onChange={(e: any) => setPromiseDate(e.target.value)} min={getRouteTodayStr(routeInfo?.country)} className="w-full mt-1 bg-[#05050A] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-red-500 outline-none [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert" />
                           <p className="text-[10px] text-slate-500 mt-1">El cliente volverá a aparecer en la ruta principal en esta fecha.</p>
                         </div>
                       )}
@@ -2168,7 +2157,7 @@ const overpaymentAction = 'REDUCE_TIME';
                         <p className="text-sm font-semibold text-white">Sumar a una cuota específica</p>
                         <p className="text-xs text-slate-400 mt-0.5 mb-2">Elige a qué cuota futura cargarle esta deuda.</p>
                         {overdueAction === 'CUOTA_ESPECIFICA' && (
-                          <select value={overdueTargetInst} onChange={e => setOverdueTargetInst(Number(e.target.value))} className="w-full bg-[#05050A] border border-white/20 rounded-lg p-2 text-white text-sm focus:border-red-500 outline-none">
+                          <select value={overdueTargetInst} onChange={(e: any) => setOverdueTargetInst(Number(e.target.value))} className="w-full bg-[#05050A] border border-white/20 rounded-lg p-2 text-white text-sm focus:border-red-500 outline-none">
                             {futureInstallmentsUI.map((fInst: any) => (
                               <option key={fInst.id} value={fInst.installmentNumber}>Cuota #{fInst.installmentNumber} - ({new Date(fInst.dueDate).toLocaleDateString('es-CO')})</option>
                             ))}
@@ -2229,11 +2218,10 @@ const overpaymentAction = 'REDUCE_TIME';
       })()}
 
       
-            {manualPayModal.open && (() => {
+      {manualPayModal.open && (() => {
         const inst = manualPayModal.inst;
         const faltante = Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount || 0));
         
-        // CORRECCIÓN DE BUG: Ahora lee correctamente los números sin confundir los puntos
         const abonoValue = Number(manualAmount.replace(/[^0-9]/g, "")) || 0;
         
         const diferencia = Math.abs(faltante - abonoValue);
@@ -2271,11 +2259,10 @@ const overpaymentAction = 'REDUCE_TIME';
 
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
-                  <input type="text" inputMode="numeric" value={manualAmount ? new Intl.NumberFormat('es-CO').format(Number(manualAmount.replace(/[^0-9]/g, ''))) : ''} onChange={(e) => setManualAmount(e.target.value)} className={`w-full bg-[#0B0B12] border ${esExcedente ? 'border-emerald-500 focus:border-emerald-400 text-emerald-400' : 'border-white/10 focus:border-blue-500 text-white'} rounded-2xl pl-8 pr-4 py-4 text-2xl font-bold outline-none shadow-inner transition-colors text-center`} placeholder="0" autoFocus />
+                  <input type="text" inputMode="numeric" value={manualAmount ? new Intl.NumberFormat('es-CO').format(Number(manualAmount.replace(/[^0-9]/g, ''))) : ''} onChange={(e: any) => setManualAmount(e.target.value)} className={`w-full bg-[#0B0B12] border ${esExcedente ? 'border-emerald-500 focus:border-emerald-400 text-emerald-400' : 'border-white/10 focus:border-blue-500 text-white'} rounded-2xl pl-8 pr-4 py-4 text-2xl font-bold outline-none shadow-inner transition-colors text-center`} placeholder="0" autoFocus />
                 </div>
               </div>
 
-              {/* UI SIMPLIFICADA PARA ABONO PARCIAL */}
               {esParcial && (
                 <div className="p-6 bg-blue-500/5 border-b border-white/5 backdrop-blur-md">
                   <div className="bg-blue-600/10 border border-blue-500/30 rounded-xl p-4 text-center shadow-inner">
@@ -2289,7 +2276,6 @@ const overpaymentAction = 'REDUCE_TIME';
                 </div>
               )}
 
-              {/* UI SIMPLIFICADA PARA EXCEDENTE (Abono mayor a la cuota) */}
               {esExcedente && (
                 <div className="p-6 bg-emerald-500/5 border-b border-white/5 backdrop-blur-md">
                   <div className="bg-emerald-600/10 border border-emerald-500/30 rounded-xl p-4 text-center shadow-inner">
@@ -2310,7 +2296,6 @@ const overpaymentAction = 'REDUCE_TIME';
                     let finalStatus = 'PAID'; 
                     let actionData: any = { action: 'NONE', amount: 0, targetInstallment: 0, description: '' };
 
-                    // LÓGICA AUTOMÁTICA (Sin preguntarle al usuario)
                     if (esParcial) {
                        finalStatus = 'PARTIAL';
                        actionData.description = `Abono parcial de $${abonoValue.toLocaleString('es-CO')}. Queda un saldo de $${diferencia.toLocaleString('es-CO')}.`;
@@ -2420,7 +2405,7 @@ const overpaymentAction = 'REDUCE_TIME';
                               </button>
                             )}
                             <button 
-                              onClick={() => { setManualPayModal({ open: true, inst: inst, loan: selectedClient.loans[0] }); setManualAmount(""); setSaldoAction('MANTENER'); }} 
+                              onClick={() => { setManualPayModal({ open: true, inst: inst, loan: selectedClient.loans[0] }); setManualAmount(""); }} 
                               className="flex-1 bg-white/5 hover:bg-white/10 py-2.5 rounded-xl text-slate-300 flex items-center justify-center transition-colors border border-white/5"
                             >
                               <FiDollarSign size={14} /> Abono Especial
