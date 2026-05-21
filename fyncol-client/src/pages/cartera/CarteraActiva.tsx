@@ -2228,19 +2228,18 @@ const overpaymentAction = 'REDUCE_TIME';
         );
       })()}
 
-      {manualPayModal.open && (() => {
+      
+            {manualPayModal.open && (() => {
         const inst = manualPayModal.inst;
         const faltante = Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount || 0));
-        const abonoValue = parseFloat(manualAmount.replace(/[^0-9.-]+/g,"")) || 0;
+        
+        // CORRECCIÓN DE BUG: Ahora lee correctamente los números sin confundir los puntos
+        const abonoValue = Number(manualAmount.replace(/[^0-9]/g, "")) || 0;
         
         const diferencia = Math.abs(faltante - abonoValue);
         const esParcial = abonoValue > 0 && abonoValue < faltante;
         const esExacto = abonoValue === faltante;
         const esExcedente = abonoValue > faltante;
-
-        const futureInstallmentsUI = manualPayModal.loan?.installmentDetails?.filter(
-          (i: any) => i.installmentNumber > inst.installmentNumber && i.status !== 'PAID' && i.status !== 'RENEGOTIATED'
-        ) || [];
 
         const totalDebt = manualPayModal.loan?.installmentDetails?.reduce((sum: number, i: any) => {
             if (i.status === 'PAID') return sum;
@@ -2276,90 +2275,48 @@ const overpaymentAction = 'REDUCE_TIME';
                 </div>
               </div>
 
+              {/* UI SIMPLIFICADA PARA ABONO PARCIAL */}
               {esParcial && (
-                <div className="p-6 bg-blue-500/5 border-b border-white/5">
-                  <p className="text-sm font-semibold text-blue-400 mb-3 text-center">Falta un saldo de <span className="text-white">${diferencia.toLocaleString('es-CO')}</span>. ¿Qué hacer con él?</p>
-                  <div className="space-y-2">
-                    <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${saldoAction === 'MANTENER' ? 'bg-blue-600/20 border-blue-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
-                      <input type="radio" name="saldoAction" checked={saldoAction === 'MANTENER'} onChange={() => setSaldoAction('MANTENER')} className="mt-1 shrink-0 accent-blue-500" />
-                      <div>
-                        <p className="text-sm font-semibold text-white">Mantener en esta misma cuota</p>
-                        <p className="text-xs text-slate-400 mt-0.5">La cuota quedará como Abono Parcial y seguirá debiendo el resto.</p>
-                      </div>
-                    </label>
-
-                    {futureInstallmentsUI.length > 0 && (
-                      <>
-                        <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${saldoAction === 'PROXIMA_CUOTA' ? 'bg-blue-600/20 border-blue-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
-                          <input type="radio" name="saldoAction" checked={saldoAction === 'PROXIMA_CUOTA'} onChange={() => setSaldoAction('PROXIMA_CUOTA')} className="mt-1 shrink-0 accent-blue-500" />
-                          <div>
-                            <p className="text-sm font-semibold text-white">Moverlo a la próxima cuota</p>
-                            <p className="text-xs text-slate-400 mt-0.5">Liquida la cuota de hoy. La próxima será más costosa.</p>
-                          </div>
-                        </label>
-                        <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${saldoAction === 'DIFERIR' ? 'bg-blue-600/20 border-blue-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
-                          <input type="radio" name="saldoAction" checked={saldoAction === 'DIFERIR'} onChange={() => setSaldoAction('DIFERIR')} className="mt-1 shrink-0 accent-blue-500" />
-                          <div>
-                            <p className="text-sm font-semibold text-white">Diferir en cuotas restantes</p>
-                            <p className="text-xs text-slate-400 mt-0.5">Reparte la deuda restante equitativamente.</p>
-                          </div>
-                        </label>
-                        <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${saldoAction === 'CUOTA_ESPECIFICA' ? 'bg-blue-600/20 border-blue-500/50' : 'bg-[#0B0B12] border-white/10 hover:border-white/20'}`}>
-                          <input type="radio" name="saldoAction" checked={saldoAction === 'CUOTA_ESPECIFICA'} onChange={() => { setSaldoAction('CUOTA_ESPECIFICA'); setTargetInstallmentNum(futureInstallmentsUI[0]?.installmentNumber); }} className="mt-1 shrink-0 accent-blue-500" />
-                          <div className="w-full">
-                            <p className="text-sm font-semibold text-white">Cargar a una cuota específica</p>
-                            <p className="text-xs text-slate-400 mt-0.5 mb-2">Mueve la deuda a otra cuota futura elegida a mano.</p>
-                            {saldoAction === 'CUOTA_ESPECIFICA' && (
-                              <select value={targetInstallmentNum} onChange={e => setTargetInstallmentNum(Number(e.target.value))} className="w-full bg-[#05050A] border border-white/20 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none">
-                                {futureInstallmentsUI.map((fInst: any) => (
-                                  <option key={fInst.id} value={fInst.installmentNumber}>Cuota #{fInst.installmentNumber} - ({new Date(fInst.dueDate).toLocaleDateString('es-CO')})</option>
-                                ))}
-                              </select>
-                            )}
-                          </div>
-                        </label>
-                      </>
-                    )}
+                <div className="p-6 bg-blue-500/5 border-b border-white/5 backdrop-blur-md">
+                  <div className="bg-blue-600/10 border border-blue-500/30 rounded-xl p-4 text-center shadow-inner">
+                    <p className="text-sm font-bold text-white mb-1 flex items-center justify-center gap-2">
+                       <FiInfo className="text-blue-400" /> Abono Incompleto
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      El cliente quedará debiendo <span className="text-white font-bold">${diferencia.toLocaleString('es-CO')}</span> en esta misma cuota.
+                    </p>
                   </div>
                 </div>
               )}
 
+              {/* UI SIMPLIFICADA PARA EXCEDENTE (Abono mayor a la cuota) */}
               {esExcedente && (
                 <div className="p-6 bg-emerald-500/5 border-b border-white/5 backdrop-blur-md">
-                  <p className="text-sm font-semibold text-emerald-400 mb-3 text-center">
-                    ¡Hay un excedente de <span className="text-white">${diferencia.toLocaleString('es-CO')}</span>!
-                  </p>
                   <div className="bg-emerald-600/10 border border-emerald-500/30 rounded-xl p-4 text-center shadow-inner">
                     <p className="text-sm font-bold text-white mb-1 flex items-center justify-center gap-2">
-                       <FiCheckCircle className="text-emerald-400" /> Reducir tiempo (Atrás hacia adelante)
+                       <FiCheckCircle className="text-emerald-400" /> ¡Abono Extra de ${diferencia.toLocaleString('es-CO')}!
                     </p>
                     <p className="text-xs text-slate-400">
-                      El dinero extra se aplicará automáticamente a las últimas cuotas del préstamo, restando saldo final.
+                      Este dinero extra se descontará automáticamente de las <strong>últimas cuotas</strong> del préstamo.
                     </p>
                   </div>
                 </div>
               )}
               
               <div className="p-6 flex gap-3 shrink-0">
-                <button onClick={() => { setManualPayModal({ open: false, inst: null, loan: null }); setSaldoAction('MANTENER'); }} className="flex-1 py-3.5 border border-white/5 text-slate-300 font-medium text-sm bg-[#0B0B12] hover:bg-white/5 rounded-xl transition-colors">Cancelar</button>
+                <button onClick={() => setManualPayModal({ open: false, inst: null, loan: null })} className="flex-1 py-3.5 border border-white/5 text-slate-300 font-medium text-sm bg-[#0B0B12] hover:bg-white/5 rounded-xl transition-colors">Cancelar</button>
                 <button 
                   onClick={() => {
                     let finalStatus = 'PAID'; 
                     let actionData: any = { action: 'NONE', amount: 0, targetInstallment: 0, description: '' };
 
+                    // LÓGICA AUTOMÁTICA (Sin preguntarle al usuario)
                     if (esParcial) {
-                       if (saldoAction === 'MANTENER') {
-                           finalStatus = 'PARTIAL';
-                           actionData.description = `Abono parcial de $${abonoValue.toLocaleString('es-CO')}. Queda un saldo de $${diferencia.toLocaleString('es-CO')}.`;
-                       } else if (futureInstallmentsUI.length > 0) {
-                           actionData = { action: saldoAction, amount: diferencia, targetInstallment: targetInstallmentNum };
-                           if (saldoAction === 'PROXIMA_CUOTA') actionData.description = `Faltante de $${diferencia.toLocaleString('es-CO')} sumado a la siguiente cuota.`;
-                           if (saldoAction === 'DIFERIR') actionData.description = `Faltante de $${diferencia.toLocaleString('es-CO')} diferido en cuotas restantes.`;
-                           if (saldoAction === 'CUOTA_ESPECIFICA') actionData.description = `Faltante de $${diferencia.toLocaleString('es-CO')} sumado a cuota #${targetInstallmentNum}.`;
-                       }
+                       finalStatus = 'PARTIAL';
+                       actionData.description = `Abono parcial de $${abonoValue.toLocaleString('es-CO')}. Queda un saldo de $${diferencia.toLocaleString('es-CO')}.`;
                     } else if (esExcedente) {
-                       actionData = { action: overpaymentAction, amount: diferencia, targetInstallment: 0 };
-                       if (overpaymentAction === 'REDUCE_TIME') actionData.description = `Excedente de $${diferencia.toLocaleString('es-CO')} usado para reducir tiempo (atrás hacia adelante).`;
+                       actionData = { action: 'REDUCE_TIME', amount: diferencia, targetInstallment: 0 };
+                       actionData.description = `Excedente de $${diferencia.toLocaleString('es-CO')} usado para reducir tiempo (atrás hacia adelante).`;
                     } else {
                        actionData.description = "Pago liquidado exactamente.";
                     }
