@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png"; 
 import { 
   FiHome, FiSettings, FiUsers, FiLogOut, FiChevronDown, FiX, 
-  FiGlobe, FiMap, FiDollarSign, FiBriefcase, FiUserPlus, FiCheckCircle, FiShield, FiActivity, FiInbox, FiTrendingDown 
+  FiGlobe, FiMap, FiDollarSign, FiBriefcase, FiUserPlus, FiCheckCircle, FiActivity, FiInbox, FiTrendingDown 
 } from "react-icons/fi";
 
 export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (val: boolean) => void }) {
@@ -73,7 +73,7 @@ export default function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsO
           <NavItem label="Dashboard" path="/dashboard" icon={<FiHome size={20} />} active={isActive("/dashboard")} onClick={() => setIsOpen(false)} />
           
           {/* BURÓ INTERNO PARA TODOS */}
-          <NavItem label="Buró Interno" path="/buro" icon={<FiShield size={20} />} active={isActive("/buro")} onClick={() => setIsOpen(false)} />
+          {/* <NavItem label="Buró Interno" path="/buro" icon={<FiShield size={20} />} active={isActive("/buro")} onClick={() => setIsOpen(false)} /> */}
           
           {/* SECCIÓN: EMPRESA (Oculta para cobradores) */}
           {showAdministracion && (
