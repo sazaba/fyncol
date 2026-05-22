@@ -1,9 +1,8 @@
-// src/components/admin/TodayRouteCard.tsx
 import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { FiMapPin, FiUser, FiNavigation, FiLoader, FiCheckCircle, FiAlertTriangle } from "react-icons/fi";
+import { FiMapPin, FiUser, FiNavigation, FiLoader, FiCheckCircle, FiAlertTriangle, FiClock } from "react-icons/fi";
 
 const clientIcon = new L.Icon({
   iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
@@ -32,7 +31,6 @@ const cobradorIcon = new L.Icon({
   shadowSize: [41, 41]
 });
 
-// Helper de Zonas Horarias
 const COUNTRY_TIMEZONES: Record<string, string> = {
   'Colombia': 'America/Bogota',
   'México': 'America/Mexico_City',
@@ -50,7 +48,6 @@ const COUNTRY_TIMEZONES: Record<string, string> = {
   'Bolivia': 'America/La_Paz',
 };
 
-// Calcula la fecha local estricta basada en el país
 const getRouteTodayStr = (countryStr?: string) => {
   let tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   if (countryStr && COUNTRY_TIMEZONES[countryStr]) {
@@ -80,7 +77,7 @@ function MapFocusController({ coords }: { coords: [number, number] | null }) {
 export default function TodayRouteCard({ routeId }: { routeId: number }) {
   const [clients, setClients] = useState<any[]>([]);
   const [cobradorData, setCobradorData] = useState<any>(null);
-  const [routeData, setRouteData] = useState<any>(null); // Añadido para capturar datos de la ruta
+  const [routeData, setRouteData] = useState<any>(null); 
   const [focusCoords, setFocusCoords] = useState<[number, number] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [mobileView, setMobileView] = useState<'LIST' | 'MAP'>('LIST');
@@ -109,7 +106,6 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
       
       if (data.success) {
         setClients(data.clientes || []);
-        // Asumiendo que tu backend envía info de la ruta, sino usaremos un default 'Colombia'
         setRouteData(data.ruta || { country: 'Colombia' }); 
         
         if (data.cobrador && data.cobrador.latitude && data.cobrador.longitude) {
@@ -158,10 +154,7 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
   }, [routeId]);
 
   const mapCenter: [number, number] = focusCoords || [4.5709, -74.2973];
-  
   const isMapVisible = mobileView === 'MAP' || (typeof window !== 'undefined' && window.innerWidth >= 1024);
-
-  // Calculamos HOY basado en la zona horaria de la ruta
   const todayStr = getRouteTodayStr(routeData?.country);
 
   return (
@@ -205,14 +198,8 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
               <p className="text-slate-400 text-sm text-center mt-10">No hay cobros pendientes o pagados para hoy.</p>
             ) : (
               clients.map((client) => {
-                // LÓGICA REFINADA: Evaluamos si el cliente pagó basado en la fecha de la transacción enviada o si el backend manda un flag fuerte.
-                // Dependeremos del estado que mande el backend asumiendo que tu backend ya cruza fechas.
-                let estadoStr = (client.estado || 'PENDIENTE').toUpperCase();
-                
-                // Sin embargo, si quieres asegurar el cruce visual como pediste:
-                if (client.fechaUltimoPago && client.fechaUltimoPago.split('T')[0] === todayStr) {
-                   estadoStr = 'PAGADO';
-                }
+                // LÓGICA ARREGLADA: Ahora confiamos plenamente en el estado procesado por el backend
+                const estadoStr = (client.estado || 'PENDIENTE').toUpperCase();
 
                 let estadoClasses = 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
                 let estadoText = 'PENDIENTE';
@@ -246,6 +233,8 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
                             <FiCheckCircle className="text-emerald-500 shrink-0" size={14} />
                           ) : estadoStr === 'MORA' || estadoStr === 'OVERDUE' ? (
                             <FiAlertTriangle className="text-red-400 shrink-0" size={14} />
+                          ) : estadoStr === 'RENEGOTIATED' ? (
+                             <FiClock className="text-orange-400 shrink-0" size={14} />
                           ) : (
                             <FiUser className="text-slate-400 group-hover:text-blue-400 transition-colors shrink-0" size={14} />
                           )}
@@ -317,10 +306,7 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
               <MapFocusController coords={focusCoords} />
 
               {clients.map((client) => {
-                let estadoStr = (client.estado || 'PENDIENTE').toUpperCase();
-                if (client.fechaUltimoPago && client.fechaUltimoPago.split('T')[0] === todayStr) {
-                   estadoStr = 'PAGADO';
-                }
+                const estadoStr = (client.estado || 'PENDIENTE').toUpperCase();
 
                 return client.latitude && client.longitude && (
                   <Marker 
@@ -331,7 +317,7 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
                     <Popup>
                       <strong className="text-[#0B1020]">{client.name}</strong><br/>
                       <span className="text-slate-600 text-xs">{client.address}</span><br/>
-                      <span className={`text-[10px] font-bold ${estadoStr === 'PAGADO' ? 'text-emerald-500' : estadoStr === 'MORA' ? 'text-red-500' : 'text-blue-500'}`}>
+                      <span className={`text-[10px] font-bold ${estadoStr === 'PAGADO' ? 'text-emerald-500' : estadoStr === 'MORA' || estadoStr === 'OVERDUE' ? 'text-red-500' : 'text-blue-500'}`}>
                         {estadoStr === 'PAGADO' ? 'Pagado Hoy' : `Deuda: ${formatCurrency(client.deudaTotal)}`}
                       </span>
                     </Popup>
