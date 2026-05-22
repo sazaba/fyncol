@@ -1,5 +1,3 @@
-// controllers/rutas.controller.ts
-
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth.middleware'; 
@@ -75,7 +73,10 @@ export const crearRuta = async (req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
-    const { country, city, currency, assignedToId, maxLoanPerClient } = req.body;
+    const { 
+      country, city, currency, assignedToId, maxLoanPerClient,
+      firstPaymentDelay, maxInstallments, minInstallmentsToPayoff // <-- NUEVOS CAMPOS
+    } = req.body;
     
     if (assignedToId) {
       const rutaExistente = await prisma.route.findFirst({
@@ -93,7 +94,10 @@ export const crearRuta = async (req: AuthRequest, res: Response): Promise<void> 
               country, city, currency,
               assignedToId: Number(assignedToId),
               companyId,
-              maxLoanPerClient: maxLoanPerClient ? Number(maxLoanPerClient) : 0 
+              maxLoanPerClient: maxLoanPerClient ? Number(maxLoanPerClient) : 0,
+              firstPaymentDelay: firstPaymentDelay !== undefined ? Number(firstPaymentDelay) : 1,
+              maxInstallments: maxInstallments !== undefined ? Number(maxInstallments) : 30,
+              minInstallmentsToPayoff: minInstallmentsToPayoff !== undefined ? Number(minInstallmentsToPayoff) : 0
             },
             include: { assignedTo: true }
           })
@@ -109,13 +113,17 @@ export const crearRuta = async (req: AuthRequest, res: Response): Promise<void> 
         country, city, currency,
         assignedToId: assignedToId ? Number(assignedToId) : null,
         companyId,
-        maxLoanPerClient: maxLoanPerClient ? Number(maxLoanPerClient) : 0 
+        maxLoanPerClient: maxLoanPerClient ? Number(maxLoanPerClient) : 0,
+        firstPaymentDelay: firstPaymentDelay !== undefined ? Number(firstPaymentDelay) : 1,
+        maxInstallments: maxInstallments !== undefined ? Number(maxInstallments) : 30,
+        minInstallmentsToPayoff: minInstallmentsToPayoff !== undefined ? Number(minInstallmentsToPayoff) : 0
       },
       include: { assignedTo: true }
     });
     
     res.status(201).json(nuevaRuta);
   } catch (error) {
+    console.error("Error al crear la ruta:", error);
     res.status(500).json({ error: 'Error interno al crear la ruta' });
   }
 };
@@ -176,7 +184,9 @@ export const actualizarRuta = async (req: AuthRequest, res: Response): Promise<v
   try {
     const { id } = req.params;
     const companyId = req.user?.companyId;
-    const { maxLoanPerClient } = req.body;
+    
+    // <-- RECOGEMOS LOS NUEVOS CAMPOS DEL BODY
+    const { maxLoanPerClient, firstPaymentDelay, maxInstallments, minInstallmentsToPayoff } = req.body;
 
     if (!companyId) {
       res.status(403).json({ error: "Acceso denegado." });
@@ -195,7 +205,10 @@ export const actualizarRuta = async (req: AuthRequest, res: Response): Promise<v
     const rutaActualizada = await prisma.route.update({
       where: { id: Number(id) },
       data: {
-        maxLoanPerClient: maxLoanPerClient !== undefined ? Number(maxLoanPerClient) : rutaExistente.maxLoanPerClient
+        maxLoanPerClient: maxLoanPerClient !== undefined ? Number(maxLoanPerClient) : rutaExistente.maxLoanPerClient,
+        firstPaymentDelay: firstPaymentDelay !== undefined ? Number(firstPaymentDelay) : rutaExistente.firstPaymentDelay,
+        maxInstallments: maxInstallments !== undefined ? Number(maxInstallments) : rutaExistente.maxInstallments,
+        minInstallmentsToPayoff: minInstallmentsToPayoff !== undefined ? Number(minInstallmentsToPayoff) : rutaExistente.minInstallmentsToPayoff
       }
     });
 
@@ -395,7 +408,7 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
       let hasMora = false;
       let hasPaymentToday = false;
       let needsToVisitToday = false; 
-      let hasUnpaidInstallmentTodayOrBefore = false; // NUEVA VARIABLE CLAVE
+      let hasUnpaidInstallmentTodayOrBefore = false;
 
       for (const loan of client.loans) {
         if (loan.payments.length > 0) {
@@ -420,7 +433,6 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
             hasMora = true;
           }
 
-          // Si hay una cuota vencida o de hoy que no se ha pagado completamente
           if (isPendingStatus && (isDueToday || isDueBeforeToday)) {
              hasUnpaidInstallmentTodayOrBefore = true;
           }
@@ -442,14 +454,11 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
       if (needsToVisitToday) {
         let estado = 'PENDIENTE';
         
-        // LÓGICA CORREGIDA:
-        // Solo es 'PAGADO' si hizo un pago hoy Y NO tiene cuotas vivas de hoy o días anteriores.
         if (hasPaymentToday && !hasUnpaidInstallmentTodayOrBefore) {
           estado = 'PAGADO'; 
         } else if (hasMora) {
           estado = 'MORA';   
         } else if (hasPaymentToday && hasUnpaidInstallmentTodayOrBefore) {
-          // Si pagó algo pero sigue debiendo, lo dejamos como PENDIENTE (o ABONO)
           estado = 'PENDIENTE'; 
         }
 
@@ -469,7 +478,7 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
     res.json({ 
       success: true, 
       clientes: clientesProcesados,
-      ruta: { country: ruta.country }, // Mandamos el país para que el frontend pueda calcular el hoy
+      ruta: { country: ruta.country },
       cobrador: ruta.assignedTo ? {
         id: ruta.assignedTo.id,
         name: ruta.assignedTo.name,
@@ -579,7 +588,6 @@ export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise
           if (needsToVisitToday) {
             clientesTotales++;
             
-            // LÓGICA CORREGIDA PARA EL RESUMEN:
             if (hasPaymentToday && !hasUnpaidInstallmentTodayOrBefore) {
               clientesCobrados++; 
             } else if (hasMora) {

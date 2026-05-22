@@ -89,6 +89,19 @@ model Route {
   updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
   maxLoanPerClient Decimal? @default(0) @map("max_loan_per_client") // TOPE DE CRÉDITO
 
+  // ==========================================
+  // NUEVAS REGLAS DE NEGOCIO (CONFIGURACIÓN)
+  // ==========================================
+  
+  // 1. Cobrar mismo día (0) o día siguiente (1)
+  firstPaymentDelay       Int @default(1) @map("first_payment_delay") 
+  
+  // 2. Número máximo de cuotas permitidas
+  maxInstallments         Int @default(30) @map("max_installments") 
+  
+  // 3. Cuotas mínimas pagadas para poder liquidar la deuda total
+  minInstallmentsToPayoff Int @default(0) @map("min_installments_to_payoff") 
+
   assignedToId Int?  @unique @map("assigned_to_id")
   assignedTo   User? @relation(fields: [assignedToId], references: [id])
 
@@ -101,7 +114,7 @@ model Route {
   clients         Client[]
   dailyClosures   DailyClosure[]
   loanRequests    LoanRequest[]
-  expenseRequests ExpenseRequest[] // <-- RELACIÓN AÑADIDA
+  expenseRequests ExpenseRequest[]
 
   @@map("routes")
 }
