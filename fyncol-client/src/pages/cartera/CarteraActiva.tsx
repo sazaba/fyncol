@@ -1296,9 +1296,6 @@
 
 
 
-
-
-
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   FiDollarSign, FiMapPin, FiSearch, 
@@ -1856,6 +1853,7 @@ export default function CarteraActiva() {
                 if (i.status === 'PAID') return false;
                 const dbDate = i.dueDate.split('T')[0];
                 const promiseDateStr = i.promiseDate ? i.promiseDate.split('T')[0] : null;
+
                 const isDueToday = dbDate <= todayStr;
                 const isPromisedToday = promiseDateStr && promiseDateStr <= todayStr;
                 const isFuturePromise = promiseDateStr && promiseDateStr > todayStr;
@@ -2220,6 +2218,7 @@ export default function CarteraActiva() {
       
       {manualPayModal.open && (() => {
         const inst = manualPayModal.inst;
+        const loan = manualPayModal.loan;
         const faltante = Math.round(Number(inst.expectedAmount) - Number(inst.paidAmount || 0));
         
         const abonoValue = Number(manualAmount.replace(/[^0-9]/g, "")) || 0;
@@ -2229,10 +2228,15 @@ export default function CarteraActiva() {
         const esExacto = abonoValue === faltante;
         const esExcedente = abonoValue > faltante;
 
-        const totalDebt = manualPayModal.loan?.installmentDetails?.reduce((sum: number, i: any) => {
+        const totalDebt = loan?.installmentDetails?.reduce((sum: number, i: any) => {
             if (i.status === 'PAID') return sum;
             return sum + Math.round(Number(i.expectedAmount) - Number(i.paidAmount || 0));
         }, 0) || 0;
+
+        // --- NUEVA LÓGICA DE CANDADO PARA LIQUIDAR ---
+        const minInstallmentsToPayoff = routeInfo?.minInstallmentsToPayoff || 0;
+        const paidInstallmentsCount = loan?.installmentDetails?.filter((i: any) => i.status === 'PAID').length || 0;
+        const canLiquidarTotal = paidInstallmentsCount >= minInstallmentsToPayoff;
 
         return (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -2243,18 +2247,33 @@ export default function CarteraActiva() {
                    <span className="text-[10px] text-blue-400/80 font-bold uppercase tracking-widest bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20">Cuota Actual: ${faltante.toLocaleString('es-CO')}</span>
                 </div>
 
-                <div className="mb-5 bg-gradient-to-r from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-2xl p-4 flex items-center justify-between shadow-inner">
-                    <div>
-                        <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mb-1 flex items-center gap-1"><FiCheckCircle size={10} /> Deuda Total Restante</p>
-                        <p className="text-xl font-bold text-white">${totalDebt.toLocaleString('es-CO')}</p>
+                <div className="mb-5 bg-gradient-to-r from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-2xl p-4 flex flex-col gap-3 shadow-inner">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mb-1 flex items-center gap-1"><FiCheckCircle size={10} /> Deuda Total Restante</p>
+                            <p className="text-xl font-bold text-white">${totalDebt.toLocaleString('es-CO')}</p>
+                        </div>
+                        <button 
+                            onClick={() => handleLiquidarDeudaTotal(loan.id)}
+                            disabled={isLiquidating || !canLiquidarTotal}
+                            className={`text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-lg flex items-center gap-2 ${
+                              canLiquidarTotal
+                                ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20'
+                                : 'bg-black/40 border border-white/10 text-slate-500 cursor-not-allowed'
+                            }`}
+                            title={!canLiquidarTotal ? `Requiere ${minInstallmentsToPayoff} cuotas pagadas` : ''}
+                        >
+                            {isLiquidating ? <FiLoader className="animate-spin" /> : (!canLiquidarTotal ? <><FiLock size={12}/> Bloqueado</> : 'Liquidar Todo')}
+                        </button>
                     </div>
-                    <button 
-                        onClick={() => handleLiquidarDeudaTotal(manualPayModal.loan.id)}
-                        disabled={isLiquidating}
-                        className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-50 flex items-center gap-2"
-                    >
-                        {isLiquidating ? <FiLoader className="animate-spin" /> : 'Liquidar Todo'}
-                    </button>
+                    {!canLiquidarTotal && (
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 flex items-center gap-2">
+                            <FiAlertTriangle className="text-amber-500 shrink-0" size={14}/>
+                            <p className="text-[10px] text-amber-400/90 leading-tight">
+                                Por política de la ruta, el cliente debe pagar mínimo <strong>{minInstallmentsToPayoff} cuotas</strong> antes de poder liquidar la deuda. (Lleva {paidInstallmentsCount}).
+                            </p>
+                        </div>
+                    )}
                 </div>
 
                 <div className="relative">
