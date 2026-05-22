@@ -31,6 +31,7 @@ const cobradorIcon = new L.Icon({
   shadowSize: [41, 41]
 });
 
+// Helper de Zonas Horarias
 const COUNTRY_TIMEZONES: Record<string, string> = {
   'Colombia': 'America/Bogota',
   'México': 'America/Mexico_City',
@@ -48,6 +49,7 @@ const COUNTRY_TIMEZONES: Record<string, string> = {
   'Bolivia': 'America/La_Paz',
 };
 
+// Calcula la fecha local estricta basada en el país
 const getRouteTodayStr = (countryStr?: string) => {
   let tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   if (countryStr && COUNTRY_TIMEZONES[countryStr]) {
@@ -106,6 +108,7 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
       
       if (data.success) {
         setClients(data.clientes || []);
+        // Asumiendo que tu backend envía info de la ruta, sino usaremos un default 'Colombia'
         setRouteData(data.ruta || { country: 'Colombia' }); 
         
         if (data.cobrador && data.cobrador.latitude && data.cobrador.longitude) {
@@ -154,7 +157,10 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
   }, [routeId]);
 
   const mapCenter: [number, number] = focusCoords || [4.5709, -74.2973];
+  
   const isMapVisible = mobileView === 'MAP' || (typeof window !== 'undefined' && window.innerWidth >= 1024);
+
+  // Calculamos HOY basado en la zona horaria de la ruta
   const todayStr = getRouteTodayStr(routeData?.country);
 
   return (
@@ -198,7 +204,7 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
               <p className="text-slate-400 text-sm text-center mt-10">No hay cobros pendientes o pagados para hoy.</p>
             ) : (
               clients.map((client) => {
-                // LÓGICA ARREGLADA: Ahora confiamos plenamente en el estado procesado por el backend
+                // LÓGICA REFINADA: Evaluamos 100% basado en el string que arroja el controlador
                 const estadoStr = (client.estado || 'PENDIENTE').toUpperCase();
 
                 let estadoClasses = 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
@@ -234,7 +240,7 @@ export default function TodayRouteCard({ routeId }: { routeId: number }) {
                           ) : estadoStr === 'MORA' || estadoStr === 'OVERDUE' ? (
                             <FiAlertTriangle className="text-red-400 shrink-0" size={14} />
                           ) : estadoStr === 'RENEGOTIATED' ? (
-                             <FiClock className="text-orange-400 shrink-0" size={14} />
+                            <FiClock className="text-orange-400 shrink-0" size={14} />
                           ) : (
                             <FiUser className="text-slate-400 group-hover:text-blue-400 transition-colors shrink-0" size={14} />
                           )}
