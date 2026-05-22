@@ -25,34 +25,20 @@ const COUNTRY_TIMEZONES: Record<string, number> = {
   'República Dominicana': -4,
   'Argentina': -3,
   'Uruguay': -3,
-  'Brasil': -3,
+  'Brasil': -3, 
   'España': +1,
   'USA': -5 
 };
 
-const getDayLimitsByOffset = (utcOffset: number) => {
+export const getDayLimitsByOffset = (utcOffset: number) => {
   const nowUtcEpoch = new Date().getTime();
   const localTime = new Date(nowUtcEpoch + (utcOffset * 3600000));
 
   const localStart = new Date(localTime);
+  localStart.setUTCHours(0, 0, 0, 0);
+
   const localEnd = new Date(localTime);
-
-  const corteAlMediodia = true; // TRUE = Cierra a las 12:00 PM
-
-  if (corteAlMediodia) {
-    if (localTime.getUTCHours() < 12) {
-      localStart.setUTCDate(localStart.getUTCDate() - 1);
-      localStart.setUTCHours(12, 0, 0, 0);
-      localEnd.setUTCHours(11, 59, 59, 999);
-    } else {
-      localStart.setUTCHours(12, 0, 0, 0);
-      localEnd.setUTCDate(localEnd.getUTCDate() + 1);
-      localEnd.setUTCHours(11, 59, 59, 999);
-    }
-  } else {
-    localStart.setUTCHours(0, 0, 0, 0);
-    localEnd.setUTCHours(23, 59, 59, 999);
-  }
+  localEnd.setUTCHours(23, 59, 59, 999);
 
   return { 
     startOfDay: new Date(localStart.getTime() - (utcOffset * 3600000)), 
@@ -75,7 +61,7 @@ export const crearRuta = async (req: AuthRequest, res: Response): Promise<void> 
 
     const { 
       country, city, currency, assignedToId, maxLoanPerClient,
-      firstPaymentDelay, maxInstallments, minInstallmentsToPayoff // <-- NUEVOS CAMPOS
+      firstPaymentDelay, maxInstallments, minInstallmentsToPayoff 
     } = req.body;
     
     if (assignedToId) {
@@ -185,7 +171,6 @@ export const actualizarRuta = async (req: AuthRequest, res: Response): Promise<v
     const { id } = req.params;
     const companyId = req.user?.companyId;
     
-    // <-- RECOGEMOS LOS NUEVOS CAMPOS DEL BODY
     const { maxLoanPerClient, firstPaymentDelay, maxInstallments, minInstallmentsToPayoff } = req.body;
 
     if (!companyId) {
@@ -416,9 +401,24 @@ export const getMonitoreoHoy = async (req: AuthRequest, res: Response): Promise<
         }
 
         for (const inst of loan.installmentDetails) {
-          const dueDate = new Date(inst.dueDate);
-          const isDueToday = dueDate >= hoyInicio && dueDate <= hoyFin;
-          const isDueBeforeToday = dueDate < hoyInicio;
+          // --- LÓGICA DE FECHAS CORREGIDA ---
+          const dueDateRaw = new Date(inst.dueDate);
+          const dueYear = dueDateRaw.getUTCFullYear();
+          const dueMonth = dueDateRaw.getUTCMonth();
+          const dueDay = dueDateRaw.getUTCDate();
+
+          const localStart = new Date(hoyInicio.getTime() + (offset * 3600000));
+          const currentYear = localStart.getUTCFullYear();
+          const currentMonth = localStart.getUTCMonth();
+          const currentDay = localStart.getUTCDate();
+
+          const cleanDueDate = new Date(Date.UTC(dueYear, dueMonth, dueDay)).getTime();
+          const cleanCurrentDate = new Date(Date.UTC(currentYear, currentMonth, currentDay)).getTime();
+
+          const isDueToday = cleanDueDate === cleanCurrentDate;
+          const isDueBeforeToday = cleanDueDate < cleanCurrentDate;
+          // ----------------------------------
+
           const isPendingStatus = ['PENDING', 'PARTIAL', 'OVERDUE', 'RENEGOTIATED'].includes(inst.status);
 
           if (isPendingStatus) {
@@ -558,9 +558,24 @@ export const getRoutesSummary = async (req: AuthRequest, res: Response): Promise
             }
 
             loan.installmentDetails.forEach((inst: any) => {
-              const dueDate = new Date(inst.dueDate);
-              const isDueToday = dueDate >= hoyInicio && dueDate <= hoyFin;
-              const isDueBeforeToday = dueDate < hoyInicio;
+              // --- LÓGICA DE FECHAS CORREGIDA ---
+              const dueDateRaw = new Date(inst.dueDate);
+              const dueYear = dueDateRaw.getUTCFullYear();
+              const dueMonth = dueDateRaw.getUTCMonth();
+              const dueDay = dueDateRaw.getUTCDate();
+
+              const localStart = new Date(hoyInicio.getTime() + (offset * 3600000));
+              const currentYear = localStart.getUTCFullYear();
+              const currentMonth = localStart.getUTCMonth();
+              const currentDay = localStart.getUTCDate();
+
+              const cleanDueDate = new Date(Date.UTC(dueYear, dueMonth, dueDay)).getTime();
+              const cleanCurrentDate = new Date(Date.UTC(currentYear, currentMonth, currentDay)).getTime();
+
+              const isDueToday = cleanDueDate === cleanCurrentDate;
+              const isDueBeforeToday = cleanDueDate < cleanCurrentDate;
+              // ----------------------------------
+
               const isPendingStatus = ['PENDING', 'PARTIAL', 'OVERDUE', 'RENEGOTIATED'].includes(inst.status);
 
               if (inst.status === 'OVERDUE') {
